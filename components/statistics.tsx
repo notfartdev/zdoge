@@ -27,6 +27,7 @@ export function Statistics() {
   const [totalDeposits, setTotalDeposits] = useState(0)
   const [latestDepositTime, setLatestDepositTime] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   const tokenConfig = tokenPools[selectedToken]
 
@@ -37,8 +38,22 @@ export function Statistics() {
         const config = tokenPools[selectedToken]
         const statsPromises = Object.entries(config.pools).map(async ([amount, address]) => {
           try {
-            const response = await fetch(`${api.indexer}/api/pool/${address}`)
-            if (!response.ok) return null
+            const controller = new AbortController()
+            const timeoutId = setTimeout(() => controller.abort(), 10000) // 10s timeout
+            
+            const response = await fetch(`${api.indexer}/api/pool/${address}`, {
+              signal: controller.signal,
+              headers: {
+                'Content-Type': 'application/json',
+              },
+            })
+            clearTimeout(timeoutId)
+            
+            if (!response.ok) {
+              console.warn(`[Stats] Pool ${amount} returned ${response.status}`)
+              return null
+            }
+            
             const data = await response.json()
             
             return {
@@ -47,8 +62,12 @@ export function Statistics() {
               depositsCount: data.depositsCount || 0,
               recentDeposits: data.deposits || [],
             }
-          } catch (err) {
-            console.error(`Failed to fetch pool ${amount}:`, err)
+          } catch (err: any) {
+            if (err.name === 'AbortError') {
+              console.warn(`[Stats] Pool ${amount} request timed out`)
+            } else {
+              console.error(`[Stats] Failed to fetch pool ${amount}:`, err.message || err)
+            }
             return null
           }
         })
@@ -80,9 +99,12 @@ export function Statistics() {
         }
 
         setLoading(false)
-      } catch (error) {
+        setError(null)
+      } catch (error: any) {
         console.error("[Stats] Failed to fetch:", error)
+        setError(error.message || 'Failed to load statistics')
         setLoading(false)
+        // Keep existing stats on error (don't reset to 0)
       }
     }
 
@@ -120,12 +142,12 @@ export function Statistics() {
   const poolWithMostRecentDeposit = poolStats.find(p => p.recentDeposits.length > 0)
 
   return (
-    <Card className="glass-card p-6 rounded-none border-[#C2A633]/15 h-fit">
-      <div className="flex items-center justify-between mb-6 pb-4 border-b border-[#C2A633]/20">
-        <h3 className="font-mono text-base font-bold text-white uppercase tracking-wider">Statistics</h3>
+    <Card className="glass-card p-4 sm:p-6 rounded-none border-[#C2A633]/15 h-fit">
+      <div className="flex items-center justify-between mb-4 sm:mb-6 pb-3 sm:pb-4 border-b border-[#C2A633]/20">
+        <h3 className="font-mono text-sm sm:text-base font-bold text-white uppercase tracking-wider">Statistics</h3>
       </div>
 
-      <div className="space-y-6">
+      <div className="space-y-4 sm:space-y-6">
         {/* Current Token Display - Auto-synced with deposit interface */}
         <div className="flex items-center justify-between p-3 bg-[#C2A633]/10 border border-[#C2A633]/30">
           <span className="font-mono text-xs text-gray-400 uppercase">Viewing</span>
@@ -144,10 +166,17 @@ export function Statistics() {
               </div>
             )}
           </div>
-          <p className="font-mono text-4xl text-white font-bold leading-none">
-            {loading ? '...' : totalDeposits.toLocaleString()}
+          <p className="font-mono text-3xl sm:text-4xl text-white font-bold leading-none">
+            {loading ? '...' : error ? '--' : totalDeposits.toLocaleString()}
           </p>
-          <p className="font-mono text-[10px] text-gray-500">total {selectedToken} deposits</p>
+          <p className="font-mono text-[10px] text-gray-500">
+            {error ? 'unavailable' : `total ${selectedToken} deposits`}
+          </p>
+          {error && (
+            <p className="font-mono text-[10px] text-red-400 mt-1">
+              Backend unavailable
+            </p>
+          )}
         </div>
 
         {/* Deposits by Amount */}

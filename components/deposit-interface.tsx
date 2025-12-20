@@ -312,7 +312,7 @@ Explorer: ${links.explorer}/tx/${txHash}
 
   return (
     <Card className="bg-black border-[#C2A633]/20 p-0 rounded-none overflow-hidden">
-      <div className="p-6 space-y-6">
+      <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
         {/* Step 1: Token Selection - Dropdown */}
         <div className="space-y-3">
           <Label className="font-mono text-xs text-gray-500 uppercase tracking-wider">Select Token</Label>
@@ -336,7 +336,7 @@ Explorer: ${links.explorer}/tx/${txHash}
         {/* Step 2: Amount Selection */}
         <div className="space-y-3">
           <Label className="font-mono text-xs text-gray-500 uppercase tracking-wider">Select Amount</Label>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-2 gap-2">
             {availableAmounts.map((amount) => (
               <button
                 key={amount}
