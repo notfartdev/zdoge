@@ -194,6 +194,7 @@ async function submitWithdrawal(
   }
 
   const txHash = await walletClient.writeContract({
+    chain: dogeosTestnet,
     address: poolAddress,
     abi: MixerPoolABI,
     functionName: 'withdraw',

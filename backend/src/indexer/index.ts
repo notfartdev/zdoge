@@ -246,7 +246,7 @@ app.get('/pool/:address/root/history', (req, res) => {
  * GET /pool/:address/path/:leafIndex
  * Get Merkle path for a deposit
  */
-app.get('/pool/:address/path/:leafIndex', (req, res) => {
+app.get('/pool/:address/path/:leafIndex', async (req, res) => {
   const pool = pools.get(req.params.address.toLowerCase());
   if (!pool) {
     return res.status(404).json({ error: 'Pool not found' });
@@ -258,9 +258,9 @@ app.get('/pool/:address/path/:leafIndex', (req, res) => {
   }
 
   try {
-    const path = pool.tree.getPath(leafIndex);
+    const path = await pool.tree.getPath(leafIndex);
     res.json({
-      pathElements: path.pathElements.map(e => '0x' + e.toString(16).padStart(64, '0')),
+      pathElements: path.pathElements.map((e: bigint) => '0x' + e.toString(16).padStart(64, '0')),
       pathIndices: path.pathIndices,
       root: '0x' + path.root.toString(16).padStart(64, '0'),
     });

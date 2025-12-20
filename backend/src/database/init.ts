@@ -8,10 +8,24 @@
 import pg from 'pg';
 import * as fs from 'fs';
 import * as path from 'path';
-import { fileURLToPath } from 'url';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// Get directory path (compatible with both CommonJS and ESM)
+const getSchemaPath = () => {
+  // Try to find schema.sql relative to current file
+  const possiblePaths = [
+    path.join(process.cwd(), 'src', 'database', 'schema.sql'),
+    path.join(process.cwd(), 'backend', 'src', 'database', 'schema.sql'),
+    path.join(__dirname || process.cwd(), 'schema.sql'),
+  ];
+  
+  for (const p of possiblePaths) {
+    if (fs.existsSync(p)) {
+      return p;
+    }
+  }
+  
+  throw new Error('Could not find schema.sql file');
+};
 
 const DB_CONFIG = {
   host: process.env.DB_HOST || 'localhost',
@@ -33,7 +47,7 @@ async function initializeDatabase() {
     console.log('✅ Connected to database\n');
     
     // Read schema file
-    const schemaPath = path.join(__dirname, 'schema.sql');
+    const schemaPath = getSchemaPath();
     const schema = fs.readFileSync(schemaPath, 'utf-8');
     
     console.log('📄 Executing schema...\n');
@@ -64,12 +78,13 @@ async function initializeDatabase() {
           const match = statement.match(/CREATE.*VIEW.*?(\w+)/i);
           if (match) console.log(`   ✅ View: ${match[1]}`);
         }
-      } catch (error: any) {
-        if (error.message.includes('already exists')) {
+      } catch (error: unknown) {
+        const errMsg = error instanceof Error ? error.message : String(error);
+        if (errMsg.includes('already exists')) {
           skipCount++;
         } else {
           errorCount++;
-          console.error(`   ❌ Error: ${error.message.substring(0, 100)}`);
+          console.error(`   ❌ Error: ${errMsg.substring(0, 100)}`);
         }
       }
     }
@@ -96,8 +111,9 @@ async function initializeDatabase() {
     
     console.log('\n✅ Database initialization complete!\n');
     
-  } catch (error: any) {
-    console.error('❌ Database initialization failed:', error.message);
+  } catch (error: unknown) {
+    const errMsg = error instanceof Error ? error.message : String(error);
+    console.error('❌ Database initialization failed:', errMsg);
     process.exit(1);
   } finally {
     await pool.end();
@@ -106,4 +122,3 @@ async function initializeDatabase() {
 
 // Run if called directly
 initializeDatabase().catch(console.error);
-

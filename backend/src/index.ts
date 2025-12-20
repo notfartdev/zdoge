@@ -615,7 +615,11 @@ app.post('/api/relay', relayLimiter, async (req, res) => {
     const proofBigInts = proof.map((p: string) => BigInt(p));
 
     // Submit transaction
+    if (!walletClient) {
+      return res.status(503).json({ error: 'Wallet not initialized' });
+    }
     const txHash = await walletClient.writeContract({
+      chain: dogeosTestnet,
       address: poolAddress as Address,
       abi: MixerPoolABI,
       functionName: 'withdraw',
@@ -726,7 +730,11 @@ app.post('/api/relay/schedule', scheduleLimiter, async (req, res) => {
       },
     ] as const;
 
+    if (!walletClient) {
+      return res.status(503).json({ error: 'Wallet not initialized' });
+    }
     const txHash = await walletClient.writeContract({
+      chain: dogeosTestnet,
       address: poolAddress as Address,
       abi: MixerPoolV2ABI,
       functionName: 'scheduleWithdrawal',
@@ -812,7 +820,11 @@ app.post('/api/relay/execute', relayLimiter, async (req, res) => {
       },
     ] as const;
 
+    if (!walletClient) {
+      return res.status(503).json({ error: 'Wallet not initialized' });
+    }
     const txHash = await walletClient.writeContract({
+      chain: dogeosTestnet,
       address: poolAddress as Address,
       abi: MixerPoolV2ABI,
       functionName: 'executeScheduledWithdrawal',

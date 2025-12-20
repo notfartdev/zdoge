@@ -56,17 +56,17 @@ export function isDatabaseAvailable(): boolean {
 /**
  * Execute a query
  */
-export async function query<T = any>(
+export async function query(
   text: string, 
   params?: any[]
-): Promise<pg.QueryResult<T>> {
+): Promise<pg.QueryResult<any>> {
   if (!pool) {
     throw new Error('Database not initialized');
   }
   
   const start = Date.now();
   try {
-    const result = await pool.query<T>(text, params);
+    const result = await pool.query(text, params);
     const duration = Date.now() - start;
     
     if (duration > 1000) {
