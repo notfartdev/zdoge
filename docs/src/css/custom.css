@@ -57,6 +57,23 @@
   padding: 0.75rem 1rem;
 }
 
+/* Navbar items spacing - add gap between right-side items */
+.navbar__items--right {
+  display: flex !important;
+  gap: 1.5rem !important;
+  align-items: center;
+}
+
+.navbar__items--right .navbar__item {
+  margin-left: 0;
+  margin-right: 0;
+}
+
+/* Ensure color mode toggle has proper spacing */
+.navbar__item--right .navbar__item:not(:last-child) {
+  margin-right: 0;
+}
+
 .navbar__title {
   font-family: var(--ifm-font-family-monospace);
   font-weight: 700;
@@ -148,6 +165,37 @@
 /* Danger boxes */
 .alert--danger {
   --ifm-alert-background-color: rgba(255, 70, 70, 0.1);
+}
+
+/* Success/Example boxes - use gold instead of green */
+.alert--success,
+.admonition.admonition-tip,
+.admonition.admonition-success,
+.admonition-icon-example {
+  --ifm-alert-background-color: rgba(194, 166, 51, 0.1) !important;
+  --ifm-alert-border-color: var(--ifm-color-primary) !important;
+  --ifm-alert-foreground-color: var(--ifm-font-color-base) !important;
+}
+
+.alert--success .admonition-icon svg,
+.admonition.admonition-tip .admonition-icon svg,
+.admonition.admonition-success .admonition-icon svg {
+  fill: var(--ifm-color-primary) !important;
+  stroke: var(--ifm-color-primary) !important;
+}
+
+/* Override any green colors from Docusaurus defaults */
+[data-theme='dark'] .alert--success,
+[data-theme='dark'] .admonition.admonition-tip,
+[data-theme='dark'] .admonition.admonition-success {
+  --ifm-alert-background-color: rgba(194, 166, 51, 0.1) !important;
+  --ifm-alert-border-color: var(--ifm-color-primary) !important;
+  --ifm-alert-foreground-color: var(--ifm-font-color-base) !important;
+}
+
+/* Override any inline green colors */
+.admonition-tip {
+  border-left-color: var(--ifm-color-primary) !important;
 }
 
 /* Code blocks */
@@ -279,6 +327,11 @@ h2 {
 .pagination-nav__link:hover {
   border-color: var(--ifm-color-primary);
   background-color: rgba(194, 166, 51, 0.05);
+}
+
+/* Hide "Previous" and "Next" text, keep only arrows */
+.pagination-nav__label {
+  display: none !important;
 }
 
 /* Search */

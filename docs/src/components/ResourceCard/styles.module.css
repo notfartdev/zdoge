@@ -1,0 +1,44 @@
+.resourceCard {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 1.5rem;
+  background-color: var(--ifm-card-background-color);
+  border: 1px solid rgba(194, 166, 51, 0.2);
+  border-radius: 0;
+  text-decoration: none;
+  color: var(--ifm-font-color-base);
+  transition: all 0.2s ease;
+}
+
+.resourceCard:hover {
+  border-color: var(--ifm-color-primary);
+  background-color: rgba(194, 166, 51, 0.05);
+  text-decoration: none;
+  color: var(--ifm-font-color-base);
+}
+
+.iconWrapper {
+  flex-shrink: 0;
+  color: var(--ifm-color-primary);
+}
+
+.content {
+  flex: 1;
+}
+
+.title {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.25rem;
+  font-family: var(--ifm-heading-font-family);
+  font-style: italic;
+  color: var(--ifm-heading-color);
+  font-weight: 400;
+}
+
+.description {
+  margin: 0;
+  color: var(--ifm-font-color-base);
+  opacity: 0.8;
+}
+
