@@ -129,11 +129,17 @@ export function MixerInterface() {
           transition={{ duration: 1, delay: 0.2 }}
           className="text-center mb-20"
         >
-          <div className="flex items-center justify-center gap-3 mb-8">
-            <img src="/dogenadologo.png" alt="DogenadoCash" className="w-20 h-20 rounded-full" />
-          </div>
-          <h1 className="font-sans text-4xl sm:text-5xl md:text-6xl lg:text-8xl xl:text-9xl font-light tracking-tight mb-6 md:mb-8">
-            DOGENADO<span className="italic">CASH</span>
+          <h1 className="font-sans text-4xl sm:text-5xl md:text-6xl lg:text-8xl xl:text-9xl font-light tracking-tight mb-6 md:mb-8 flex items-center justify-center flex-wrap">
+            <span className="flex items-center">
+              <span>D</span>
+              <img 
+                src="/dogenadologo.png" 
+                alt="O" 
+                className="inline-block h-[1em] w-[1em] object-contain mx-[0.03em] relative top-[0.02em]" 
+              />
+              <span>GENADO</span>
+            </span>
+            <span className="italic ml-[0.2em]">CASH</span>
           </h1>
           <p className="font-mono text-sm sm:text-base md:text-lg tracking-wider text-gray-400 max-w-2xl mx-auto px-4">
             A decentralized privacy protocol enabling private transactions on Doge.
