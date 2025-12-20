@@ -3,24 +3,11 @@ const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
   images: {
     unoptimized: true,
   },
-  // Disable Turbopack for production builds (it has issues with binary files)
-  experimental: {
-    turbo: undefined,
-  },
-  // Exclude large binary files from webpack processing
-  webpack: (config, { isServer }) => {
-    config.module.rules.push({
-      test: /\.(wasm|zkey)$/,
-      type: 'asset/resource',
-    });
-    return config;
-  },
+  // Empty turbopack config to silence warning about webpack config
+  turbopack: {},
   
   // Security headers
   async headers() {
