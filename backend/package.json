@@ -2,15 +2,14 @@
   "name": "dogenado-backend",
   "version": "1.0.0",
   "description": "Backend services for Dogenado Privacy Pool",
-  "main": "src/index.ts",
+  "main": "dist/index.js",
+  "type": "module",
   "scripts": {
-    "build": "tsc --skipLibCheck --noEmit || true",
-    "start": "node --loader ts-node/esm src/index.ts",
-    "dev": "ts-node-dev --respawn src/index.ts",
-    "indexer": "ts-node src/indexer/index.ts",
-    "relayer": "ts-node src/relayer/index.ts",
-    "db:init": "ts-node src/database/init.ts",
-    "db:reset": "ts-node src/database/reset.ts",
+    "build": "npm run clean && tsc --skipLibCheck",
+    "clean": "rm -rf dist || true",
+    "start": "node dist/index.js",
+    "dev": "tsc --watch",
+    "db:init": "node dist/database/init.js",
     "test": "vitest"
   },
   "dependencies": {
@@ -22,7 +21,6 @@
     "ffjavascript": "^0.3.0",
     "pg": "^8.16.3",
     "snarkjs": "^0.7.3",
-    "ts-node": "^10.9.2",
     "viem": "2.21.0",
     "ws": "^8.16.0"
   },
@@ -32,7 +30,6 @@
     "@types/node": "^20.0.0",
     "@types/pg": "^8.16.0",
     "@types/ws": "^8.5.10",
-    "ts-node-dev": "^2.0.0",
     "typescript": "^5.3.0",
     "vitest": "^1.2.0"
   }
