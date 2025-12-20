@@ -2,10 +2,10 @@
   "name": "dogenado-backend",
   "version": "1.0.0",
   "description": "Backend services for Dogenado Privacy Pool",
-  "main": "dist/index.js",
+  "main": "src/index.ts",
   "scripts": {
-    "build": "node build.mjs",
-    "start": "node dist/index.js",
+    "build": "echo 'Using tsx for runtime transpilation'",
+    "start": "tsx src/index.ts",
     "dev": "tsx watch src/index.ts",
     "indexer": "tsx src/indexer/index.ts",
     "relayer": "tsx src/relayer/index.ts",
@@ -22,6 +22,7 @@
     "ffjavascript": "^0.3.0",
     "pg": "^8.16.3",
     "snarkjs": "^0.7.3",
+    "tsx": "^4.7.0",
     "viem": "2.21.0",
     "ws": "^8.16.0"
   },
@@ -31,8 +32,6 @@
     "@types/node": "^20.0.0",
     "@types/pg": "^8.16.0",
     "@types/ws": "^8.5.10",
-    "esbuild": "^0.20.0",
-    "tsx": "^4.7.0",
     "typescript": "^5.3.0",
     "vitest": "^1.2.0"
   }
