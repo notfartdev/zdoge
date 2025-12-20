@@ -13,9 +13,7 @@ Before using Dogenado, you need to connect a compatible Web3 wallet.
 | Wallet | Status | Notes |
 |--------|--------|-------|
 | MetaMask | Supported | Recommended |
-| WalletConnect | Supported | Mobile wallets |
-| Coinbase Wallet | Supported | |
-| Trust Wallet | Supported | Via WalletConnect |
+| WalletConnect | Supported | Mobile wallets via WalletConnect |
 
 ## Network Configuration
 
