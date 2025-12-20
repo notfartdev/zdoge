@@ -59,12 +59,12 @@ export function HowItWorks() {
           className="mb-16"
         >
           <p className="font-mono text-xs tracking-[0.3em] text-[#C2A633] mb-4">HOW IT WORKS</p>
-          <h2 className="font-sans text-4xl md:text-6xl lg:text-7xl font-light tracking-tight mb-6">
+          <h2 className="font-sans text-3xl sm:text-4xl md:text-6xl lg:text-7xl font-light tracking-tight mb-4 md:mb-6">
             Privacy Through
             <br />
             <span className="italic">Mixing</span>
           </h2>
-          <p className="font-mono text-sm text-muted-foreground max-w-2xl">
+          <p className="font-mono text-xs sm:text-sm text-muted-foreground max-w-2xl px-4 sm:px-0">
             DogenadoCash uses cryptographic privacy to break the on-chain link between deposit and withdrawal addresses,
             enhancing transaction privacy without compromising decentralization. Your DOGE remains yours, just more
             private.
@@ -72,7 +72,7 @@ export function HowItWorks() {
         </motion.div>
 
         {/* Steps Grid */}
-        <div className="grid md:grid-cols-3 gap-8 mb-16">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6 md:gap-8 mb-8 md:mb-16">
           {steps.map((step, index) => (
             <motion.div
               key={step.number}
@@ -80,13 +80,13 @@ export function HowItWorks() {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.8, delay: index * 0.2 }}
-              className="border border-white/10 bg-black/20 backdrop-blur-sm p-8 group hover:border-[#C2A633]/50 transition-colors duration-500"
+              className="border border-white/10 bg-black/20 backdrop-blur-sm p-4 sm:p-6 md:p-8 group hover:border-[#C2A633]/50 transition-colors duration-500"
             >
               <div className="mb-6">
                 <step.icon className="w-10 h-10 text-[#C2A633]" />
               </div>
               <div className="font-mono text-xs tracking-widest text-[#C2A633] mb-3">{step.number}</div>
-              <h3 className="font-sans text-2xl md:text-3xl font-light tracking-tight mb-4">{step.title}</h3>
+              <h3 className="font-sans text-xl sm:text-2xl md:text-3xl font-light tracking-tight mb-2 md:mb-4">{step.title}</h3>
               <p className="font-mono text-xs text-muted-foreground leading-relaxed">{step.description}</p>
             </motion.div>
           ))}
@@ -98,21 +98,23 @@ export function HowItWorks() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 1 }}
-          className="border border-white/10 bg-black/20 backdrop-blur-sm p-8 md:p-12"
+          className="border border-white/10 bg-black/20 backdrop-blur-sm p-4 sm:p-6 md:p-8 lg:p-12 overflow-x-auto"
         >
-          <div className="flex flex-col md:flex-row items-center justify-between gap-8 relative">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-4 md:gap-8 relative min-w-[320px]">
             {/* Input Wallets */}
-            <div className="flex flex-col gap-4 relative z-10">
+            <div className="flex flex-col gap-2 md:gap-4 relative z-10 w-full md:w-auto">
               <div className="text-center">
-                <p className="font-mono text-xs tracking-widest text-muted-foreground mb-4">INPUT WALLETS</p>
-                {[1, 2, 3, 4].map((i) => (
-                  <div
-                    key={i}
-                    className="w-32 h-10 border border-white/20 bg-black/40 mb-2 flex items-center justify-center relative"
-                  >
-                    <span className="font-mono text-xs text-muted-foreground">Wallet {i}</span>
-                  </div>
-                ))}
+                <p className="font-mono text-[10px] sm:text-xs tracking-widest text-muted-foreground mb-2 md:mb-4">INPUT WALLETS</p>
+                <div className="grid grid-cols-2 md:grid-cols-1 gap-2 md:gap-0">
+                  {[1, 2, 3, 4].map((i) => (
+                    <div
+                      key={i}
+                      className="w-full md:w-32 h-8 md:h-10 border border-white/20 bg-black/40 mb-0 md:mb-2 flex items-center justify-center relative"
+                    >
+                      <span className="font-mono text-[10px] sm:text-xs text-muted-foreground">Wallet {i}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
 
@@ -167,8 +169,19 @@ export function HowItWorks() {
             </div>
 
             {/* Mixing Pool */}
-            <div className="flex flex-col items-center justify-center relative z-10">
-              <div className="w-48 h-48 border-2 border-[#C2A633] bg-[#C2A633]/5 backdrop-blur-sm flex items-center justify-center relative overflow-hidden">
+            <div className="flex flex-col items-center justify-center relative z-10 my-4 md:my-0">
+              {/* Mobile: Vertical Arrow */}
+              <motion.div
+                className="md:hidden mb-2"
+                animate={{ y: [0, 8, 0] }}
+                transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
+              >
+                <svg className="w-6 h-6 text-[#C2A633]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                </svg>
+              </motion.div>
+              
+              <div className="w-32 h-32 sm:w-40 sm:h-40 md:w-48 md:h-48 border-2 border-[#C2A633] bg-[#C2A633]/5 backdrop-blur-sm flex items-center justify-center relative overflow-hidden">
                 {/* Rotating particles inside mixer */}
                 <motion.div
                   animate={{ rotate: 360 }}
@@ -204,7 +217,7 @@ export function HowItWorks() {
                 />
                 
                 {/* Center icon */}
-                <Shuffle className="w-12 h-12 text-[#C2A633] relative z-10" />
+                <Shuffle className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 text-[#C2A633] relative z-10" />
                 
                 {/* Pulsing glow */}
                 <motion.div
@@ -272,14 +285,27 @@ export function HowItWorks() {
               </div>
             </div>
 
+              {/* Mobile: Vertical Arrow */}
+              <motion.div
+                className="md:hidden mt-2"
+                animate={{ y: [0, 8, 0] }}
+                transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut", delay: 0.75 }}
+              >
+                <svg className="w-6 h-6 text-[#C2A633]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                </svg>
+              </motion.div>
+            </div>
+
             {/* Output Wallets */}
-            <div className="flex flex-col gap-4 relative z-10">
+            <div className="flex flex-col gap-2 md:gap-4 relative z-10 w-full md:w-auto">
               <div className="text-center">
-                <p className="font-mono text-xs tracking-widest text-muted-foreground mb-4">OUTPUT WALLETS</p>
-                {[1, 2, 3, 4].map((i) => (
-                  <motion.div
-                    key={i}
-                    className="w-32 h-10 border border-[#C2A633]/50 bg-[#C2A633]/10 mb-2 flex items-center justify-center"
+                <p className="font-mono text-[10px] sm:text-xs tracking-widest text-muted-foreground mb-2 md:mb-4">OUTPUT WALLETS</p>
+                <div className="grid grid-cols-2 md:grid-cols-1 gap-2 md:gap-0">
+                  {[1, 2, 3, 4].map((i) => (
+                    <motion.div
+                      key={i}
+                      className="w-full md:w-32 h-8 md:h-10 border border-[#C2A633]/50 bg-[#C2A633]/10 mb-0 md:mb-2 flex items-center justify-center"
                     animate={{
                       borderColor: ['rgba(194, 166, 51, 0.3)', 'rgba(194, 166, 51, 0.6)', 'rgba(194, 166, 51, 0.3)']
                     }}
@@ -289,16 +315,17 @@ export function HowItWorks() {
                       repeat: Infinity,
                       ease: "easeInOut"
                     }}
-                  >
-                    <span className="font-mono text-xs text-foreground">Wallet {i}</span>
-                  </motion.div>
-                ))}
+                    >
+                      <span className="font-mono text-[10px] sm:text-xs text-foreground">Wallet {i}</span>
+                    </motion.div>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
 
-          <div className="mt-8 text-center">
-            <p className="font-mono text-xs text-muted-foreground max-w-2xl mx-auto leading-relaxed">
+          <div className="mt-4 md:mt-8 text-center px-4">
+            <p className="font-mono text-[10px] sm:text-xs text-muted-foreground max-w-2xl mx-auto leading-relaxed">
               Crypto mixers blend funds from multiple users so the connection between the original wallet and the
               withdrawal wallet is obfuscated, making tracing difficult.
             </p>

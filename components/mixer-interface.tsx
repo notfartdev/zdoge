@@ -38,10 +38,10 @@ export function MixerInterface() {
           <div className="flex items-center justify-center gap-3 mb-8">
             <img src="/dogenadologo.png" alt="DogenadoCash" className="w-20 h-20 rounded-full" />
           </div>
-          <h1 className="font-sans text-6xl md:text-8xl lg:text-9xl font-light tracking-tight mb-8">
+          <h1 className="font-sans text-4xl sm:text-5xl md:text-6xl lg:text-8xl xl:text-9xl font-light tracking-tight mb-6 md:mb-8">
             DOGENADO<span className="italic">CASH</span>
           </h1>
-          <p className="font-mono text-base md:text-lg tracking-wider text-gray-400 max-w-2xl mx-auto">
+          <p className="font-mono text-sm sm:text-base md:text-lg tracking-wider text-gray-400 max-w-2xl mx-auto px-4">
             A decentralized privacy protocol enabling private transactions on Doge.
           </p>
         </motion.div>
@@ -51,7 +51,7 @@ export function MixerInterface() {
           initial={{ opacity: 0, y: 40 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 1, delay: 0.4 }}
-          className="grid lg:grid-cols-[500px_1fr] gap-8 items-start"
+          className="grid grid-cols-1 lg:grid-cols-[500px_1fr] gap-6 lg:gap-8 items-start"
         >
           {/* Left: Mixer Interface (Demo) */}
           <div className="border border-white/10 bg-black/20 backdrop-blur-sm">
@@ -71,7 +71,7 @@ export function MixerInterface() {
                 </TabsTrigger>
               </TabsList>
 
-              <TabsContent value="deposit" className="p-8">
+              <TabsContent value="deposit" className="p-4 sm:p-6 md:p-8">
                 <div className="space-y-6">
                   {/* Amount Selection */}
                   <div>
@@ -93,7 +93,7 @@ export function MixerInterface() {
                   {!showDemo && (
                     <Button
                       onClick={handleDemoClick}
-                      className="w-full bg-[#C2A633] hover:bg-[#C2A633]/90 text-black font-mono text-xs tracking-widest py-6"
+                      className="w-full bg-[#C2A633] hover:bg-[#C2A633]/90 text-black font-mono text-xs tracking-widest py-4 sm:py-6 min-h-[44px]"
                     >
                       GENERATE DEPOSIT
                     </Button>
@@ -137,7 +137,7 @@ export function MixerInterface() {
                 </div>
               </TabsContent>
 
-              <TabsContent value="withdraw" className="p-8">
+              <TabsContent value="withdraw" className="p-4 sm:p-6 md:p-8">
                 <div className="space-y-6">
                   <div>
                     <label className="font-mono text-xs tracking-widest text-muted-foreground mb-3 block">
@@ -157,7 +157,7 @@ export function MixerInterface() {
                     <Input placeholder="D..." className="bg-black/40 border-white/10 font-mono text-xs" readOnly />
                   </div>
 
-                  <Button className="w-full bg-[#C2A633] hover:bg-[#C2A633]/90 text-black font-mono text-xs tracking-widest py-6 cursor-default">
+                  <Button className="w-full bg-[#C2A633] hover:bg-[#C2A633]/90 text-black font-mono text-xs tracking-widest py-4 sm:py-6 min-h-[44px] cursor-default">
                     WITHDRAW
                   </Button>
                 </div>
@@ -166,7 +166,7 @@ export function MixerInterface() {
           </div>
 
           {/* Right: Statistics */}
-          <div className="grid gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-4 lg:gap-6 mt-6 lg:mt-0">
             <div className="border border-white/10 bg-black/20 backdrop-blur-sm p-6">
               <div className="flex items-center gap-2 mb-4">
                 <CheckCircle2 className="w-4 h-4 text-[#C2A633] flex-shrink-0" />

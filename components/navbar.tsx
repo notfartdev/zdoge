@@ -43,10 +43,10 @@ export function Navbar() {
           isScrolled ? "bg-background/80 backdrop-blur-md border-b border-border" : ""
         }`}
       >
-        <nav className="flex items-center justify-between px-6 py-4 my-0 md:px-12 md:py-5">
-          <Link href="/" className="group flex items-center gap-3">
-            <img src="/dogenadologo.png" alt="Dogenado" className="w-8 h-8 rounded-full" />
-            <span className="font-mono text-sm tracking-widest text-foreground">DOGENADO</span>
+        <nav className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 my-0 md:px-12 md:py-5">
+          <Link href="/" className="group flex items-center gap-2 sm:gap-3 min-h-[44px]">
+            <img src="/dogenadologo.png" alt="Dogenado" className="w-7 h-7 sm:w-8 sm:h-8 rounded-full" />
+            <span className="font-mono text-xs sm:text-sm tracking-widest text-foreground">DOGENADO</span>
           </Link>
 
           {/* Desktop Navigation */}
@@ -101,7 +101,7 @@ export function Navbar() {
           {/* Mobile Menu Button */}
           <button
             onClick={() => setIsMenuOpen(!isMenuOpen)}
-            className="md:hidden relative w-8 h-8 flex flex-col items-center justify-center gap-1.5"
+            className="md:hidden relative w-10 h-10 sm:w-12 sm:h-12 flex flex-col items-center justify-center gap-1.5 min-h-[44px] min-w-[44px]"
             aria-label="Toggle menu"
           >
             <motion.span
@@ -149,7 +149,7 @@ export function Navbar() {
                   ))}
                   <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.4 }}>
                     <Link href="/dashboard">
-                      <button className="px-8 py-3 bg-[#C2A633] text-black font-mono text-sm tracking-wider font-bold">
+                      <button className="px-6 sm:px-8 py-3 sm:py-4 bg-[#C2A633] text-black font-mono text-xs sm:text-sm tracking-wider font-bold min-h-[44px]">
                         LAUNCH MIXER
                       </button>
                     </Link>
