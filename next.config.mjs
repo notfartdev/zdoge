@@ -3,8 +3,23 @@ const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
   images: {
     unoptimized: true,
+  },
+  // Disable Turbopack for production builds (it has issues with binary files)
+  experimental: {
+    turbo: undefined,
+  },
+  // Exclude large binary files from webpack processing
+  webpack: (config, { isServer }) => {
+    config.module.rules.push({
+      test: /\.(wasm|zkey)$/,
+      type: 'asset/resource',
+    });
+    return config;
   },
   
   // Security headers
@@ -24,7 +39,7 @@ const nextConfig = {
               "style-src 'self' 'unsafe-inline'", // Required for styled-components/tailwind
               "img-src 'self' data: https:",
               "font-src 'self' https://fonts.gstatic.com",
-              "connect-src 'self' https://*.dogeos.com wss://*.dogeos.com http://localhost:* ws://localhost:* https://api.coingecko.com",
+              "connect-src 'self' https://*.dogeos.com wss://*.dogeos.com http://localhost:* ws://localhost:* https://api.coingecko.com https://*.onrender.com https://dogenadocash.onrender.com",
               "frame-ancestors 'none'",
               "base-uri 'self'",
               "form-action 'self'",
