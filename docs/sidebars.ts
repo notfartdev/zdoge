@@ -11,6 +11,10 @@ const sidebars: SidebarsConfig = {
     {
       type: 'category',
       label: 'User Guide',
+      link: {
+        type: 'generated-index',
+        description: 'Step-by-step guides for using Dogenado',
+      },
       items: [
         'user-guide/connect-wallet',
         'user-guide/deposit',
@@ -22,6 +26,10 @@ const sidebars: SidebarsConfig = {
     {
       type: 'category',
       label: 'Technical',
+      link: {
+        type: 'generated-index',
+        description: 'Technical deep-dive into Dogenado architecture',
+      },
       items: [
         'technical/architecture',
         'technical/smart-contracts',
@@ -32,6 +40,10 @@ const sidebars: SidebarsConfig = {
     {
       type: 'category',
       label: 'Resources',
+      link: {
+        type: 'generated-index',
+        description: 'Additional resources and references',
+      },
       items: [
         'resources/contract-addresses',
         'resources/supported-tokens',
