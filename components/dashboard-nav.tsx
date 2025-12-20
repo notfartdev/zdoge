@@ -30,12 +30,14 @@ export function DashboardNav() {
               >
                 Mixer
               </Link>
-              <Link
-                href="/#how-it-works"
+              <a
+                href="https://docs.dogenado.cash"
+                target="_blank"
+                rel="noopener noreferrer"
                 className="font-mono text-sm text-gray-400 hover:text-white transition-colors"
               >
                 Docs
-              </Link>
+              </a>
             </div>
           </div>
 

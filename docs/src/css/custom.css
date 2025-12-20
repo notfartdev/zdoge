@@ -1,0 +1,301 @@
+/**
+ * Dogenado Documentation Theme
+ * Dark-first design inspired by crypto/privacy protocols
+ */
+
+:root {
+  /* Primary Colors - Dogenado Gold/Orange */
+  --ifm-color-primary: #f7931a;
+  --ifm-color-primary-dark: #de8417;
+  --ifm-color-primary-darker: #d27d16;
+  --ifm-color-primary-darkest: #ad6712;
+  --ifm-color-primary-light: #f8a33a;
+  --ifm-color-primary-lighter: #f9ab49;
+  --ifm-color-primary-lightest: #fbc06f;
+
+  /* Code styling */
+  --ifm-code-font-size: 95%;
+  --docusaurus-highlighted-code-line-bg: rgba(247, 147, 26, 0.1);
+
+  /* Fonts */
+  --ifm-font-family-base: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --ifm-font-family-monospace: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+  --ifm-heading-font-family: 'Space Grotesk', var(--ifm-font-family-base);
+}
+
+/* Dark theme - Primary */
+[data-theme='dark'] {
+  --ifm-color-primary: #f7931a;
+  --ifm-color-primary-dark: #de8417;
+  --ifm-color-primary-darker: #d27d16;
+  --ifm-color-primary-darkest: #ad6712;
+  --ifm-color-primary-light: #f8a33a;
+  --ifm-color-primary-lighter: #f9ab49;
+  --ifm-color-primary-lightest: #fbc06f;
+  --docusaurus-highlighted-code-line-bg: rgba(247, 147, 26, 0.2);
+
+  /* Dark backgrounds */
+  --ifm-background-color: #0a0a0a;
+  --ifm-background-surface-color: #111111;
+  --ifm-navbar-background-color: #0a0a0aee;
+  --ifm-footer-background-color: #050505;
+  --ifm-card-background-color: #161616;
+  
+  /* Text */
+  --ifm-font-color-base: #e5e5e5;
+  --ifm-heading-color: #ffffff;
+}
+
+/* Navbar styling */
+.navbar {
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(247, 147, 26, 0.1);
+}
+
+.navbar__title {
+  font-weight: 700;
+  font-size: 1.3rem;
+}
+
+.navbar__link:hover {
+  color: var(--ifm-color-primary);
+}
+
+/* Launch App button */
+.navbar__item.navbar__link[href*="dogenado.cash"]:not([href*="docs"]) {
+  background: linear-gradient(135deg, var(--ifm-color-primary), #ff6b35);
+  color: #000 !important;
+  font-weight: 600;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.navbar__item.navbar__link[href*="dogenado.cash"]:not([href*="docs"]):hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 20px rgba(247, 147, 26, 0.4);
+}
+
+/* Sidebar */
+.menu {
+  padding: 1rem;
+}
+
+.menu__link {
+  border-radius: 8px;
+  padding: 0.5rem 0.75rem;
+  transition: all 0.15s ease;
+}
+
+.menu__link:hover {
+  background-color: rgba(247, 147, 26, 0.1);
+}
+
+.menu__link--active {
+  background-color: rgba(247, 147, 26, 0.15);
+  color: var(--ifm-color-primary);
+  font-weight: 600;
+}
+
+/* Table of Contents */
+.table-of-contents__link:hover,
+.table-of-contents__link--active {
+  color: var(--ifm-color-primary);
+}
+
+/* Admonitions */
+.admonition {
+  border-radius: 12px;
+  border-left-width: 4px;
+}
+
+.admonition-heading h5 {
+  font-weight: 600;
+}
+
+/* Info boxes */
+.alert--info {
+  --ifm-alert-background-color: rgba(247, 147, 26, 0.1);
+  --ifm-alert-border-color: var(--ifm-color-primary);
+  --ifm-alert-foreground-color: var(--ifm-font-color-base);
+}
+
+/* Warning boxes */
+.alert--warning {
+  --ifm-alert-background-color: rgba(255, 170, 0, 0.1);
+}
+
+/* Danger boxes */
+.alert--danger {
+  --ifm-alert-background-color: rgba(255, 70, 70, 0.1);
+}
+
+/* Code blocks */
+.prism-code {
+  border-radius: 12px;
+  font-size: 0.9rem;
+}
+
+[data-theme='dark'] .prism-code {
+  background-color: #0d0d0d !important;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* Inline code */
+code {
+  background-color: rgba(247, 147, 26, 0.1);
+  border: 1px solid rgba(247, 147, 26, 0.2);
+  border-radius: 4px;
+  padding: 0.15rem 0.35rem;
+}
+
+[data-theme='dark'] code {
+  color: var(--ifm-color-primary-light);
+}
+
+/* Tables */
+table {
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+[data-theme='dark'] table {
+  background-color: #111;
+}
+
+[data-theme='dark'] th {
+  background-color: #1a1a1a;
+  color: var(--ifm-color-primary);
+}
+
+[data-theme='dark'] tr:nth-child(2n) {
+  background-color: #0d0d0d;
+}
+
+/* Links */
+a {
+  transition: color 0.15s ease;
+}
+
+a:hover {
+  color: var(--ifm-color-primary-light);
+}
+
+/* Headings */
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 700;
+}
+
+h1 {
+  font-size: 2.5rem;
+  background: linear-gradient(135deg, #fff, var(--ifm-color-primary));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+[data-theme='light'] h1 {
+  background: linear-gradient(135deg, #111, var(--ifm-color-primary-dark));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Footer */
+.footer {
+  border-top: 1px solid rgba(247, 147, 26, 0.1);
+}
+
+.footer__title {
+  color: var(--ifm-color-primary);
+}
+
+/* Pagination */
+.pagination-nav__link {
+  border-radius: 12px;
+  border: 1px solid rgba(247, 147, 26, 0.2);
+  transition: all 0.2s ease;
+}
+
+.pagination-nav__link:hover {
+  border-color: var(--ifm-color-primary);
+  background-color: rgba(247, 147, 26, 0.05);
+}
+
+/* Search */
+.DocSearch-Button {
+  border-radius: 10px;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(247, 147, 26, 0.3);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(247, 147, 26, 0.5);
+}
+
+/* Hero banner (for intro page) */
+.hero-banner {
+  margin-bottom: 2rem;
+}
+
+.hero-banner img {
+  border-radius: 16px;
+  width: 100%;
+  max-height: 300px;
+  object-fit: cover;
+}
+
+/* Privacy-themed elements */
+.privacy-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: rgba(247, 147, 26, 0.1);
+  border: 1px solid rgba(247, 147, 26, 0.3);
+  border-radius: 50px;
+  font-size: 0.85rem;
+  color: var(--ifm-color-primary);
+}
+
+/* Mermaid diagrams */
+.docusaurus-mermaid-container {
+  margin: 1.5rem 0;
+}
+
+[data-theme='dark'] .docusaurus-mermaid-container svg {
+  background: transparent !important;
+}
+
+/* Responsive */
+@media (max-width: 996px) {
+  h1 {
+    font-size: 2rem;
+  }
+  
+  .navbar__title {
+    font-size: 1.1rem;
+  }
+}
+
+/* Animation for code blocks */
+.prism-code {
+  transition: box-shadow 0.3s ease;
+}
+
+.prism-code:hover {
+  box-shadow: 0 0 30px rgba(247, 147, 26, 0.1);
+}
