@@ -6,8 +6,6 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
-  // Empty turbopack config to silence warning about webpack config
-  turbopack: {},
   
   // Security headers
   async headers() {
