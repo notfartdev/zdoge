@@ -433,6 +433,20 @@ h2 {
   background: transparent !important;
 }
 
+/* Improve content area spacing on mobile */
+@media (max-width: 996px) {
+  /* Main content container */
+  .container {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+  
+  /* Main content wrapper */
+  main {
+    padding-top: 1rem;
+  }
+}
+
 /* Responsive */
 @media (max-width: 996px) {
   h1 {
@@ -448,21 +462,39 @@ h2 {
     font-size: 1.25rem;
   }
   
+  /* Hide navbar title text on mobile, keep only logo */
   .navbar__title {
-    font-size: 0.95rem;
+    display: none;
   }
   
   .navbar__item {
-    padding: 0.5rem 0.75rem;
+    padding: 0.5rem 0.5rem;
     min-height: 44px;
     display: flex;
     align-items: center;
+    font-size: 0.85rem;
+  }
+  
+  /* Reduce spacing between navbar items on mobile */
+  .navbar__items--right {
+    gap: 0.75rem !important;
+  }
+  
+  /* Make Launch App button more compact on mobile */
+  .navbar__item.navbar__link[href*="dogenado.cash"]:not([href*="docs"]) {
+    padding: 0.4rem 0.75rem;
+    font-size: 0.7rem;
   }
   
   /* Mobile menu improvements */
   .navbar__toggle {
     min-width: 44px;
     min-height: 44px;
+  }
+  
+  /* Ensure navbar logo has proper spacing */
+  .navbar__logo {
+    margin-right: 0.5rem;
   }
   
   /* Footer mobile */
@@ -509,14 +541,50 @@ h2 {
 @media (max-width: 576px) {
   h1 {
     font-size: 1.5rem;
+    margin-top: 1rem;
+    margin-bottom: 0.75rem;
   }
   
   h2 {
     font-size: 1.25rem;
+    margin-top: 1.5rem;
+    margin-bottom: 0.75rem;
+  }
+  
+  h3 {
+    font-size: 1.1rem;
   }
   
   .navbar {
-    padding: 0.5rem 0.75rem;
+    padding: 0.5rem 0.5rem;
+  }
+  
+  /* Further reduce navbar item spacing on very small screens */
+  .navbar__items--right {
+    gap: 0.5rem !important;
+  }
+  
+  .navbar__item {
+    padding: 0.4rem 0.4rem;
+  }
+  
+  /* Make Launch App button even more compact */
+  .navbar__item.navbar__link[href*="dogenado.cash"]:not([href*="docs"]) {
+    padding: 0.35rem 0.6rem;
+    font-size: 0.65rem;
+  }
+  
+  /* Hide X label on very small screens, keep icon only if it exists */
+  .navbar__item.navbar__link[href*="x.com"],
+  .navbar__item.navbar__link[href*="twitter.com"] {
+    padding: 0.5rem;
+  }
+  
+  /* Make X link more compact - text will naturally truncate or we can hide it */
+  .navbar__item.navbar__link[href*="x.com"],
+  .navbar__item.navbar__link[href*="twitter.com"] {
+    font-size: 0.75rem;
+    min-width: auto;
   }
   
   .hero-banner img {
@@ -537,11 +605,69 @@ h2 {
   p, li {
     font-size: 0.9rem;
     line-height: 1.6;
+    margin-top: 0.75rem;
+    margin-bottom: 0.75rem;
   }
   
   code {
     font-size: 0.85rem;
     padding: 0.2rem 0.3rem;
+  }
+  
+  /* Adjust content padding on mobile */
+  .container {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+  
+  /* Adjust admonitions on mobile */
+  .admonition {
+    padding: 0.75rem;
+    margin: 1rem 0;
+  }
+  
+  /* Adjust table of contents on mobile */
+  .table-of-contents {
+    margin-top: 1rem;
+    margin-bottom: 1rem;
+    font-size: 0.85rem;
+  }
+  
+  /* Better spacing for main content */
+  .markdown {
+    padding: 0.5rem 0;
+  }
+  
+  /* Adjust breadcrumbs on mobile */
+  .breadcrumbs {
+    font-size: 0.8rem;
+    margin-bottom: 0.75rem;
+  }
+  
+  /* Improve admonitions on mobile */
+  .admonition-heading {
+    font-size: 0.9rem;
+  }
+  
+  /* Adjust images on mobile */
+  .markdown img {
+    max-width: 100%;
+    height: auto;
+    margin: 1rem 0;
+  }
+  
+  /* Better spacing for lists */
+  .markdown ul,
+  .markdown ol {
+    padding-left: 1.25rem;
+    margin: 0.75rem 0;
+  }
+  
+  /* Adjust blockquotes */
+  blockquote {
+    padding: 0.75rem 1rem;
+    margin: 1rem 0;
+    font-size: 0.9rem;
   }
 }
 
