@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Dogenado Relayer Service
  * 

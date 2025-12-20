@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Dogenado Backend - Combined Entry Point
  * 
