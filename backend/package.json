@@ -5,12 +5,12 @@
   "main": "src/index.ts",
   "scripts": {
     "build": "echo 'Using tsx for runtime transpilation'",
-    "start": "tsx src/index.ts",
-    "dev": "tsx watch src/index.ts",
-    "indexer": "tsx src/indexer/index.ts",
-    "relayer": "tsx src/relayer/index.ts",
-    "db:init": "tsx src/database/init.ts",
-    "db:reset": "tsx src/database/reset.ts",
+    "start": "node --import tsx src/index.ts",
+    "dev": "npx tsx watch src/index.ts",
+    "indexer": "npx tsx src/indexer/index.ts",
+    "relayer": "npx tsx src/relayer/index.ts",
+    "db:init": "npx tsx src/database/init.ts",
+    "db:reset": "npx tsx src/database/reset.ts",
     "test": "vitest"
   },
   "dependencies": {
