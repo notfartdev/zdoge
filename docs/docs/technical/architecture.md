@@ -10,27 +10,35 @@ Dogenado is built on a multi-layer architecture designed for security, privacy, 
 
 ## System Components
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                        User Browser                          │
-│  ┌─────────────────┐  ┌─────────────────┐  ┌──────────────┐ │
-│  │   Web Frontend  │  │  ZK Proof Gen   │  │ Wallet (MM)  │ │
-│  │   (Next.js)     │  │  (snarkjs)      │  │              │ │
-│  └────────┬────────┘  └────────┬────────┘  └──────┬───────┘ │
-└───────────┼────────────────────┼─────────────────┼──────────┘
-            │                    │                 │
-            ▼                    ▼                 ▼
-┌───────────────────────────────────────────────────────────────┐
-│                      DogeOS Blockchain                         │
-│  ┌─────────────────────────────────────────────────────────┐  │
-│  │                  Smart Contracts                         │  │
-│  │  ┌──────────────┐  ┌──────────────┐  ┌───────────────┐  │  │
-│  │  │ MixerPoolV2  │  │   Verifier   │  │  ERC20 Tokens │  │  │
-│  │  │ (per token/  │  │  (Groth16)   │  │  (USDC, etc)  │  │  │
-│  │  │   amount)    │  │              │  │               │  │  │
-│  │  └──────────────┘  └──────────────┘  └───────────────┘  │  │
-│  └─────────────────────────────────────────────────────────┘  │
-└───────────────────────────────────────────────────────────────┘
+```mermaid
+graph TB
+    subgraph Browser["User Browser"]
+        Frontend["Web Frontend<br/>(Next.js)"]
+        ZKProof["ZK Proof Gen<br/>(snarkjs)"]
+        Wallet["Wallet<br/>(MetaMask)"]
+    end
+    
+    subgraph Blockchain["DogeOS Blockchain"]
+        subgraph Contracts["Smart Contracts"]
+            Mixer["MixerPoolV2<br/>(per token/amount)"]
+            Verifier["Verifier<br/>(Groth16)"]
+            ERC20["ERC20 Tokens<br/>(USDC, etc)"]
+        end
+    end
+    
+    Frontend --> Contracts
+    ZKProof --> Contracts
+    Wallet --> Contracts
+    
+    style Browser fill:#1a1a1a,stroke:#C2A633,stroke-width:2px,color:#fff
+    style Blockchain fill:#1a1a1a,stroke:#C2A633,stroke-width:2px,color:#fff
+    style Contracts fill:#161616,stroke:#C2A633,stroke-width:1px,color:#fff
+    style Frontend fill:#0d0d0d,stroke:#C2A633,stroke-width:1px,color:#C2A633
+    style ZKProof fill:#0d0d0d,stroke:#C2A633,stroke-width:1px,color:#C2A633
+    style Wallet fill:#0d0d0d,stroke:#C2A633,stroke-width:1px,color:#C2A633
+    style Mixer fill:#0d0d0d,stroke:#C2A633,stroke-width:1px,color:#C2A633
+    style Verifier fill:#0d0d0d,stroke:#C2A633,stroke-width:1px,color:#C2A633
+    style ERC20 fill:#0d0d0d,stroke:#C2A633,stroke-width:1px,color:#C2A633
 ```
 
 ## Frontend Layer

@@ -1,0 +1,38 @@
+---
+id: resources
+title: Resources
+---
+
+import ResourceCard from '@site/src/components/ResourceCard';
+
+# Resources
+
+<div className="resources-grid" style={{
+  display: 'grid',
+  gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+  gap: '1.5rem',
+  marginTop: '2rem'
+}}>
+
+<ResourceCard 
+  title="Contract Addresses"
+  description="All Dogenado smart contracts deployed on DogeOS."
+  href="/resources/contract-addresses"
+  icon="FileText"
+/>
+
+<ResourceCard 
+  title="Supported Tokens"
+  description="Dogenado supports multiple tokens with various pool denominations."
+  href="/resources/supported-tokens"
+  icon="Coins"
+/>
+
+<ResourceCard 
+  title="FAQ"
+  description="Common questions about using Dogenado."
+  href="/resources/faq"
+  icon="MessageCircle"
+/>
+
+</div>
