@@ -40,7 +40,9 @@ export function Footer() {
               Docs
             </a>
             <a
-              href="https://x.com/dogenadocash"
+              href="https://x.com/DogenadoCash"
+              target="_blank"
+              rel="noopener noreferrer"
               data-cursor-hover
               className="font-mono text-xs tracking-widest text-muted-foreground hover:text-white transition-colors duration-300"
             >

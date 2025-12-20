@@ -67,7 +67,7 @@ const config: Config = {
           position: 'right',
         },
         {
-          href: 'https://x.com/dogenadocash',
+          href: 'https://x.com/DogenadoCash',
           label: 'X',
           position: 'right',
         },
@@ -111,7 +111,7 @@ const config: Config = {
           items: [
             {
               label: 'X (Twitter)',
-              href: 'https://x.com/dogenadocash',
+              href: 'https://x.com/DogenadoCash',
             },
           ],
         },
