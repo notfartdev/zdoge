@@ -11,18 +11,15 @@ import { AlertCircle, CheckCircle2, Copy } from "lucide-react"
 export function MixerInterface() {
   const [amount, setAmount] = useState([10])
   const [activeTab, setActiveTab] = useState("deposit")
-  const [secretNote, setSecretNote] = useState("")
-  const [depositAddress, setDepositAddress] = useState("")
+  // Demo state - shows example output without real functionality
+  const [showDemo, setShowDemo] = useState(false)
 
-  const handleGenerateNote = () => {
-    const note = `dogenado://note/${Math.random().toString(36).substring(2, 15)}${Math.random().toString(36).substring(2, 15)}`
-    setSecretNote(note)
-  }
+  // Demo data - not real functionality
+  const demoNote = "dogenado://note/srjo2mcnfwlvxw31p0ehg"
+  const demoAddress = "D4TRKW2AB4GC"
 
-  const handleDeposit = () => {
-    handleGenerateNote()
-    // Simulate generating deposit address
-    setDepositAddress("D" + Math.random().toString(36).substring(2, 15).toUpperCase())
+  const handleDemoClick = () => {
+    setShowDemo(true)
   }
 
   return (
@@ -49,14 +46,14 @@ export function MixerInterface() {
           </p>
         </motion.div>
 
-        {/* Main Interface */}
+        {/* Main Interface - Demo Only */}
         <motion.div
           initial={{ opacity: 0, y: 40 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 1, delay: 0.4 }}
           className="grid lg:grid-cols-[500px_1fr] gap-8 items-start"
         >
-          {/* Left: Mixer Interface */}
+          {/* Left: Mixer Interface (Demo) */}
           <div className="border border-white/10 bg-black/20 backdrop-blur-sm">
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
               <TabsList className="w-full grid grid-cols-2 bg-transparent border-b border-white/10 rounded-none h-auto p-0">
@@ -92,18 +89,18 @@ export function MixerInterface() {
                     </div>
                   </div>
 
-                  {/* Deposit Button */}
-                  {!secretNote && (
+                  {/* Demo Button */}
+                  {!showDemo && (
                     <Button
-                      onClick={handleDeposit}
+                      onClick={handleDemoClick}
                       className="w-full bg-[#C2A633] hover:bg-[#C2A633]/90 text-black font-mono text-xs tracking-widest py-6"
                     >
                       GENERATE DEPOSIT
                     </Button>
                   )}
 
-                  {/* Secret Note Display */}
-                  {secretNote && (
+                  {/* Demo Output Display */}
+                  {showDemo && (
                     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
                       <div className="border border-[#C2A633] bg-[#C2A633]/5 p-4">
                         <div className="flex items-start gap-3 mb-3">
@@ -116,11 +113,8 @@ export function MixerInterface() {
                           </div>
                         </div>
                         <div className="bg-black/40 p-3 rounded border border-white/10 flex items-center gap-2">
-                          <code className="font-mono text-xs text-foreground break-all flex-1">{secretNote}</code>
-                          <button
-                            onClick={() => navigator.clipboard.writeText(secretNote)}
-                            className="text-muted-foreground hover:text-foreground transition-colors"
-                          >
+                          <code className="font-mono text-xs text-foreground break-all flex-1">{demoNote}</code>
+                          <button className="text-muted-foreground hover:text-foreground transition-colors cursor-default">
                             <Copy className="w-4 h-4" />
                           </button>
                         </div>
@@ -129,11 +123,8 @@ export function MixerInterface() {
                       <div className="border border-white/10 bg-black/20 p-4">
                         <p className="font-mono text-xs tracking-widest text-muted-foreground mb-2">DEPOSIT ADDRESS</p>
                         <div className="bg-black/40 p-3 rounded border border-white/10 flex items-center gap-2">
-                          <code className="font-mono text-sm text-foreground break-all flex-1">{depositAddress}</code>
-                          <button
-                            onClick={() => navigator.clipboard.writeText(depositAddress)}
-                            className="text-muted-foreground hover:text-foreground transition-colors"
-                          >
+                          <code className="font-mono text-sm text-foreground break-all flex-1">{demoAddress}</code>
+                          <button className="text-muted-foreground hover:text-foreground transition-colors cursor-default">
                             <Copy className="w-4 h-4" />
                           </button>
                         </div>
@@ -155,6 +146,7 @@ export function MixerInterface() {
                     <Input
                       placeholder="dogenado://note/..."
                       className="bg-black/40 border-white/10 font-mono text-xs"
+                      readOnly
                     />
                   </div>
 
@@ -162,10 +154,10 @@ export function MixerInterface() {
                     <label className="font-mono text-xs tracking-widest text-muted-foreground mb-3 block">
                       RECIPIENT ADDRESS
                     </label>
-                    <Input placeholder="D..." className="bg-black/40 border-white/10 font-mono text-xs" />
+                    <Input placeholder="D..." className="bg-black/40 border-white/10 font-mono text-xs" readOnly />
                   </div>
 
-                  <Button className="w-full bg-[#C2A633] hover:bg-[#C2A633]/90 text-black font-mono text-xs tracking-widest py-6">
+                  <Button className="w-full bg-[#C2A633] hover:bg-[#C2A633]/90 text-black font-mono text-xs tracking-widest py-6 cursor-default">
                     WITHDRAW
                   </Button>
                 </div>

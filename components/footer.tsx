@@ -1,64 +1,64 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { FileText, Globe } from "lucide-react"
+
+// X/Twitter icon component
+function XIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+    </svg>
+  )
+}
 
 export function Footer() {
-  const [time, setTime] = useState("")
-
-  useEffect(() => {
-    const updateTime = () => {
-      const now = new Date()
-      const hours = now.getHours().toString().padStart(2, "0")
-      const minutes = now.getMinutes().toString().padStart(2, "0")
-      const seconds = now.getSeconds().toString().padStart(2, "0")
-      const milliseconds = now.getMilliseconds().toString().padStart(3, "0")
-      setTime(`${hours}:${minutes}:${seconds}.${milliseconds}`)
-    }
-
-    updateTime()
-    const interval = setInterval(updateTime, 10)
-    return () => clearInterval(interval)
-  }, [])
-
   return (
-    <footer className="relative border-t border-white/10">
-      {/* Footer Info */}
-      <div className="px-8 md:px-12 py-8">
-        <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+    <footer className="relative border-t border-[#C2A633]/20">
+      <div className="px-8 md:px-12 py-6">
+        <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+          {/* Logo */}
           <div className="flex items-center gap-3">
-            <img src="/dogenadologo.png" alt="DogenadoCash" className="w-8 h-8 rounded-full" />
+            <img src="/dogenadologo.png" alt="DogenadoCash" className="w-8 h-8" />
             <span className="font-mono text-xs tracking-widest text-foreground">DOGENADOCASH</span>
           </div>
 
-          {/* Links */}
-          <div className="flex gap-8">
+          {/* Icon Links */}
+          <div className="flex items-center gap-6">
             <a
               href="https://docs.dogenado.cash"
-              data-cursor-hover
-              className="font-mono text-xs tracking-widest text-muted-foreground hover:text-white transition-colors duration-300"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 text-muted-foreground hover:text-[#C2A633] transition-colors duration-300"
+              title="Documentation"
             >
-              Docs
+              <FileText className="w-4 h-4" />
+              <span className="font-mono text-xs tracking-widest">Docs</span>
             </a>
             <a
               href="https://x.com/DogenadoCash"
               target="_blank"
               rel="noopener noreferrer"
-              data-cursor-hover
-              className="font-mono text-xs tracking-widest text-muted-foreground hover:text-white transition-colors duration-300"
+              className="flex items-center gap-2 text-muted-foreground hover:text-[#C2A633] transition-colors duration-300"
+              title="X (Twitter)"
             >
-              X
+              <XIcon className="w-4 h-4" />
+              <span className="font-mono text-xs tracking-widest">X</span>
+            </a>
+            <a
+              href="https://dogeos.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 text-muted-foreground hover:text-[#C2A633] transition-colors duration-300"
+              title="DogeOS Website"
+            >
+              <Globe className="w-4 h-4" />
+              <span className="font-mono text-xs tracking-widest">DogeOS</span>
             </a>
           </div>
 
           {/* Copyright */}
-          <p className="font-mono text-xs tracking-widest text-muted-foreground">
-            © {new Date().getFullYear()} • OPEN SOURCE
-          </p>
-        </div>
-
-        <div className="mt-8 pt-8 border-t border-white/10">
-          <p className="font-mono text-xs text-muted-foreground text-center max-w-3xl mx-auto leading-relaxed">
-            DogenadoCash is experimental software currently on testnet. Use at your own risk. Always comply with local regulations.
+          <p className="font-mono text-xs tracking-widest text-muted-foreground/50">
+            © {new Date().getFullYear()}
           </p>
         </div>
       </div>
