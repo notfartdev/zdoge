@@ -4,13 +4,13 @@
   "description": "Backend services for Dogenado Privacy Pool",
   "main": "src/index.ts",
   "scripts": {
-    "build": "echo 'Using tsx for runtime transpilation'",
-    "start": "node --import tsx src/index.ts",
-    "dev": "npx tsx watch src/index.ts",
-    "indexer": "npx tsx src/indexer/index.ts",
-    "relayer": "npx tsx src/relayer/index.ts",
-    "db:init": "npx tsx src/database/init.ts",
-    "db:reset": "npx tsx src/database/reset.ts",
+    "build": "tsc --skipLibCheck --noEmit || true",
+    "start": "node --loader ts-node/esm src/index.ts",
+    "dev": "ts-node-dev --respawn src/index.ts",
+    "indexer": "ts-node src/indexer/index.ts",
+    "relayer": "ts-node src/relayer/index.ts",
+    "db:init": "ts-node src/database/init.ts",
+    "db:reset": "ts-node src/database/reset.ts",
     "test": "vitest"
   },
   "dependencies": {
@@ -22,7 +22,7 @@
     "ffjavascript": "^0.3.0",
     "pg": "^8.16.3",
     "snarkjs": "^0.7.3",
-    "tsx": "^4.7.0",
+    "ts-node": "^10.9.2",
     "viem": "2.21.0",
     "ws": "^8.16.0"
   },
@@ -32,6 +32,7 @@
     "@types/node": "^20.0.0",
     "@types/pg": "^8.16.0",
     "@types/ws": "^8.5.10",
+    "ts-node-dev": "^2.0.0",
     "typescript": "^5.3.0",
     "vitest": "^1.2.0"
   }
