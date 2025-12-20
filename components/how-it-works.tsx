@@ -112,310 +112,285 @@ export function HowItWorks() {
           ))}
         </div>
 
-        {/* Tornado Mixing Visualization */}
+        {/* Transaction Flow Visualization */}
         <motion.div
           initial={{ opacity: 0, y: 40 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 1 }}
-          className="border border-white/10 bg-black/20 backdrop-blur-sm p-4 sm:p-6 md:p-8 lg:p-12 overflow-x-auto"
+          className="border border-white/10 bg-black/20 backdrop-blur-sm p-8 sm:p-12 md:p-16"
         >
-          <div className="flex flex-col md:flex-row items-center justify-between gap-4 md:gap-8 relative min-w-[320px]">
-            {/* Input Wallets */}
-            <div className="flex flex-col gap-2 md:gap-4 relative z-10 w-full md:w-auto">
-              <div className="text-center">
-                <p className="font-mono text-[10px] sm:text-xs tracking-widest text-muted-foreground mb-2 md:mb-4">INPUT WALLETS</p>
-                <div className="grid grid-cols-2 md:grid-cols-1 gap-2 md:gap-0">
-                  {[1, 2, 3, 4].map((i) => (
+          <div className="relative w-full max-w-6xl mx-auto">
+            {/* Transaction Flow Diagram */}
+            <div className="relative flex flex-col md:flex-row items-center justify-between gap-12 md:gap-20 min-h-[600px]">
+              
+              {/* Left: Deposit Wallets */}
+              <div className="flex flex-col gap-6 w-full md:w-auto relative z-20">
+                <p className="font-mono text-xs tracking-widest text-[#C2A633] mb-6 text-center md:text-left">DEPOSIT</p>
+                <div className="flex flex-col gap-6">
+                  {['A', 'B', 'C', 'D'].map((wallet, index) => (
                     <motion.div
-                      key={i}
-                      className="w-full md:w-32 h-8 md:h-10 border border-white/20 bg-black/40 mb-0 md:mb-2 flex items-center justify-center relative"
-                      animate={{
-                        borderColor: ['rgba(255, 255, 255, 0.2)', 'rgba(194, 166, 51, 0.6)', 'rgba(255, 255, 255, 0.2)']
-                      }}
-                      transition={{
-                        duration: 2,
-                        delay: i * 0.3,
-                        repeat: Infinity,
-                        ease: "easeInOut"
-                      }}
+                      key={wallet}
+                      initial={{ opacity: 0, x: -20 }}
+                      whileInView={{ opacity: 1, x: 0 }}
+                      viewport={{ once: true }}
+                      transition={{ duration: 0.5, delay: index * 0.1 }}
+                      className="relative"
+                      id={`deposit-wallet-${wallet}`}
                     >
-                      <span className="font-mono text-[10px] sm:text-xs text-muted-foreground">Wallet {i}</span>
+                      <div className="px-5 py-4 border border-white/20 bg-black/40 backdrop-blur-sm hover:border-[#C2A633]/50 transition-all duration-300 min-w-[160px]">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full bg-[#C2A633]/20 border-2 border-[#C2A633]/50 flex items-center justify-center">
+                            <span className="font-mono text-sm font-bold text-[#C2A633]">{wallet}</span>
+                          </div>
+                          <span className="font-mono text-sm text-white font-medium">Wallet {wallet}</span>
+                        </div>
+                      </div>
                     </motion.div>
                   ))}
                 </div>
               </div>
-            </div>
 
-            {/* Tornado Flow Area - Left Side */}
-            <div className="hidden md:flex flex-col items-center justify-center relative w-32 h-64">
-              {/* Curved paths leading to tornado */}
-              <svg className="absolute inset-0 w-full h-full" style={{ overflow: 'visible' }}>
-                <defs>
-                  <linearGradient id="tornadoGradientLeft" x1="0%" y1="0%" x2="100%" y2="0%">
-                    <stop offset="0%" stopColor="#C2A633" stopOpacity="0.1" />
-                    <stop offset="50%" stopColor="#C2A633" stopOpacity="0.6" />
-                    <stop offset="100%" stopColor="#C2A633" stopOpacity="0.1" />
-                  </linearGradient>
-                </defs>
-                {/* Curved paths spiraling inward */}
-                {[0, 1, 2, 3].map((i) => {
-                  const startY = 20 + i * 40
-                  const endY = 50
-                  const controlX = 50
-                  const controlY = startY + (endY - startY) / 2
-                  return (
-                    <path
-                      key={i}
-                      d={`M 0 ${startY} Q ${controlX} ${controlY} 100 ${endY}`}
-                      stroke="url(#tornadoGradientLeft)"
-                      strokeWidth="1.5"
-                      fill="none"
-                      strokeDasharray="3 3"
-                      opacity="0.4"
-                    />
-                  )
-                })}
-              </svg>
-              
-              {/* Particles flowing along curved paths into tornado */}
-              <div className="relative w-full h-full">
-                {[0, 1, 2, 3].map((i) => (
-                  <motion.div
-                    key={i}
-                    className="absolute w-2.5 h-2.5 bg-[#C2A633] rounded-full shadow-[0_0_12px_#C2A633]"
-                    style={{
-                      left: 0,
-                      top: `${20 + i * 40}%`,
-                    }}
-                    animate={{
-                      x: ['0%', '50%', '100%'],
-                      y: [
-                        '0%',
-                        `${(50 - (20 + i * 40)) * 0.5}%`,
-                        `${50 - (20 + i * 40)}%`
-                      ],
-                      scale: [0.8, 1.3, 1.5, 1.2],
-                      opacity: [0.3, 1, 1, 0.8, 0.2],
-                      rotate: [0, 180, 360]
-                    }}
-                    transition={{
-                      duration: 2.5,
-                      delay: i * 0.4,
-                      repeat: Infinity,
-                      ease: [0.42, 0, 0.58, 1] // Custom easing for smooth curve
-                    }}
-                  />
-                ))}
-              </div>
-            </div>
-
-            {/* Tornado Mixing Pool */}
-            <div className="flex flex-col items-center justify-center relative z-10 my-4 md:my-0">
-              {/* Mobile: Vertical Arrow */}
-              <motion.div
-                className="md:hidden mb-2"
-                animate={{ y: [0, 8, 0] }}
-                transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
-              >
-                <svg className="w-6 h-6 text-[#C2A633]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-                </svg>
-              </motion.div>
-              
-              <div className="w-32 h-32 sm:w-40 sm:h-40 md:w-48 md:h-48 border-2 border-[#C2A633] bg-[#C2A633]/5 backdrop-blur-sm flex items-center justify-center relative overflow-hidden rounded-full">
-                {/* Tornado effect - particles spiraling inward */}
-                <div className="absolute inset-0">
-                  {[...Array(12)].map((_, i) => {
-                    const angle = (i * 30) * (Math.PI / 180)
-                    const radius = 40
-                    return (
-                      <motion.div
-                        key={i}
-                        className="absolute top-1/2 left-1/2 w-2.5 h-2.5 bg-[#C2A633] rounded-full shadow-[0_0_10px_#C2A633]"
-                        style={{
-                          transformOrigin: '0 0',
-                        }}
-                        animate={{
-                          rotate: [i * 30, i * 30 + 360],
-                          x: [radius, radius * 0.3, radius * 0.1],
-                          y: [0, 0, 0],
-                          scale: [1, 1.5, 2, 1.8],
-                          opacity: [0.6, 1, 1, 0.8, 0.4]
-                        }}
-                        transition={{
-                          duration: 3,
-                          delay: i * 0.2,
-                          repeat: Infinity,
-                          ease: "easeInOut"
-                        }}
-                      />
-                    )
-                  })}
-                </div>
-                
-                {/* Inner rotating ring - tornado core */}
+              {/* Center: Mixing Pool */}
+              <div className="flex flex-col items-center justify-center relative z-30 my-12 md:my-0">
                 <motion.div
-                  animate={{ rotate: -360 }}
-                  transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-                  className="absolute inset-8 border-2 border-[#C2A633]/40 rounded-full"
-                />
-                
-                {/* Middle ring */}
-                <motion.div
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
-                  className="absolute inset-12 border border-[#C2A633]/30 rounded-full"
-                />
-                
-                {/* Outer rotating particles */}
-                <motion.div
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 6, repeat: Infinity, ease: "linear" }}
-                  className="absolute inset-4"
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  whileInView={{ opacity: 1, scale: 1 }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 0.8 }}
+                  className="relative"
+                  id="mixing-pool"
                 >
-                  {[...Array(8)].map((_, i) => (
-                    <div
-                      key={i}
-                      className="absolute top-0 left-1/2 w-1.5 h-1.5 bg-[#C2A633] rounded-full shadow-[0_0_8px_#C2A633]"
-                      style={{
-                        transform: `rotate(${i * 45}deg) translateY(-18px)`,
-                      }}
-                    />
-                  ))}
-                </motion.div>
-                
-                {/* Center icon */}
-                <Shuffle className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 text-[#C2A633] relative z-10" />
-                
-                {/* Pulsing glow effect */}
-                <motion.div
-                  className="absolute inset-0 border-2 border-[#C2A633] rounded-full"
-                  animate={{
-                    opacity: [0.2, 0.5, 0.2],
-                    scale: [1, 1.05, 1],
-                    boxShadow: [
-                      '0 0 20px rgba(194, 166, 51, 0.3)',
-                      '0 0 40px rgba(194, 166, 51, 0.6)',
-                      '0 0 20px rgba(194, 166, 51, 0.3)'
-                    ]
-                  }}
-                  transition={{
-                    duration: 2,
-                    repeat: Infinity,
-                    ease: "easeInOut"
-                  }}
-                />
-              </div>
-              
-              {/* Mobile: Vertical Arrow */}
-              <motion.div
-                className="md:hidden mt-2"
-                animate={{ y: [0, 8, 0] }}
-                transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut", delay: 0.75 }}
-              >
-                <svg className="w-6 h-6 text-[#C2A633]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-                </svg>
-              </motion.div>
-            </div>
+                  {/* Pool Container */}
+                  <div className="w-56 h-56 md:w-72 md:h-72 border-2 border-[#C2A633] bg-gradient-to-br from-[#C2A633]/10 to-[#C2A633]/5 backdrop-blur-sm rounded-full flex items-center justify-center relative overflow-hidden">
+                    
+                    {/* Animated mixing particles */}
+                    <div className="absolute inset-0">
+                      {[...Array(20)].map((_, i) => {
+                        const angle = (i * 18) * (Math.PI / 180)
+                        const radius = 100
+                        return (
+                          <motion.div
+                            key={i}
+                            className="absolute top-1/2 left-1/2 w-2 h-2 bg-[#C2A633] rounded-full shadow-[0_0_10px_#C2A633]"
+                            style={{
+                              transformOrigin: '0 0',
+                            }}
+                            animate={{
+                              rotate: [i * 18, i * 18 + 360],
+                              x: [Math.cos(angle) * radius, Math.cos(angle) * radius * 0.4, Math.cos(angle) * radius * 0.1],
+                              y: [Math.sin(angle) * radius, Math.sin(angle) * radius * 0.4, Math.sin(angle) * radius * 0.1],
+                              scale: [0.8, 1.3, 1.6, 1.2],
+                              opacity: [0.5, 0.9, 1, 0.9, 0.5]
+                            }}
+                            transition={{
+                              duration: 3.5,
+                              delay: i * 0.1,
+                              repeat: Infinity,
+                              ease: "easeInOut"
+                            }}
+                          />
+                        )
+                      })}
+                    </div>
 
-            {/* Tornado Flow Area - Right Side */}
-            <div className="hidden md:flex flex-col items-center justify-center relative w-32 h-64">
-              {/* Curved paths leading out from tornado */}
-              <svg className="absolute inset-0 w-full h-full" style={{ overflow: 'visible' }}>
-                <defs>
-                  <linearGradient id="tornadoGradientRight" x1="0%" y1="0%" x2="100%" y2="0%">
-                    <stop offset="0%" stopColor="#C2A633" stopOpacity="0.1" />
-                    <stop offset="50%" stopColor="#C2A633" stopOpacity="0.6" />
-                    <stop offset="100%" stopColor="#C2A633" stopOpacity="0.1" />
-                  </linearGradient>
-                </defs>
-                {/* Curved paths spiraling outward */}
-                {[0, 1, 2, 3].map((i) => {
-                  const startY = 50
-                  const endY = 20 + i * 40
-                  const controlX = 50
-                  const controlY = startY + (endY - startY) / 2
-                  return (
-                    <path
-                      key={i}
-                      d={`M 0 ${startY} Q ${controlX} ${controlY} 100 ${endY}`}
-                      stroke="url(#tornadoGradientRight)"
-                      strokeWidth="1.5"
-                      fill="none"
-                      strokeDasharray="3 3"
-                      opacity="0.4"
-                    />
-                  )
-                })}
-              </svg>
-              
-              {/* Particles flowing out from tornado */}
-              <div className="relative w-full h-full">
-                {[0, 1, 2, 3].map((i) => (
-                  <motion.div
-                    key={i}
-                    className="absolute w-2.5 h-2.5 bg-[#C2A633] rounded-full shadow-[0_0_12px_#C2A633]"
-                    style={{
-                      left: '50%',
-                      top: '50%',
-                    }}
-                    animate={{
-                      x: ['0%', '50%', '100%'],
-                      y: [
-                        '0%',
-                        `${(20 + i * 40 - 50) * 0.5}%`,
-                        `${20 + i * 40 - 50}%`
-                      ],
-                      scale: [1.5, 1.2, 1, 0.8],
-                      opacity: [0.8, 1, 1, 0.8, 0.3],
-                      rotate: [0, -180, -360]
-                    }}
-                    transition={{
-                      duration: 2.5,
-                      delay: i * 0.4 + 1.5,
-                      repeat: Infinity,
-                      ease: [0.42, 0, 0.58, 1]
-                    }}
-                  />
-                ))}
-              </div>
-            </div>
-
-            {/* Output Wallets */}
-            <div className="flex flex-col gap-2 md:gap-4 relative z-10 w-full md:w-auto">
-              <div className="text-center">
-                <p className="font-mono text-[10px] sm:text-xs tracking-widest text-muted-foreground mb-2 md:mb-4">OUTPUT WALLETS</p>
-                <div className="grid grid-cols-2 md:grid-cols-1 gap-2 md:gap-0">
-                  {[1, 2, 3, 4].map((i) => (
+                    {/* Rotating rings */}
                     <motion.div
-                      key={i}
-                      className="w-full md:w-32 h-8 md:h-10 border border-[#C2A633]/50 bg-[#C2A633]/10 mb-0 md:mb-2 flex items-center justify-center"
+                      animate={{ rotate: -360 }}
+                      transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
+                      className="absolute inset-6 border border-[#C2A633]/40 rounded-full"
+                    />
+                    <motion.div
+                      animate={{ rotate: 360 }}
+                      transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
+                      className="absolute inset-12 border border-[#C2A633]/30 rounded-full"
+                    />
+
+                    {/* Center icon */}
+                    <Shuffle className="w-14 h-14 md:w-18 md:h-18 text-[#C2A633] relative z-10" />
+
+                    {/* Pulsing glow */}
+                    <motion.div
+                      className="absolute inset-0 rounded-full"
                       animate={{
-                        borderColor: ['rgba(194, 166, 51, 0.3)', 'rgba(194, 166, 51, 0.7)', 'rgba(194, 166, 51, 0.3)'],
-                        backgroundColor: ['rgba(194, 166, 51, 0.05)', 'rgba(194, 166, 51, 0.15)', 'rgba(194, 166, 51, 0.05)']
+                        boxShadow: [
+                          '0 0 40px rgba(194, 166, 51, 0.4)',
+                          '0 0 80px rgba(194, 166, 51, 0.7)',
+                          '0 0 40px rgba(194, 166, 51, 0.4)'
+                        ]
                       }}
                       transition={{
-                        duration: 3,
-                        delay: i * 0.3 + 1.5,
+                        duration: 2.5,
                         repeat: Infinity,
                         ease: "easeInOut"
                       }}
+                    />
+                  </div>
+
+                  {/* Pool Label */}
+                  <div className="mt-6 text-center">
+                    <p className="font-mono text-xs tracking-widest text-[#C2A633] font-bold">MIXING POOL</p>
+                  </div>
+                </motion.div>
+              </div>
+
+              {/* Right: Withdrawal Wallets */}
+              <div className="flex flex-col gap-6 w-full md:w-auto relative z-20">
+                <p className="font-mono text-xs tracking-widest text-[#C2A633] mb-6 text-center md:text-right">WITHDRAW</p>
+                <div className="flex flex-col gap-6">
+                  {['W', 'X', 'Y', 'Z'].map((wallet, index) => (
+                    <motion.div
+                      key={wallet}
+                      initial={{ opacity: 0, x: 20 }}
+                      whileInView={{ opacity: 1, x: 0 }}
+                      viewport={{ once: true }}
+                      transition={{ duration: 0.5, delay: index * 0.1 }}
+                      className="relative"
+                      id={`withdraw-wallet-${wallet}`}
                     >
-                      <span className="font-mono text-[10px] sm:text-xs text-foreground">Wallet {i}</span>
+                      <div className="px-5 py-4 border-2 border-[#C2A633]/60 bg-[#C2A633]/15 backdrop-blur-sm hover:border-[#C2A633] hover:bg-[#C2A633]/25 transition-all duration-300 min-w-[160px]">
+                        <div className="flex items-center gap-3 justify-end md:justify-start">
+                          <span className="font-mono text-sm text-white font-medium">Wallet {wallet}</span>
+                          <div className="w-10 h-10 rounded-full bg-[#C2A633]/40 border-2 border-[#C2A633] flex items-center justify-center">
+                            <span className="font-mono text-sm font-bold text-[#C2A633]">{wallet}</span>
+                          </div>
+                        </div>
+                      </div>
                     </motion.div>
                   ))}
                 </div>
               </div>
             </div>
-          </div>
 
-          <div className="mt-4 md:mt-8 text-center px-4">
-            <p className="font-mono text-[10px] sm:text-xs text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-              Crypto mixers blend funds from multiple users so the connection between the original wallet and the
-              withdrawal wallet is obfuscated, making tracing difficult.
-            </p>
+            {/* Connection Lines with Animated Signals */}
+            <div className="hidden md:block absolute inset-0 pointer-events-none" style={{ height: '100%', width: '100%' }}>
+              <svg viewBox="0 0 1000 600" className="absolute inset-0 w-full h-full" preserveAspectRatio="xMidYMid meet" style={{ overflow: 'visible' }}>
+                <defs>
+                  <filter id="signalGlow" x="-50%" y="-50%" width="200%" height="200%">
+                    <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+                    <feMerge>
+                      <feMergeNode in="coloredBlur"/>
+                      <feMergeNode in="SourceGraphic"/>
+                    </feMerge>
+                  </filter>
+                  <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+                    <polygon points="0 0, 10 3, 0 6" fill="#C2A633" opacity="0.9" />
+                  </marker>
+                </defs>
+                
+                {/* Deposit Lines: A, B, C, D → Pool */}
+                {['A', 'B', 'C', 'D'].map((wallet, i) => {
+                  const walletY = 120 + i * 120
+                  const poolY = 300
+                  const startX = 200
+                  const endX = 450
+                  const midX = (startX + endX) / 2
+                  const midY = (walletY + poolY) / 2
+                  
+                  return (
+                    <g key={`deposit-line-${wallet}`}>
+                      {/* Visible connection line */}
+                      <path
+                        d={`M ${startX} ${walletY} Q ${midX} ${midY} ${endX} ${poolY}`}
+                        stroke="#C2A633"
+                        strokeWidth="3"
+                        fill="none"
+                        strokeDasharray="6 6"
+                        opacity="0.7"
+                        markerEnd="url(#arrowhead)"
+                      />
+                      
+                      {/* Animated signal particles */}
+                      {[0, 1, 2].map((particle) => {
+                        const delay = particle * 1 + i * 0.6
+                        return (
+                          <motion.circle
+                            key={`deposit-signal-${wallet}-${particle}`}
+                            r="7"
+                            fill="#C2A633"
+                            filter="url(#signalGlow)"
+                            initial={{ 
+                              cx: startX,
+                              cy: walletY
+                            }}
+                            animate={{
+                              cx: [startX, midX, endX],
+                              cy: [walletY, midY, poolY],
+                            }}
+                            transition={{
+                              duration: 3.5,
+                              delay: delay,
+                              repeat: Infinity,
+                              ease: "easeInOut"
+                            }}
+                          />
+                        )
+                      })}
+                    </g>
+                  )
+                })}
+
+                {/* Withdrawal Lines: Pool → W, X, Y, Z */}
+                {['W', 'X', 'Y', 'Z'].map((wallet, i) => {
+                  const walletY = 120 + i * 120
+                  const poolY = 300
+                  const startX = 550
+                  const endX = 800
+                  const midX = (startX + endX) / 2
+                  const midY = (poolY + walletY) / 2
+                  
+                  return (
+                    <g key={`withdraw-line-${wallet}`}>
+                      {/* Visible connection line */}
+                      <path
+                        d={`M ${startX} ${poolY} Q ${midX} ${midY} ${endX} ${walletY}`}
+                        stroke="#C2A633"
+                        strokeWidth="3"
+                        fill="none"
+                        strokeDasharray="6 6"
+                        opacity="0.7"
+                        markerEnd="url(#arrowhead)"
+                      />
+                      
+                      {/* Animated signal particles */}
+                      {[0, 1, 2].map((particle) => {
+                        const delay = particle * 1 + i * 0.6 + 3.5
+                        return (
+                          <motion.circle
+                            key={`withdraw-signal-${wallet}-${particle}`}
+                            r="7"
+                            fill="#C2A633"
+                            filter="url(#signalGlow)"
+                            initial={{ 
+                              cx: startX,
+                              cy: poolY
+                            }}
+                            animate={{
+                              cx: [startX, midX, endX],
+                              cy: [poolY, midY, walletY],
+                            }}
+                            transition={{
+                              duration: 3.5,
+                              delay: delay,
+                              repeat: Infinity,
+                              ease: "easeInOut"
+                            }}
+                          />
+                        )
+                      })}
+                    </g>
+                  )
+                })}
+              </svg>
+            </div>
+
+            {/* Explanation Text */}
+            <div className="mt-12 md:mt-16 text-center">
+              <p className="font-mono text-xs sm:text-sm text-muted-foreground max-w-2xl mx-auto leading-relaxed">
+                Transactions flow from deposit wallets into the mixing pool where they are cryptographically blended.
+                Withdrawals to fresh addresses break the on-chain link, ensuring privacy.
+              </p>
+            </div>
           </div>
         </motion.div>
       </div>
