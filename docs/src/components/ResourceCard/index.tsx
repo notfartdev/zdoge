@@ -1,11 +1,26 @@
 import React from 'react';
-import { FileText, Coins, MessageCircle, LucideIcon } from 'lucide-react';
+import { 
+  FileText, 
+  Coins, 
+  MessageCircle, 
+  Wallet,
+  ArrowDownCircle,
+  ArrowUpCircle,
+  Search,
+  Shield,
+  LucideIcon 
+} from 'lucide-react';
 import styles from './styles.module.css';
 
 const iconMap: Record<string, LucideIcon> = {
   FileText,
   Coins,
   MessageCircle,
+  Wallet,
+  ArrowDownCircle,
+  ArrowUpCircle,
+  Search,
+  Shield,
 };
 
 interface ResourceCardProps {

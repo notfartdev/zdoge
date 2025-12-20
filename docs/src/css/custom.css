@@ -226,6 +226,10 @@ code {
 table {
   border-radius: 12px;
   overflow: hidden;
+  margin: 1.5rem 0;
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
 }
 
 [data-theme='dark'] table {
@@ -239,6 +243,39 @@ table {
 
 [data-theme='dark'] tr:nth-child(2n) {
   background-color: #0d0d0d;
+}
+
+/* Code blocks - add spacing to prevent overlapping */
+pre {
+  margin: 1.5rem 0 !important;
+  overflow-x: auto;
+}
+
+/* Ensure code blocks inside pre have no margin */
+pre code {
+  margin: 0;
+}
+
+/* Ensure proper spacing for all major content blocks */
+.markdown > p,
+.markdown > ul,
+.markdown > ol,
+.markdown > blockquote,
+.markdown > h1,
+.markdown > h2,
+.markdown > h3,
+.markdown > h4,
+.markdown > h5,
+.markdown > h6 {
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+}
+
+.markdown > h1,
+.markdown > h2,
+.markdown > h3 {
+  margin-top: 2rem;
+  margin-bottom: 1rem;
 }
 
 /* Links */
@@ -521,6 +558,7 @@ h2 {
 /* Tables - match minimalist style */
 table {
   border-radius: 0;
+  margin: 1.5rem 0;
 }
 
 [data-theme='dark'] table {
