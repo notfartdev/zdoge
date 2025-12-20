@@ -11,9 +11,9 @@ Withdrawing from Dogenado allows you to receive your tokens at any address witho
 ## Before You Start
 
 Ensure you have:
-- ✅ Your secret deposit note
-- ✅ A recipient wallet address
-- ✅ No wallet connection required (for maximum privacy)
+- Your secret deposit note
+- A recipient wallet address
+- No wallet connection required (for maximum privacy)
 
 :::info Privacy Note
 You don't need to connect a wallet to withdraw. The withdrawal is processed by the Dogenado service, preserving your anonymity.
@@ -46,7 +46,7 @@ You'll see the deposit details:
 |-------|---------|
 | Token | USDC |
 | Amount | 100 |
-| Status | ✅ Valid, not withdrawn |
+| Status | Valid, not withdrawn |
 
 ### 4. Enter Recipient Address
 

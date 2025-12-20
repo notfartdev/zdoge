@@ -204,10 +204,38 @@ h1 {
 /* Footer */
 .footer {
   border-top: 1px solid rgba(247, 147, 26, 0.1);
+  background: linear-gradient(to bottom, #0a0a0a, #050505);
 }
 
 .footer__title {
   color: var(--ifm-color-primary);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.75rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.footer__link-item {
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.8rem;
+  letter-spacing: 0.05em;
+  opacity: 0.7;
+  transition: opacity 0.2s ease;
+}
+
+.footer__link-item:hover {
+  opacity: 1;
+  color: var(--ifm-color-primary);
+}
+
+.footer__copyright {
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.7rem;
+  letter-spacing: 0.05em;
+  opacity: 0.5;
+  margin-top: 2rem;
+  padding-top: 2rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 /* Pagination */

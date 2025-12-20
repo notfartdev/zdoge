@@ -36,8 +36,8 @@ If you deposit at 2:00 PM and withdraw at 2:05 PM, an observer might correlate t
 
 ### Avoid Patterns
 
-❌ **Bad**: Always deposit Monday, withdraw Tuesday
-✅ **Good**: Vary your timing randomly
+**Bad**: Always deposit Monday, withdraw Tuesday
+**Good**: Vary your timing randomly
 
 ## Amount Patterns
 
@@ -53,8 +53,8 @@ Popular pool sizes have larger anonymity sets:
 
 ### Don't Create Correlations
 
-❌ **Bad**: Deposit 100 USDC, deposit 100 USDC, withdraw 200 USDC worth to same address
-✅ **Good**: Use consistent denominations, separate destination addresses
+**Bad**: Deposit 100 USDC, deposit 100 USDC, withdraw 200 USDC worth to same address
+**Good**: Use consistent denominations, separate destination addresses
 
 ## Network Privacy
 
@@ -68,8 +68,8 @@ Your IP address can be logged. For maximum privacy:
 
 ### Fresh Recipient Addresses
 
-❌ **Bad**: Withdraw to an address that received funds from your main wallet
-✅ **Good**: Generate a brand new address with no transaction history
+**Bad**: Withdraw to an address that received funds from your main wallet
+**Good**: Generate a brand new address with no transaction history
 
 ## Wallet Hygiene
 

@@ -11,9 +11,9 @@ Depositing tokens into Dogenado is the first step to achieving transaction priva
 ## Before You Start
 
 Ensure you have:
-- ✅ Connected wallet on DogeOS
-- ✅ Sufficient token balance for deposit
-- ✅ Small amount of DOGE for gas fees
+- Connected wallet on DogeOS
+- Sufficient token balance for deposit
+- Small amount of DOGE for gas fees
 
 ## Step-by-Step Guide
 

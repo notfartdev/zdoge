@@ -11,9 +11,9 @@ Verify whether a deposit note has been withdrawn without using it.
 ## Why Check Status?
 
 Before attempting a withdrawal, you may want to verify:
-- ✅ The note is valid
-- ✅ The deposit exists in the pool
-- ✅ The note hasn't already been spent
+- The note is valid
+- The deposit exists in the pool
+- The note hasn't already been spent
 
 ## How to Check
 
@@ -40,7 +40,7 @@ The system will verify:
 
 ## Status Results
 
-### ✅ Valid - Not Withdrawn
+### Valid - Not Withdrawn
 
 ```
 Status: Active
@@ -54,7 +54,7 @@ Action: Ready to withdraw
 
 This note can be used to withdraw funds.
 
-### ❌ Already Withdrawn
+### Already Withdrawn
 
 ```
 Status: Spent
@@ -68,7 +68,7 @@ Action: Cannot withdraw
 
 This note has already been used. Funds were withdrawn previously.
 
-### ⚠️ Invalid Note
+### Invalid Note
 
 ```
 Status: Invalid

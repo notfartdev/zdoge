@@ -15,7 +15,7 @@ export function MixerInterface() {
   const [depositAddress, setDepositAddress] = useState("")
 
   const handleGenerateNote = () => {
-    const note = `dogemixer://note/${Math.random().toString(36).substring(2, 15)}${Math.random().toString(36).substring(2, 15)}`
+    const note = `dogenado://note/${Math.random().toString(36).substring(2, 15)}${Math.random().toString(36).substring(2, 15)}`
     setSecretNote(note)
   }
 
@@ -39,15 +39,13 @@ export function MixerInterface() {
           className="text-center mb-20"
         >
           <div className="flex items-center justify-center gap-3 mb-8">
-            <div className="w-20 h-20 rounded-full bg-[#C2A633] flex items-center justify-center text-black font-bold text-4xl">
-              Ð
-            </div>
+            <img src="/dogenadologo.png" alt="DogenadoCash" className="w-20 h-20 rounded-full" />
           </div>
           <h1 className="font-sans text-6xl md:text-8xl lg:text-9xl font-light tracking-tight mb-8">
-            DOGE<span className="italic">MIXER</span>
+            DOGENADO<span className="italic">CASH</span>
           </h1>
           <p className="font-mono text-base md:text-lg tracking-wider text-gray-400 max-w-2xl mx-auto">
-            Privacy for Doge — as simple as a wag.
+            A decentralized privacy protocol enabling private transactions on Doge.
           </p>
         </motion.div>
 
@@ -155,7 +153,7 @@ export function MixerInterface() {
                       SECRET NOTE
                     </label>
                     <Input
-                      placeholder="dogemixer://note/..."
+                      placeholder="dogenado://note/..."
                       className="bg-black/40 border-white/10 font-mono text-xs"
                     />
                   </div>

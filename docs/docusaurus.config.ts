@@ -3,9 +3,9 @@ import type {Config} from '@docusaurus/types';
 import type * as Preset from '@docusaurus/preset-classic';
 
 const config: Config = {
-  title: 'Dogenado',
-  tagline: 'Privacy Protocol for DogeOS',
-  favicon: 'img/favicon.ico',
+  title: 'DogenadoCash',
+  tagline: 'A decentralized privacy protocol enabling private transactions on Doge',
+  favicon: 'img/dogenadologo.png',
 
   future: {
     v4: true,
@@ -49,9 +49,9 @@ const config: Config = {
       respectPrefersColorScheme: true,
     },
     navbar: {
-      title: 'Dogenado',
+      title: 'DogenadoCash',
       logo: {
-        alt: 'Dogenado Logo',
+        alt: 'DogenadoCash Logo',
         src: 'img/dogenadologo.png',
       },
       items: [
@@ -62,13 +62,13 @@ const config: Config = {
           label: 'Documentation',
         },
         {
-          href: 'https://dogenado.cash',
+          href: 'https://dogenado.cash/dashboard',
           label: 'Launch App',
           position: 'right',
         },
         {
-          href: 'https://github.com/notfartdev/dogenadocash',
-          label: 'GitHub',
+          href: 'https://x.com/dogenadocash',
+          label: 'X',
           position: 'right',
         },
       ],
@@ -98,7 +98,7 @@ const config: Config = {
           items: [
             {
               label: 'Launch App',
-              href: 'https://dogenado.cash',
+              href: 'https://dogenado.cash/dashboard',
             },
             {
               label: 'Block Explorer',
@@ -110,13 +110,13 @@ const config: Config = {
           title: 'Community',
           items: [
             {
-              label: 'GitHub',
-              href: 'https://github.com/notfartdev/dogenadocash',
+              label: 'X (Twitter)',
+              href: 'https://x.com/dogenadocash',
             },
           ],
         },
       ],
-      copyright: `Copyright © ${new Date().getFullYear()} Dogenado. Privacy Protocol for DogeOS.`,
+      copyright: `Copyright © ${new Date().getFullYear()} DogenadoCash. A decentralized privacy protocol for DogeOS.`,
     },
     prism: {
       theme: prismThemes.github,

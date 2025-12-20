@@ -50,17 +50,17 @@ Dogenado uses **zkSNARKs** (Zero-Knowledge Succinct Non-Interactive Argument of 
 
 When you withdraw, you prove:
 
-1. ✅ **You know a secret** that corresponds to a deposit in the pool
-2. ✅ **The deposit exists** in the Merkle tree
-3. ✅ **You haven't withdrawn before** (nullifier hasn't been used)
+1. **You know a secret** that corresponds to a deposit in the pool
+2. **The deposit exists** in the Merkle tree
+3. **You haven't withdrawn before** (nullifier hasn't been used)
 
 ### What Stays Hidden
 
 The proof reveals **nothing** about:
 
-- ❌ Which deposit is yours
-- ❌ When you deposited
-- ❌ Your original wallet address
+- Which deposit is yours
+- When you deposited
+- Your original wallet address
 
 ## The Deposit Process
 

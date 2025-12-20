@@ -45,10 +45,8 @@ export function Navbar() {
       >
         <nav className="flex items-center justify-between px-6 py-4 my-0 md:px-12 md:py-5">
           <Link href="/" className="group flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-[#C2A633] flex items-center justify-center text-black font-bold text-sm">
-              Ð
-            </div>
-            <span className="font-mono text-sm tracking-widest text-foreground">DOGEMIXER</span>
+            <img src="/dogenadologo.png" alt="Dogenado" className="w-8 h-8 rounded-full" />
+            <span className="font-mono text-sm tracking-widest text-foreground">DOGENADO</span>
           </Link>
 
           {/* Desktop Navigation */}

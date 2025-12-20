@@ -159,9 +159,9 @@ User                    Frontend               Contract
 
 ### What's Protected
 
-- ✅ **Deposit-withdrawal link**: Cryptographically hidden
-- ✅ **Secret/nullifier**: Never leaves user's browser
-- ✅ **Funds**: Controlled by user's note
+- **Deposit-withdrawal link**: Cryptographically hidden
+- **Secret/nullifier**: Never leaves user's browser
+- **Funds**: Controlled by user's note
 
 ### What's Visible On-Chain
 

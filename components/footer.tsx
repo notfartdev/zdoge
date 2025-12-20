@@ -26,24 +26,26 @@ export function Footer() {
       <div className="px-8 md:px-12 py-8">
         <div className="flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-[#C2A633] flex items-center justify-center text-black font-bold text-sm">
-              Ð
-            </div>
-            <span className="font-mono text-xs tracking-widest text-foreground">DOGEMIXER</span>
+            <img src="/dogenadologo.png" alt="DogenadoCash" className="w-8 h-8 rounded-full" />
+            <span className="font-mono text-xs tracking-widest text-foreground">DOGENADOCASH</span>
           </div>
 
           {/* Links */}
           <div className="flex gap-8">
-            {["Docs", "GitHub", "Community"].map((link) => (
-              <a
-                key={link}
-                href="#"
-                data-cursor-hover
-                className="font-mono text-xs tracking-widest text-muted-foreground hover:text-white transition-colors duration-300"
-              >
-                {link}
-              </a>
-            ))}
+            <a
+              href="https://docs.dogenado.cash"
+              data-cursor-hover
+              className="font-mono text-xs tracking-widest text-muted-foreground hover:text-white transition-colors duration-300"
+            >
+              Docs
+            </a>
+            <a
+              href="https://x.com/dogenadocash"
+              data-cursor-hover
+              className="font-mono text-xs tracking-widest text-muted-foreground hover:text-white transition-colors duration-300"
+            >
+              X
+            </a>
           </div>
 
           {/* Copyright */}
@@ -54,8 +56,7 @@ export function Footer() {
 
         <div className="mt-8 pt-8 border-t border-white/10">
           <p className="font-mono text-xs text-muted-foreground text-center max-w-3xl mx-auto leading-relaxed">
-            DogeMixer is experimental software. Use at your own risk. Always comply with local regulations. This is a
-            demonstration interface inspired by privacy-preserving technologies.
+            DogenadoCash is experimental software currently on testnet. Use at your own risk. Always comply with local regulations.
           </p>
         </div>
       </div>

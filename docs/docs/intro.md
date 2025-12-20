@@ -6,20 +6,20 @@ sidebar_position: 1
 ---
 
 <div className="hero-banner">
-  <img src="/img/dogenadobanner.png" alt="Dogenado - Privacy Protocol for DogeOS" />
+  <img src="/img/dogenadobanner.png" alt="DogenadoCash - Privacy Protocol for DogeOS" />
 </div>
 
-# Introduction to Dogenado
+# Introduction to DogenadoCash
 
-**Dogenado** is a **non-custodial privacy protocol** enabling **permissionless shielded transactions** on DogeOS (Dogecoin Layer 2). Using zero-knowledge cryptography, Dogenado breaks the on-chain link between deposit and withdrawal addresses, providing financial privacy for users.
+**DogenadoCash** is a **non-custodial privacy protocol** enabling **permissionless shielded transactions** on DogeOS (Dogecoin Layer 2). A decentralized privacy protocol enabling private transactions on Doge.
 
-:::info What is Dogenado?
-Dogenado is a privacy mixer that uses zero-knowledge proofs (zkSNARKs) to enable anonymous token transfers. When you deposit tokens, you receive a secret note. This note can be used to withdraw to any address without revealing the connection to your original deposit.
+:::info What is DogenadoCash?
+DogenadoCash is a privacy protocol that uses zero-knowledge proofs (zkSNARKs) to enable anonymous token transfers. When you deposit tokens, you receive a secret note. This note can be used to withdraw to any address without revealing the connection to your original deposit.
 :::
 
 ## How Privacy is Achieved
 
-Dogenado achieves anonymity by breaking the on-chain link between source and destination addresses through **anonymity pools**:
+DogenadoCash achieves anonymity by breaking the on-chain link between source and destination addresses through **anonymity pools**:
 
 1. **Deposit**: You deposit a fixed amount of tokens into a pool and receive a secret note
 2. **Wait**: Your deposit joins other deposits in the anonymity set
@@ -31,18 +31,21 @@ The larger the anonymity set (more deposits), the stronger the privacy guarantee
 
 | Feature | Description |
 |---------|-------------|
-| 🔐 **Zero-Knowledge Proofs** | Mathematical guarantees that no one can link deposits to withdrawals |
-| 🏦 **Non-Custodial** | You always control your funds via your secret note |
-| ⚡ **Fast Transactions** | Built on DogeOS for quick, low-cost transactions |
-| 🪙 **Multi-Token Support** | Privacy for USDC, USDT, USD1, WDOGE, WETH, and LBTC |
-| ⏰ **Optional Timelock** | Enhanced security with scheduled withdrawals |
+| **Zero-Knowledge Proofs** | Mathematical guarantees that no one can link deposits to withdrawals |
+| **Non-Custodial** | You always control your funds via your secret note |
+| **Fast Transactions** | Built on DogeOS for quick, low-cost transactions |
+| **Multi-Token Support** | Privacy for USDC, USDT, USD1, WDOGE, WETH, and LBTC |
+| **Optional Timelock** | Enhanced security with scheduled withdrawals |
 
-## Supported Networks
+## Network Status
 
-Dogenado is currently deployed on:
+:::caution Testnet Phase
+DogenadoCash is currently live on **DogeOS Testnet** as we prepare for the upcoming **Doge zkEVM Mainnet** launch. All features are fully functional for testing purposes.
+:::
 
-- **DogeOS Testnet** - For testing and development
-- *DogeOS Mainnet* - Coming soon
+**Current deployment:**
+- **DogeOS Testnet** — Live and fully operational
+- **Doge zkEVM Mainnet** — Coming soon
 
 ## Supported Tokens & Pools
 
@@ -59,7 +62,7 @@ Each token has multiple pool denominations to choose from:
 
 ## Fee Structure
 
-Dogenado charges a **0.5% service fee** on withdrawals to cover:
+DogenadoCash charges a **0.5% service fee** on withdrawals to cover:
 - Gas costs for transaction processing
 - Infrastructure maintenance
 - Protocol development
@@ -73,7 +76,7 @@ If you deposit 100 USDC and withdraw:
 
 ## Getting Started
 
-Ready to start using Dogenado? Follow these guides:
+Ready to start using DogenadoCash? Follow these guides:
 
 1. [Connect Your Wallet](/user-guide/connect-wallet)
 2. [Make a Deposit](/user-guide/deposit)
@@ -82,5 +85,5 @@ Ready to start using Dogenado? Follow these guides:
 ---
 
 :::warning Disclaimer
-Dogenado is provided as-is. Users are responsible for understanding local regulations regarding privacy protocols. Always secure your secret notes - if lost, funds cannot be recovered.
+DogenadoCash is provided as-is. Users are responsible for understanding local regulations regarding privacy protocols. Always secure your secret notes - if lost, funds cannot be recovered.
 :::

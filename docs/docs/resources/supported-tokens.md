@@ -125,10 +125,10 @@ interface IERC20 {
 The community may propose new tokens via governance (future feature).
 
 Requirements for new tokens:
-- ✅ ERC-20 compliant
-- ✅ Sufficient liquidity
-- ✅ Community demand
-- ✅ Security audit
+- ERC-20 compliant
+- Sufficient liquidity
+- Community demand
+- Security audit
 
 ---
 

@@ -16,10 +16,8 @@ export function DashboardNav() {
           {/* Left Side: Logo / Mixer / Docs */}
           <div className="flex items-center gap-12">
             <Link href="/" className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-[#C2A633] flex items-center justify-center">
-                <span className="font-mono text-black font-bold text-xl">Ð</span>
-              </div>
-              <span className="font-mono text-xl font-bold text-white">dogemixer</span>
+              <img src="/dogenadologo.png" alt="DogenadoCash" className="w-10 h-10 rounded-full" />
+              <span className="font-mono text-xl font-bold text-white">dogenado</span>
             </Link>
             <div className="flex items-center gap-8">
               <Link

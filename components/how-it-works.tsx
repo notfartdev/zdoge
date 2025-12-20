@@ -42,7 +42,7 @@ export function HowItWorks() {
             <span className="italic">Mixing</span>
           </h2>
           <p className="font-mono text-sm text-muted-foreground max-w-2xl">
-            DogeMixer uses cryptographic privacy to break the on-chain link between deposit and withdrawal addresses,
+            DogenadoCash uses cryptographic privacy to break the on-chain link between deposit and withdrawal addresses,
             enhancing transaction privacy without compromising decentralization. Your DOGE remains yours, just more
             private.
           </p>

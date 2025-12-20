@@ -44,7 +44,7 @@ export function PrivacyTips() {
             <span className="italic">Tips</span>
           </h2>
           <p className="font-mono text-sm text-muted-foreground max-w-2xl">
-            Follow these guidelines to maximize your privacy when using DogeMixer.
+            Follow these guidelines to maximize your privacy when using DogenadoCash.
           </p>
         </motion.div>
 
@@ -84,7 +84,7 @@ export function PrivacyTips() {
             <div>
               <h3 className="font-sans text-2xl font-light tracking-tight mb-3">Security Reminder</h3>
               <p className="font-mono text-sm text-muted-foreground leading-relaxed mb-4">
-                DogeMixer is a decentralized, non-custodial protocol. We never have access to your funds or private
+                DogenadoCash is a decentralized, non-custodial protocol. We never have access to your funds or private
                 keys. You are solely responsible for keeping your secret notes secure. Loss of your secret note means
                 permanent loss of access to your deposited funds.
               </p>

@@ -112,9 +112,9 @@ A multi-party computation where:
 ### Security Guarantee
 
 The trusted setup ensures:
-- ✅ Cannot create fake proofs
-- ✅ Cannot extract private information from proofs
-- ✅ Verification is always reliable
+- Cannot create fake proofs
+- Cannot extract private information from proofs
+- Verification is always reliable
 
 ### Our Trusted Setup
 

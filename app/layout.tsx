@@ -17,9 +17,14 @@ const geistMono = Geist_Mono({
 })
 
 export const metadata: Metadata = {
-  title: "DogeMixer - Privacy for Dogecoin",
-  description: "Decentralized, non-custodial Dogecoin mixer for enhanced transaction privacy",
-    generator: 'v0.app'
+  title: "DogenadoCash - Privacy Protocol for Doge",
+  description: "A decentralized privacy protocol enabling private transactions on Doge",
+  icons: {
+    icon: [
+      { url: '/dogenadologo.png', type: 'image/png' },
+    ],
+    apple: '/dogenadologo.png',
+  },
 }
 
 export const viewport: Viewport = {
