@@ -49,36 +49,7 @@ export function Navbar() {
             <span className="font-mono text-xs sm:text-sm tracking-widest text-foreground">DOGENADO</span>
           </Link>
 
-          {/* Desktop Navigation */}
-          <ul className="hidden md:flex items-center gap-8">
-            {isHomePage ? (
-              <>
-                {navLinks.map((link, index) => (
-                  <li key={link.label}>
-                    <button
-                      onClick={() => scrollToSection(link.href)}
-                      className="group relative font-mono text-xs tracking-wider text-muted-foreground hover:text-foreground transition-colors duration-300"
-                    >
-                      <span className="text-[#C2A633] mr-1">0{index + 1}</span>
-                      {link.label.toUpperCase()}
-                      <span className="absolute -bottom-1 left-0 w-0 h-px bg-foreground group-hover:w-full transition-all duration-300" />
-                    </button>
-                  </li>
-                ))}
-              </>
-            ) : (
-              <li>
-                <Link
-                  href="/"
-                  className="group relative font-mono text-xs tracking-wider text-muted-foreground hover:text-foreground transition-colors duration-300"
-                >
-                  <span className="text-[#C2A633] mr-1">01</span>
-                  BACK TO HOME
-                  <span className="absolute -bottom-1 left-0 w-0 h-px bg-foreground group-hover:w-full transition-all duration-300" />
-                </Link>
-              </li>
-            )}
-          </ul>
+          {/* Desktop Navigation - Removed per design */}
 
           <div className="hidden md:flex items-center gap-3">
             {isHomePage ? (
