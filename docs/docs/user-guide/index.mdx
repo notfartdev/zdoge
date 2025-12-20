@@ -1,0 +1,53 @@
+---
+id: user-guide
+title: User Guide
+---
+
+import ResourceCard from '@site/src/components/ResourceCard';
+
+# User Guide
+
+<div className="resources-grid" style={{
+  display: 'grid',
+  gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+  gap: '1.5rem',
+  marginTop: '2rem'
+}}>
+
+<ResourceCard 
+  title="Connect Your Wallet"
+  description="Before using Dogenado, you need to connect a compatible wallet to interact with the DogeOS blockchain."
+  href="/user-guide/connect-wallet"
+  icon="Wallet"
+/>
+
+<ResourceCard 
+  title="How to Deposit"
+  description="Depositing tokens into Dogenado is the first step to gaining privacy. Learn how to make your first deposit."
+  href="/user-guide/deposit"
+  icon="ArrowDownCircle"
+/>
+
+<ResourceCard 
+  title="How to Withdraw"
+  description="Withdrawing from Dogenado allows you to receive your tokens at any address while maintaining privacy."
+  href="/user-guide/withdraw"
+  icon="ArrowUpCircle"
+/>
+
+<ResourceCard 
+  title="Check Note Status"
+  description="Verify whether a deposit note has been withdrawn with our note status checker tool."
+  href="/user-guide/check-status"
+  icon="Search"
+/>
+
+<ResourceCard 
+  title="Tips for Anonymity"
+  description="Dogenado provides the cryptographic foundation for privacy, but following best practices maximizes your anonymity."
+  href="/user-guide/tips-anonymity"
+  icon="Shield"
+/>
+
+</div>
+
