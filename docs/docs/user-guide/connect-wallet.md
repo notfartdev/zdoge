@@ -39,15 +39,11 @@ Go to [dogenado.cash](https://dogenado.cash) and click **"Launch App"** or navig
 
 ### 2. Click Connect Wallet
 
-![Connect Wallet Button](/img/guides/connect-wallet.png)
-
 Click the **"Connect Wallet"** button in the navigation bar.
 
 ### 3. Select Your Wallet
 
-Choose your preferred wallet from the list:
-
-![Wallet Selection](/img/guides/wallet-select.png)
+Choose your preferred wallet from the list.
 
 ### 4. Approve Connection
 

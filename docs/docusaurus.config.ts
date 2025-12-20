@@ -18,6 +18,7 @@ const config: Config = {
   projectName: 'dogenado-docs',
 
   onBrokenLinks: 'throw',
+  onBrokenMarkdownLinks: 'warn',
 
   i18n: {
     defaultLocale: 'en',

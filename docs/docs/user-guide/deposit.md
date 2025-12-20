@@ -19,9 +19,7 @@ Ensure you have:
 
 ### 1. Select Token
 
-In the Deposit section, use the dropdown to select your token:
-
-![Token Selection](/img/guides/token-select.png)
+In the Deposit section, use the dropdown to select your token.
 
 Supported tokens:
 - **USDC** - USD Coin
@@ -70,8 +68,6 @@ After the deposit confirms, you'll receive a **secret note**:
 dogenado-usdc100-1-0xabc123...xyz789
 ```
 
-![Save Note](/img/guides/save-note.png)
-
 :::danger CRITICAL - SAVE YOUR NOTE
 This note is the **ONLY** way to withdraw your funds. 
 - Copy it immediately
@@ -104,11 +100,7 @@ dogenado-[token][amount]-[network]-0x[data]
 
 ## Viewing Deposit History
 
-Check your deposit history in the **Inbox** section:
-
-![Inbox Deposits](/img/guides/inbox-deposits.png)
-
-You can see:
+Check your deposit history in the **Inbox** section. You can see:
 - Transaction hash (clickable to explorer)
 - Pool and amount
 - Timestamp

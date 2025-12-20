@@ -33,8 +33,6 @@ Enter your complete secret note:
 dogenado-usdc100-1-0xabc123...xyz789
 ```
 
-![Paste Note](/img/guides/paste-note.png)
-
 ### 3. Verify Note
 
 Click **"Verify Note"** to validate:
@@ -52,9 +50,7 @@ You'll see the deposit details:
 
 ### 4. Enter Recipient Address
 
-Enter the wallet address to receive the funds:
-
-![Enter Recipient](/img/guides/enter-recipient.png)
+Enter the wallet address to receive the funds.
 
 :::tip Fresh Address
 For maximum privacy, use a fresh wallet address that has never been associated with your identity.
@@ -100,8 +96,6 @@ Click **"Withdraw"** to begin the process:
 
 3. **Confirmation**
    - You'll see a success message with the transaction hash
-
-![Withdrawal Success](/img/guides/withdraw-success.png)
 
 ## Scheduled Withdrawals
 
