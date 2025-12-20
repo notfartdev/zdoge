@@ -36,6 +36,15 @@ export function WalletConnectButton() {
     return `${address.slice(0, 6)}...${address.slice(-4)}`
   }
 
+  const formatBalance = (balance: bigint): string => {
+    // DOGE has 18 decimals
+    const divisor = BigInt(10 ** 18)
+    const whole = balance / divisor
+    const remainder = balance % divisor
+    const decimal = remainder.toString().padStart(18, '0').slice(0, 2)
+    return `${whole}.${decimal}`
+  }
+
   if (error) {
     return (
       <div className="space-y-2">
@@ -80,7 +89,7 @@ export function WalletConnectButton() {
       <DropdownMenuContent align="end" className="bg-zinc-900 border-[#C2A633]/20">
         <div className="px-2 py-2">
           <p className="font-mono text-xs text-gray-400">Balance</p>
-          <p className="font-mono text-lg font-bold text-[#C2A633]">{wallet.balance.toFixed(2)} DOGE</p>
+          <p className="font-mono text-lg font-bold text-[#C2A633]">{formatBalance(wallet.balance)} DOGE</p>
         </div>
         <DropdownMenuSeparator className="bg-[#C2A633]/20" />
         <DropdownMenuItem onClick={disconnect} className="font-mono text-red-400 cursor-pointer">

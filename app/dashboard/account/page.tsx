@@ -7,7 +7,7 @@ export default function AccountPage() {
     <div className="min-h-screen bg-black">
       <DashboardNav />
       <main className="container mx-auto px-4 py-8 max-w-4xl">
-        <h1 className="font-mono text-4xl font-bold mb-8 text-white">Settings</h1>
+        <h1 className="font-mono text-4xl font-bold mb-8 text-white">Account</h1>
         <div className="space-y-8">
           <WalletSettings />
           <NoteAccountSettings />

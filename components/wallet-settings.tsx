@@ -60,7 +60,7 @@ export function WalletSettings() {
                 <Wallet className="h-5 w-5 text-[#C2A633]" />
                 <div>
                   <p className="font-mono text-sm text-white">{wallet.address}</p>
-                  <p className="font-mono text-xs text-gray-500">{wallet.balance.toFixed(2)} DOGE</p>
+                  <p className="font-mono text-xs text-gray-500">{typeof wallet.balance === 'number' ? wallet.balance.toFixed(2) : String(wallet.balance)} DOGE</p>
                 </div>
               </div>
               <Button

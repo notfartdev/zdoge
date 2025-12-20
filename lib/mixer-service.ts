@@ -2,164 +2,142 @@
 
 import crypto from "crypto"
 
-// Simulated mixer pools
-const mixerPools = new Map<
-  number,
-  {
-    anonymitySet: number
-    deposits: string[]
-    totalDeposits: number
-  }
->()
+/**
+ * Mixer Service for Dogenado
+ * 
+ * This file contains server-side functions for the mixer.
+ * For DogeOS integration, see lib/dogeos-config.ts and lib/note-service.ts
+ */
 
-// Initialize pools
-;[1, 10, 100, 1000].forEach((amount) => {
-  mixerPools.set(amount, {
-    anonymitySet: Math.floor(Math.random() * 50000) + 10000,
-    deposits: [],
-    totalDeposits: Math.floor(Math.random() * 100000) + 50000,
-  })
-})
+// Pool statistics (fetched from backend in production)
+interface PoolStats {
+  anonymitySet: number
+  totalDeposits: number
+  depositsCount: number
+  latestActivity: number
+}
 
-const paymentRequests = new Map<
-  string,
-  {
-    depositId: string
-    amount: number
-    stealthAddress: string
-    secret: string
-    nullifier: string
-    timestamp: number
-    authenticated: boolean
-  }
->()
+// Cache for pool stats
+const poolStatsCache = new Map<string, { stats: PoolStats; timestamp: number }>()
+const CACHE_TTL = 60000 // 1 minute
 
+/**
+ * Generate commitment hash (server-side version)
+ */
 export async function generateCommitment(secret: string, nullifier: string): Promise<string> {
   const hash = crypto.createHash("sha256")
   hash.update(secret + nullifier)
-  return hash.digest("hex")
+  return hash.digest("hex").slice(0, 62) // 31 bytes for field element
 }
 
-export async function createDeposit(amount: number, address: string) {
-  const secret = crypto.randomBytes(32).toString("hex")
-  const nullifier = crypto.randomBytes(32).toString("hex")
-  const commitment = await generateCommitment(secret, nullifier)
-
-  const depositId = crypto.randomUUID()
-
-  const stealthAddress = `D${crypto.randomBytes(16).toString("hex")}`
-
-  paymentRequests.set(depositId, {
-    depositId,
-    amount,
-    stealthAddress,
-    secret,
-    nullifier,
-    timestamp: Date.now(),
-    authenticated: false,
-  })
-
-  // Add to pool
-  const pool = mixerPools.get(amount)
-  if (pool) {
-    pool.deposits.push(commitment)
-    pool.anonymitySet += 1
-    pool.totalDeposits += amount
-  }
-
-  return {
-    id: depositId,
-    depositId,
-    amount,
-    commitment,
-    secret,
-    nullifier,
-    timestamp: Date.now(),
-    note: `dogemixer-${amount}-DOGE-${secret}-${nullifier}`,
-  }
+/**
+ * Generate nullifier hash
+ */
+export async function generateNullifierHash(nullifier: string): Promise<string> {
+  const hash = crypto.createHash("sha256")
+  hash.update(nullifier + nullifier)
+  return hash.digest("hex").slice(0, 62)
 }
 
-export async function createWithdrawal(amount: number, secret: string, nullifier: string, recipientAddress: string) {
-  const commitment = await generateCommitment(secret, nullifier)
-
-  // Verify commitment exists in pool
-  const pool = mixerPools.get(amount)
-  if (!pool || !pool.deposits.includes(commitment)) {
-    throw new Error("Invalid deposit proof")
+/**
+ * Get pool statistics
+ * In production, this fetches from the backend indexer
+ */
+export async function getPoolStats(poolAddress: string): Promise<PoolStats> {
+  // Check cache
+  const cached = poolStatsCache.get(poolAddress)
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    return cached.stats
   }
 
-  // Generate zero-knowledge proof (simplified)
-  const proof = crypto
-    .createHash("sha256")
-    .update(commitment + recipientAddress)
-    .digest("hex")
-
-  const withdrawalId = crypto.randomUUID()
-
-  return {
-    id: withdrawalId,
-    amount,
-    recipientAddress,
-    proof,
-    timestamp: Date.now(),
-    status: "confirmed" as const,
+  // In production, fetch from indexer:
+  // const response = await fetch(`${process.env.INDEXER_URL}/api/pool/${poolAddress}`)
+  // const data = await response.json()
+  
+  // For now, return simulated stats
+  const stats: PoolStats = {
+    anonymitySet: Math.floor(Math.random() * 50000) + 10000,
+    totalDeposits: Math.floor(Math.random() * 1000000) + 500000,
+    depositsCount: Math.floor(Math.random() * 1000) + 100,
+    latestActivity: Date.now() - Math.floor(Math.random() * 86400000),
   }
+
+  poolStatsCache.set(poolAddress, { stats, timestamp: Date.now() })
+  return stats
 }
 
-export async function getPoolStats(amount: number) {
-  const pool = mixerPools.get(amount)
-  if (!pool) {
-    return {
-      anonymitySet: 0,
-      totalDeposits: 0,
-      latestDeposits: [],
+/**
+ * Get all pools with their stats
+ */
+export async function getAllPoolStats(): Promise<{
+  pool: string
+  denomination: string
+  stats: PoolStats
+}[]> {
+  // Pool configurations
+  const pools = [
+    { pool: "usdc100", denomination: "100 USDC" },
+    { pool: "usdc1000", denomination: "1,000 USDC" },
+  ]
+
+  return Promise.all(
+    pools.map(async (p) => ({
+      ...p,
+      stats: await getPoolStats(p.pool),
+    }))
+  )
+}
+
+/**
+ * Validate a note format
+ */
+export async function validateNote(noteString: string): Promise<{
+  valid: boolean
+  error?: string
+  pool?: string
+}> {
+  try {
+    const parts = noteString.split("-")
+    
+    if (parts.length !== 5) {
+      return { valid: false, error: "Invalid note format" }
     }
-  }
-
-  return {
-    anonymitySet: pool.anonymitySet,
-    totalDeposits: pool.totalDeposits,
-    latestDeposits: pool.deposits.slice(-10).map((_, idx) => ({
-      id: pool.anonymitySet - idx,
-      timestamp: Date.now() - idx * 3600000, // Hours ago
-    })),
+    
+    if (parts[0] !== "dogenado") {
+      return { valid: false, error: "Not a Dogenado note" }
+    }
+    
+    if (parts[1] !== "1") {
+      return { valid: false, error: "Unsupported note version" }
+    }
+    
+    if (parts[3].length !== 62 || parts[4].length !== 62) {
+      return { valid: false, error: "Invalid secret or nullifier" }
+    }
+    
+    return { valid: true, pool: parts[2] }
+  } catch (error) {
+    return { valid: false, error: "Failed to parse note" }
   }
 }
 
+/**
+ * Get RPC provider URL
+ */
 export async function getRPCProvider(): Promise<string> {
-  return process.env.DOGE_RPC_URL || "https://dogechain.info/api/v1"
+  return process.env.DOGEOS_RPC_URL || "https://rpc.testnet.dogeos.com"
 }
 
-export async function updateRPCProvider(newProvider: string): Promise<void> {
-  // In production, this would update user settings in database
-  console.log("[v0] RPC Provider updated:", newProvider)
-}
-
-export async function getPaymentRequest(paymentId: string) {
-  const request = paymentRequests.get(paymentId)
-  if (!request) {
-    throw new Error("Payment request not found")
-  }
-  return request
-}
-
-export async function authenticatePaymentRequest(paymentId: string, signature: string) {
-  const request = paymentRequests.get(paymentId)
-  if (!request) {
-    throw new Error("Payment request not found")
-  }
-
-  // Verify signature (simplified for demo)
-  const isValid = signature.length > 0
-
-  if (isValid) {
-    request.authenticated = true
-    paymentRequests.set(paymentId, request)
-  }
-
+/**
+ * Get network info
+ */
+export async function getNetworkInfo() {
   return {
-    authenticated: isValid,
-    stealthAddress: request.stealthAddress,
-    amount: request.amount,
+    name: "DogeOS Chikyū Testnet",
+    chainId: 6281971,
+    rpcUrl: await getRPCProvider(),
+    wsRpcUrl: "wss://ws.rpc.testnet.dogeos.com",
+    blockExplorer: "https://blockscout.testnet.dogeos.com",
+    faucet: "https://faucet.testnet.dogeos.com",
   }
 }

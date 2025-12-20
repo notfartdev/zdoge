@@ -2,10 +2,9 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Button } from "@/components/ui/button"
-import { Settings } from "lucide-react"
+import { Inbox, Search } from "lucide-react"
 import { WalletConnectButton } from "./wallet-connect-button"
-import { NoteAccountSetup } from "./note-account-setup"
+import { AccountModal } from "./account-modal"
 
 export function DashboardNav() {
   const pathname = usePathname()
@@ -14,6 +13,7 @@ export function DashboardNav() {
     <nav className="border-b border-[#C2A633]/20 bg-black">
       <div className="container mx-auto px-6">
         <div className="flex items-center justify-between h-20">
+          {/* Left Side: Logo / Mixer / Docs */}
           <div className="flex items-center gap-12">
             <Link href="/" className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-[#C2A633] flex items-center justify-center">
@@ -38,27 +38,35 @@ export function DashboardNav() {
               </Link>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+
+          {/* Right Side: Connect Wallet / Check / Inbox / Account */}
+          <div className="flex items-center gap-6">
             <WalletConnectButton />
-            <Button
-              variant="outline"
-              size="sm"
-              className="border-[#C2A633]/40 text-[#C2A633] hover:bg-[#C2A633]/10 font-mono bg-transparent h-10 px-4"
+            
+            {/* Check Note Status */}
+            <Link
+              href="/dashboard/check"
+              className={`font-mono text-sm transition-colors flex items-center gap-2 ${
+                pathname === "/dashboard/check" ? "text-[#C2A633] font-bold" : "text-gray-400 hover:text-white"
+              }`}
             >
-              DOGE
-            </Button>
-            <NoteAccountSetup />
-            <Link href="/dashboard/account">
-              <Button
-                variant="outline"
-                size="icon"
-                className={`border-[#C2A633]/40 hover:bg-[#C2A633]/10 h-10 w-10 transition-colors ${
-                  pathname === "/dashboard/account" ? "bg-[#C2A633]/10 text-[#C2A633]" : "text-[#C2A633]"
-                }`}
-              >
-                <Settings className="h-4 w-4" />
-              </Button>
+              <Search className="w-4 h-4" />
+              Check
             </Link>
+            
+            {/* Inbox */}
+            <Link
+              href="/dashboard/inbox"
+              className={`font-mono text-sm transition-colors flex items-center gap-2 ${
+                pathname === "/dashboard/inbox" ? "text-[#C2A633] font-bold" : "text-gray-400 hover:text-white"
+              }`}
+            >
+              <Inbox className="w-4 h-4" />
+              Inbox
+            </Link>
+
+            {/* Account Modal */}
+            <AccountModal />
           </div>
         </div>
       </div>

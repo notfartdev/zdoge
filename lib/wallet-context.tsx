@@ -1,39 +1,39 @@
 "use client"
 
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
-import { DogeWalletService } from "./doge-wallet"
-import type { DogeWalletConnection } from "./types"
+import { usePathname } from "next/navigation"
+import { evmWalletService, type EVMWalletConnection } from "./evm-wallet"
+import { dogeosTestnet } from "./dogeos-config"
 
 interface WalletContextType {
-  wallet: DogeWalletConnection | null
+  wallet: EVMWalletConnection | null
   isConnecting: boolean
+  isWrongNetwork: boolean
   connect: () => Promise<void>
   disconnect: () => void
   refreshBalance: () => Promise<void>
+  switchNetwork: () => Promise<void>
 }
 
 const WalletContext = createContext<WalletContextType | undefined>(undefined)
 
 export function WalletProvider({ children }: { children: ReactNode }) {
-  const [wallet, setWallet] = useState<DogeWalletConnection | null>(null)
+  const [wallet, setWallet] = useState<EVMWalletConnection | null>(null)
   const [isConnecting, setIsConnecting] = useState(false)
-
-  const walletService = DogeWalletService.getInstance()
+  const [isWrongNetwork, setIsWrongNetwork] = useState(false)
+  const pathname = usePathname()
 
   const connect = async () => {
     setIsConnecting(true)
     try {
-      const connection = await walletService.connectWallet()
+      const connection = await evmWalletService.connect()
       if (connection) {
-        setWallet({
-          address: connection.address,
-          balance: connection.balance,
-          isConnected: true,
-        })
+        setWallet(connection)
+        setIsWrongNetwork(connection.chainId !== dogeosTestnet.id)
         localStorage.setItem("wallet_connected", "true")
       }
     } catch (error) {
-      console.error("[v0] Wallet connection failed:", error)
+      console.error("[Wallet] Connection failed:", error)
       throw error
     } finally {
       setIsConnecting(false)
@@ -41,28 +41,67 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   }
 
   const disconnect = () => {
-    walletService.disconnectWallet()
+    evmWalletService.disconnect()
     setWallet(null)
+    setIsWrongNetwork(false)
     localStorage.removeItem("wallet_connected")
   }
 
   const refreshBalance = async () => {
     if (wallet?.address) {
-      const balance = await walletService.getBalance(wallet.address)
+      const balance = await evmWalletService.getBalance(wallet.address)
       setWallet({ ...wallet, balance })
     }
   }
 
-  // Auto-connect on mount if previously connected
-  useEffect(() => {
-    const wasConnected = localStorage.getItem("wallet_connected")
-    if (wasConnected === "true" && walletService.isWalletInstalled()) {
-      connect().catch(console.error)
+  const switchNetwork = async () => {
+    try {
+      await evmWalletService.switchToDogeOS()
+      setIsWrongNetwork(false)
+      // Refresh connection after switch
+      const connection = evmWalletService.getConnection()
+      if (connection) {
+        setWallet(connection)
+      }
+    } catch (error) {
+      console.error("[Wallet] Network switch failed:", error)
+      throw error
     }
+  }
+
+  // Subscribe to wallet changes
+  useEffect(() => {
+    const unsubscribe = evmWalletService.subscribe((connection) => {
+      setWallet(connection)
+      if (connection) {
+        setIsWrongNetwork(connection.chainId !== dogeosTestnet.id)
+      }
+    })
+
+    return unsubscribe
   }, [])
 
+  // Auto-connect only on dashboard pages if previously connected
+  useEffect(() => {
+    // Only auto-connect on /dashboard pages, not on landing page
+    const isDashboardPage = pathname?.startsWith('/dashboard')
+    const wasConnected = localStorage.getItem("wallet_connected")
+    
+    if (isDashboardPage && wasConnected === "true" && evmWalletService.isWalletInstalled()) {
+      connect().catch(console.error)
+    }
+  }, [pathname])
+
   return (
-    <WalletContext.Provider value={{ wallet, isConnecting, connect, disconnect, refreshBalance }}>
+    <WalletContext.Provider value={{ 
+      wallet, 
+      isConnecting, 
+      isWrongNetwork,
+      connect, 
+      disconnect, 
+      refreshBalance,
+      switchNetwork 
+    }}>
       {children}
     </WalletContext.Provider>
   )
