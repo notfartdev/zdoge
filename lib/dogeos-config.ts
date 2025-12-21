@@ -77,8 +77,9 @@ export const tokens = {
   },
 } as const;
 
-// Supported tokens for mixing (wDOGE hidden - use DOGE instead, same pools via DogeRouter)
-export const SUPPORTED_TOKENS = ['DOGE', 'USDC', 'USDT', 'USD1', 'WETH', 'LBTC'] as const;
+// Supported tokens for mixing
+// DOGE temporarily disabled - DogeRouter needs wDOGE interface verification
+export const SUPPORTED_TOKENS = ['USDC', 'USDT', 'USD1', 'WETH', 'LBTC'] as const;
 export type SupportedToken = typeof SUPPORTED_TOKENS[number];
 
 // Pool configuration per token
