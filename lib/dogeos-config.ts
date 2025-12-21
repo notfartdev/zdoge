@@ -40,13 +40,13 @@ export const tokens = {
   USDC: {
     address: '0xD19d2Ffb1c284668b7AFe72cddae1BAF3Bc03925' as `0x${string}`,
     symbol: 'USDC',
-    decimals: 6,
+    decimals: 18, // DogeOS testnet USDC uses 18 decimals (not 6 like on Ethereum mainnet)
     name: 'USD Coin',
   },
   USDT: {
     address: '0xC81800b77D91391Ef03d7868cB81204E753093a9' as `0x${string}`,
     symbol: 'USDT',
-    decimals: 6,
+    decimals: 18, // DogeOS testnet USDT uses 18 decimals (not 6 like on Ethereum mainnet)
     name: 'Tether USD',
   },
   USD1: {
@@ -64,7 +64,7 @@ export const tokens = {
   LBTC: {
     address: '0x29789F5A3e4c3113e7165c33A7E3bc592CF6fE0E' as `0x${string}`,
     symbol: 'LBTC',
-    decimals: 8,
+    decimals: 18, // DogeOS testnet LBTC uses 18 decimals (not 8 like on other chains)
     name: 'Liquid BTC',
   },
 } as const;
@@ -83,30 +83,30 @@ export const tokenPools: Record<SupportedToken, {
     token: tokens.USDC,
     amounts: [1, 10, 100, 1000],
     pools: {
-      '1': '0x381Ea9De3e18684Ceb27C484F9967b5e66192c39',
-      '10': '0xfaA751c76d4aEA7e729bDCfBFD2eb0B6edCc8cbb',
-      '100': '0x0843FfA3f936D671b5A8fcD7485589aD2DDe79E1',
-      '1000': '0xC832b63d408FA3Aa337Bcb6142820Dce42742dB8',
+      '1': '0x3c1FDFdBc9f436c9D370c57C658C1ca67EBAa146',
+      '10': '0xd8d301c460023D320f44da2f696831ECc7F60504',
+      '100': '0xe00bC9e7431dFF487ac9EB7b51d8B14C5B7b0847',
+      '1000': '0xde641902e9986eFD55A664230AC0203d3286E2b0',
     },
   },
   USDT: {
     token: tokens.USDT,
     amounts: [1, 10, 100, 1000],
     pools: {
-      '1': '0xed030C6747f58C0ae2577179E997Db7d4913161c',
-      '10': '0xe28FcC3C7699f4363F0ECA318545873b3ec776De',
-      '100': '0x397851793EB29a1cADb8bBd84cde191755550092',
-      '1000': '0x8Cb14297AB6CBBeE5A051359050c5e7b6bB749E4',
+      '1': '0x3B80e33752634d856AE6e6f68570157637912000',
+      '10': '0x6f9210EDd0985eA6f9FEeAB080FA85933178D38c',
+      '100': '0x13DC6fda3cF0990e7D15750A2c3ce8693c351e46',
+      '1000': '0x308C8f3692c6C19B84A24466D1792f7B794cF5ae',
     },
   },
   USD1: {
     token: tokens.USD1,
     amounts: [1, 10, 100, 1000],
     pools: {
-      '1': '0xac8b5d8CaD366B2CB4649CF6d19912143617d13c',
-      '10': '0xA03388ae4E6ed03eE5312C3AEFaD8418636040bf',
-      '100': '0x9EDAd2F0196e7B3ab38b1844964de1A06EB2e6B1',
-      '1000': '0xd9EB8AaD52806E47b5E7DcbE4Dffb95CA81a8fd9',
+      '1': '0x72CdC6eA899621be7dF24c8084C667276D23F5b3',
+      '10': '0x47fE455020B010c114356C88C291118918e32c57',
+      '100': '0x248A93958693fD9Cc260676B63440F5eBAf25B79',
+      '1000': '0x307d1D56a321eE5f4334b6A3A00E6Cc6ad8598b1',
     },
   },
   WDOGE: {
@@ -133,10 +133,10 @@ export const tokenPools: Record<SupportedToken, {
     token: tokens.LBTC,
     amounts: [0.001, 0.01, 0.1, 1],
     pools: {
-      '0.001': '0x144679135b82d21577409Ee9F479a06DC5f795cD',
-      '0.01': '0x7C4702b79d3B1Faf63CA75e27365Ed69c6C7641d',
-      '0.1': '0x568726722BC8170079DAb667813C8894A7c96b4D',
-      '1': '0x6eCAAF4b39bb68f49b02f97191D40e5f5dccD419',
+      '0.001': '0x821EdB78D739759F0E226DF9a0B8D87f7c78cA77',
+      '0.01': '0xda43aA668640CA2F48364adCC01B1Ed5c11D6385',
+      '0.1': '0x5ffc61930595BA9Fae2a0D0b0651cd65BC105e92',
+      '1': '0x526A143FD0C0429cE71FB8FA09ACa6f4876d29a5',
     },
   },
 };
@@ -152,10 +152,10 @@ export function getAllPoolAddresses(): string[] {
 
 // Legacy pools export for backwards compatibility
 export const pools = {
-  USDC_1: { address: tokenPools.USDC.pools['1'] as `0x${string}`, token: tokens.USDC, denomination: BigInt(1 * 10 ** 6), amount: 1 },
-  USDC_10: { address: tokenPools.USDC.pools['10'] as `0x${string}`, token: tokens.USDC, denomination: BigInt(10 * 10 ** 6), amount: 10 },
-  USDC_100: { address: tokenPools.USDC.pools['100'] as `0x${string}`, token: tokens.USDC, denomination: BigInt(100 * 10 ** 6), amount: 100 },
-  USDC_1000: { address: tokenPools.USDC.pools['1000'] as `0x${string}`, token: tokens.USDC, denomination: BigInt(1000 * 10 ** 6), amount: 1000 },
+  USDC_1: { address: tokenPools.USDC.pools['1'] as `0x${string}`, token: tokens.USDC, denomination: BigInt(1 * 10 ** 18), amount: 1 },
+  USDC_10: { address: tokenPools.USDC.pools['10'] as `0x${string}`, token: tokens.USDC, denomination: BigInt(10 * 10 ** 18), amount: 10 },
+  USDC_100: { address: tokenPools.USDC.pools['100'] as `0x${string}`, token: tokens.USDC, denomination: BigInt(100 * 10 ** 18), amount: 100 },
+  USDC_1000: { address: tokenPools.USDC.pools['1000'] as `0x${string}`, token: tokens.USDC, denomination: BigInt(1000 * 10 ** 18), amount: 1000 },
 };
 
 // Pool denomination options (legacy)

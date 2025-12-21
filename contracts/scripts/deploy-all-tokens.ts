@@ -5,15 +5,16 @@
 import { ethers } from 'hardhat';
 
 // Token configurations
+// IMPORTANT: All tokens on DogeOS testnet use 18 decimals!
 const TOKENS = {
   USDC: {
     address: '0xD19d2Ffb1c284668b7AFe72cddae1BAF3Bc03925',
-    decimals: 6,
+    decimals: 18, // DogeOS testnet USDC uses 18 decimals
     amounts: [1, 10, 100, 1000],
   },
   USDT: {
     address: '0xC81800b77D91391Ef03d7868cB81204E753093a9',
-    decimals: 6,
+    decimals: 18, // DogeOS testnet USDT uses 18 decimals
     amounts: [1, 10, 100, 1000],
   },
   USD1: {
@@ -21,19 +22,20 @@ const TOKENS = {
     decimals: 18,
     amounts: [1, 10, 100, 1000],
   },
-  WDOGE: {
-    address: '0xF6BDB158A5ddF77F1B83bC9074F6a472c58D78aE',
-    decimals: 18,
-    amounts: [100, 1000, 10000, 100000],
-  },
-  WETH: {
-    address: '0x1a6094Ac3ca3Fc9F1B4777941a5f4AAc16A72000',
-    decimals: 18,
-    amounts: [0.01, 0.1, 1, 10],
-  },
+  // WDOGE and WETH are already correctly deployed - skip them
+  // WDOGE: {
+  //   address: '0xF6BDB158A5ddF77F1B83bC9074F6a472c58D78aE',
+  //   decimals: 18,
+  //   amounts: [100, 1000, 10000, 100000],
+  // },
+  // WETH: {
+  //   address: '0x1a6094Ac3ca3Fc9F1B4777941a5f4AAc16A72000',
+  //   decimals: 18,
+  //   amounts: [0.01, 0.1, 1, 10],
+  // },
   LBTC: {
     address: '0x29789F5A3e4c3113e7165c33A7E3bc592CF6fE0E',
-    decimals: 8,
+    decimals: 18, // DogeOS testnet LBTC uses 18 decimals
     amounts: [0.001, 0.01, 0.1, 1],
   },
 };
