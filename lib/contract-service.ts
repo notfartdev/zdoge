@@ -5,7 +5,7 @@
  */
 
 import { evmWalletService } from './evm-wallet';
-import { dogeosTestnet, pools, tokens, MixerPoolABI, ERC20ABI, api } from './dogeos-config';
+import { dogeosTestnet, pools, tokens, MixerPoolABI, ERC20ABI, DogeRouterABI, api, contracts } from './dogeos-config';
 
 // Encode function call data
 function encodeFunctionData(abi: readonly any[], functionName: string, args: any[]): string {
@@ -58,6 +58,9 @@ function keccak256(input: string): string {
     'getLatestRoot()': '0x1bf7e13e',
     'isSpent(bytes32)': '0xe5285dcc',
     'isKnownRoot(bytes32)': '0x6d9833e3',
+    // DogeRouter selectors
+    'depositDoge(address,bytes32)': '0x8c3c4b35',
+    'withdrawDoge(address,uint256[8],bytes32,bytes32,address,address,uint256)': '0x5a7d5b4a',
   };
   
   return selectors[input] || '0x00000000';
@@ -245,6 +248,67 @@ class ContractService {
       commitment: formattedCommitment,
       leafIndex,
     };
+  }
+
+  /**
+   * Deposit native DOGE via DogeRouter (auto-wraps to wDOGE)
+   */
+  async depositDoge(poolAddress: string, commitment: string, amount: bigint): Promise<DepositResult> {
+    const connection = evmWalletService.getConnection();
+    if (!connection) throw new Error('Wallet not connected');
+
+    // Ensure commitment is properly formatted as bytes32
+    const formattedCommitment = commitment.startsWith('0x') ? commitment : '0x' + commitment;
+    
+    const data = encodeFunctionData(DogeRouterABI, 'depositDoge', [poolAddress, formattedCommitment]);
+    
+    console.log('[Contract] Submitting DOGE deposit via router...');
+    console.log('[Contract] Router:', contracts.dogeRouter);
+    console.log('[Contract] Pool:', poolAddress);
+    console.log('[Contract] Commitment:', formattedCommitment);
+    console.log('[Contract] Amount:', amount.toString());
+    
+    // Send native DOGE with the transaction
+    const txHash = await evmWalletService.sendTransaction({
+      to: contracts.dogeRouter,
+      data,
+      value: amount, // Send native DOGE
+    });
+    
+    console.log('[Contract] TX Hash:', txHash);
+    
+    // Wait for confirmation and get receipt
+    const receipt = await this.waitForTransaction(txHash);
+    
+    // Parse leaf index from logs (Deposit event from the wDOGE pool)
+    let leafIndex = 0;
+    if (receipt.logs && receipt.logs.length > 0) {
+      // Look for Deposit event from the pool
+      const depositLog = receipt.logs.find((log: any) => 
+        log.topics && log.topics.length >= 3
+      );
+      if (depositLog) {
+        leafIndex = parseInt(depositLog.topics[2], 16);
+      }
+    }
+    
+    return {
+      txHash,
+      commitment: formattedCommitment,
+      leafIndex,
+    };
+  }
+
+  /**
+   * Get native DOGE balance for an address
+   */
+  async getNativeBalance(userAddress: string): Promise<bigint> {
+    const result = await window.ethereum!.request({
+      method: 'eth_getBalance',
+      params: [userAddress, 'latest'],
+    });
+    
+    return BigInt(result);
   }
 
   /**

@@ -31,6 +31,14 @@ export const dogeosTestnet = {
 
 // Official tokens on DogeOS Testnet
 export const tokens = {
+  // Native DOGE (uses DogeRouter for deposits/withdrawals)
+  DOGE: {
+    address: '0x0000000000000000000000000000000000000000' as `0x${string}`, // Native token, no address
+    symbol: 'DOGE',
+    decimals: 18,
+    name: 'Dogecoin',
+    isNative: true, // Flag to indicate this uses DogeRouter
+  },
   WDOGE: {
     address: '0xF6BDB158A5ddF77F1B83bC9074F6a472c58D78aE' as `0x${string}`,
     symbol: 'WDOGE',
@@ -70,7 +78,7 @@ export const tokens = {
 } as const;
 
 // Supported tokens for mixing
-export const SUPPORTED_TOKENS = ['USDC', 'USDT', 'USD1', 'WDOGE', 'WETH', 'LBTC'] as const;
+export const SUPPORTED_TOKENS = ['DOGE', 'USDC', 'USDT', 'USD1', 'WDOGE', 'WETH', 'LBTC'] as const;
 export type SupportedToken = typeof SUPPORTED_TOKENS[number];
 
 // Pool configuration per token
@@ -78,7 +86,21 @@ export const tokenPools: Record<SupportedToken, {
   token: typeof tokens[keyof typeof tokens];
   amounts: number[];
   pools: Record<string, `0x${string}`>;
+  usesRouter?: boolean; // If true, use DogeRouter instead of direct deposit
 }> = {
+  // DOGE uses the same pools as WDOGE but goes through DogeRouter
+  DOGE: {
+    token: tokens.DOGE,
+    amounts: [100, 1000, 10000, 100000],
+    pools: {
+      // These are the wDOGE pool addresses - DogeRouter wraps DOGE to wDOGE
+      '100': '0xAAbC0bF61d4c0C580f94133a2E905Ae3DB2C9689',
+      '1000': '0xF09a1A994610E50e38FC9535d9151127F126dAbe',
+      '10000': '0x687c1566B204350C91aB25f8B43235bF59e6535d',
+      '100000': '0x7d1cF893E6B2192D3a34369a3D2742F572879E17',
+    },
+    usesRouter: true, // Flag to use DogeRouter
+  },
   USDC: {
     token: tokens.USDC,
     amounts: [1, 10, 100, 1000],
@@ -499,6 +521,67 @@ export const ERC20ABI = [
     inputs: [],
     outputs: [{ name: '', type: 'string' }],
     stateMutability: 'view',
+  },
+] as const;
+
+// DogeRouter ABI for native DOGE deposits/withdrawals
+export const DogeRouterABI = [
+  {
+    type: 'function',
+    name: 'depositDoge',
+    inputs: [
+      { name: 'pool', type: 'address' },
+      { name: 'commitment', type: 'bytes32' },
+    ],
+    outputs: [],
+    stateMutability: 'payable',
+  },
+  {
+    type: 'function',
+    name: 'withdrawDoge',
+    inputs: [
+      { name: 'pool', type: 'address' },
+      { name: 'proof', type: 'uint256[8]' },
+      { name: 'root', type: 'bytes32' },
+      { name: 'nullifierHash', type: 'bytes32' },
+      { name: 'recipient', type: 'address' },
+      { name: 'relayer', type: 'address' },
+      { name: 'fee', type: 'uint256' },
+    ],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    name: 'validPools',
+    inputs: [{ name: 'pool', type: 'address' }],
+    outputs: [{ name: '', type: 'bool' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'wdoge',
+    inputs: [],
+    outputs: [{ name: '', type: 'address' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'event',
+    name: 'DepositDoge',
+    inputs: [
+      { name: 'pool', type: 'address', indexed: true },
+      { name: 'commitment', type: 'bytes32', indexed: true },
+      { name: 'amount', type: 'uint256', indexed: false },
+    ],
+  },
+  {
+    type: 'event',
+    name: 'WithdrawDoge',
+    inputs: [
+      { name: 'pool', type: 'address', indexed: true },
+      { name: 'recipient', type: 'address', indexed: true },
+      { name: 'amount', type: 'uint256', indexed: false },
+    ],
   },
 ] as const;
 

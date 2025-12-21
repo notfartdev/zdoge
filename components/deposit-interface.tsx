@@ -49,15 +49,25 @@ export function DepositInterface() {
     setSelectedAmount(amounts[0].toString())
   }, [selectedToken])
 
+  // Check if this token uses DogeRouter (native DOGE)
+  const usesRouter = tokenConfig.usesRouter === true
+  const isNativeDoge = selectedToken === 'DOGE'
+
   // Fetch token balance when wallet or token changes
   useEffect(() => {
     async function fetchBalance() {
       if (wallet?.isConnected && wallet.address && currentToken) {
         try {
-          const balance = await contractService.getTokenBalance(
-            currentToken.address,
-            wallet.address
-          )
+          let balance: bigint
+          if (isNativeDoge) {
+            // For native DOGE, get the native balance
+            balance = await contractService.getNativeBalance(wallet.address)
+          } else {
+            balance = await contractService.getTokenBalance(
+              currentToken.address,
+              wallet.address
+            )
+          }
           setTokenBalance(balance)
         } catch (err) {
           console.error("Failed to fetch token balance:", err)
@@ -65,7 +75,7 @@ export function DepositInterface() {
       }
     }
     fetchBalance()
-  }, [wallet?.isConnected, wallet?.address, selectedToken])
+  }, [wallet?.isConnected, wallet?.address, selectedToken, isNativeDoge])
 
   const handleDeposit = async () => {
     if (!wallet?.isConnected || !wallet.address) {
@@ -100,7 +110,10 @@ export function DepositInterface() {
 
     try {
       // Step 1: Generate secret note
-      const poolId = `${selectedToken.toLowerCase()}${selectedAmount}`
+      // For DOGE, we use the wdoge pool internally
+      const poolId = isNativeDoge 
+        ? `wdoge${selectedAmount}` // DOGE uses wDOGE pools internally
+        : `${selectedToken.toLowerCase()}${selectedAmount}`
       console.log("[Deposit] Generating note for pool:", poolId)
       const note = await generateNote(poolId)
       const noteString = serializeNote(note)
@@ -109,41 +122,61 @@ export function DepositInterface() {
       const commitment = getCommitmentBytes(note)
       console.log("[Deposit] Commitment:", commitment)
 
-      // Step 2: Check and approve token spending
-      setTxStatus("approving")
-      const currentAllowance = await contractService.getAllowance(
-        currentToken.address,
-        wallet.address,
-        poolAddress
-      )
-      
-      if (currentAllowance < denomination) {
-        console.log("[Deposit] Approving tokens...")
+      let result: { txHash: string; leafIndex: number }
+
+      if (isNativeDoge) {
+        // Native DOGE deposit via DogeRouter
+        // No approval needed - just send native DOGE directly
+        setTxStatus("depositing")
         toast({
-          title: "Approve Token",
-          description: "Please approve the token spending in your wallet.",
+          title: "Confirm Deposit",
+          description: `Please confirm the ${selectedAmount} DOGE deposit in your wallet.`,
         })
-        await contractService.approveToken(
-          currentToken.address,
+        
+        console.log("[Deposit] Using DogeRouter for native DOGE...")
+        result = await contractService.depositDoge(
           poolAddress,
+          commitment,
           denomination
         )
-        console.log("[Deposit] Tokens approved!")
       } else {
-        console.log("[Deposit] Already approved")
-      }
+        // ERC-20 token deposit (existing flow)
+        // Step 2: Check and approve token spending
+        setTxStatus("approving")
+        const currentAllowance = await contractService.getAllowance(
+          currentToken.address,
+          wallet.address,
+          poolAddress
+        )
+        
+        if (currentAllowance < denomination) {
+          console.log("[Deposit] Approving tokens...")
+          toast({
+            title: "Approve Token",
+            description: "Please approve the token spending in your wallet.",
+          })
+          await contractService.approveToken(
+            currentToken.address,
+            poolAddress,
+            denomination
+          )
+          console.log("[Deposit] Tokens approved!")
+        } else {
+          console.log("[Deposit] Already approved")
+        }
 
-      // Step 3: Submit deposit transaction
-      setTxStatus("depositing")
-      toast({
-        title: "Confirm Deposit",
-        description: "Please confirm the deposit transaction in your wallet.",
-      })
-      
-      const result = await contractService.deposit(
-        poolAddress,
-        commitment
-      )
+        // Step 3: Submit deposit transaction
+        setTxStatus("depositing")
+        toast({
+          title: "Confirm Deposit",
+          description: "Please confirm the deposit transaction in your wallet.",
+        })
+        
+        result = await contractService.deposit(
+          poolAddress,
+          commitment
+        )
+      }
       
       setTxHash(result.txHash)
       setLeafIndex(result.leafIndex)
