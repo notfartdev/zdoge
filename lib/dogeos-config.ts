@@ -77,8 +77,8 @@ export const tokens = {
   },
 } as const;
 
-// Supported tokens for mixing
-export const SUPPORTED_TOKENS = ['DOGE', 'USDC', 'USDT', 'USD1', 'WDOGE', 'WETH', 'LBTC'] as const;
+// Supported tokens for mixing (wDOGE hidden - use DOGE instead, same pools via DogeRouter)
+export const SUPPORTED_TOKENS = ['DOGE', 'USDC', 'USDT', 'USD1', 'WETH', 'LBTC'] as const;
 export type SupportedToken = typeof SUPPORTED_TOKENS[number];
 
 // Pool configuration per token
@@ -131,16 +131,8 @@ export const tokenPools: Record<SupportedToken, {
       '1000': '0x307d1D56a321eE5f4334b6A3A00E6Cc6ad8598b1',
     },
   },
-  WDOGE: {
-    token: tokens.WDOGE,
-    amounts: [1, 10, 100, 1000],
-    pools: {
-      '1': '0xD9743cB4D6ab805b28215E78e26A9CefD0d971E5',
-      '10': '0x6fa72AF1E9CF420aE3a839eea9E3F9d6375028C0',
-      '100': '0xFB652Db6668d476f2a4Af2783F2e7259Eb8a1a86',
-      '1000': '0xa9143916C4Bf99d94AdD2578162f53164307E7A6',
-    },
-  },
+  // WDOGE hidden from UI - users use DOGE instead (same pools via DogeRouter)
+  // Pool addresses kept in DOGE config above
   WETH: {
     token: tokens.WETH,
     amounts: [0.01, 0.1, 1, 10],

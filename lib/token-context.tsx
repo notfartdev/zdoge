@@ -18,10 +18,10 @@ const TokenContext = createContext<TokenContextType | undefined>(undefined)
 
 // CoinGecko token IDs
 const COINGECKO_IDS: Record<string, string> = {
+  DOGE: 'dogecoin',  // Native DOGE
   USDC: 'usd-coin',
   USDT: 'tether',
   USD1: 'usd-coin', // Use USDC as proxy for USD1
-  WDOGE: 'dogecoin',
   WETH: 'ethereum',
   LBTC: 'bitcoin',
 }
@@ -59,10 +59,10 @@ export function TokenProvider({ children }: { children: ReactNode }) {
         console.error('[Prices] Failed to fetch:', error)
         // Fallback prices
         setPrices({
+          DOGE: 0.35,
           USDC: 1,
           USDT: 1,
           USD1: 1,
-          WDOGE: 0.35,
           WETH: 3500,
           LBTC: 100000,
         })
