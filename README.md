@@ -1,134 +1,133 @@
-# Dogenado 🌪️
+# Dogenado
 
-**Privacy Pool for DogeOS** — A Tornado Cash-style mixer for the Dogecoin ecosystem.
+Privacy pool implementation for the DogeOS blockchain. Enables unlinkable token transfers using zero-knowledge proofs and Merkle tree commitments.
 
-Dogenado enables unlinkable transfers of ERC20 tokens (USDC, WDOGE) on DogeOS using zero-knowledge proofs. Users deposit fixed amounts into privacy pools and later withdraw to fresh addresses, breaking the on-chain link between sender and recipient.
+## Overview
 
-## 🌟 Features
+Dogenado implements a privacy-preserving token mixer on DogeOS. Users deposit fixed-denomination amounts into pools and later withdraw to arbitrary addresses. The cryptographic design ensures that deposits cannot be linked to withdrawals on-chain.
 
-- **Non-custodial**: Your funds, your keys. No trusted third party.
-- **ZK Proofs**: Cryptographic privacy using Groth16 zero-knowledge proofs.
-- **Fixed Denominations**: Pool-based mixing for maximum anonymity sets.
-- **Relayer Support**: Gasless withdrawals for enhanced privacy.
-- **DogeOS Native**: Built for the Dogecoin L2 ecosystem.
+The system uses Groth16 zero-knowledge proofs to prove membership in the Merkle tree without revealing which commitment corresponds to the withdrawal. This breaks the on-chain link between deposit and withdrawal transactions.
 
-## 🏗️ Architecture
+## Architecture
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                         Frontend (Next.js)                       │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐  │
-│  │   Deposit   │  │  Withdraw   │  │   Note Management       │  │
-│  │  Interface  │  │  Interface  │  │  (Generate/Parse/Save)  │  │
-│  └──────┬──────┘  └──────┬──────┘  └─────────────────────────┘  │
-└─────────┼────────────────┼──────────────────────────────────────┘
-          │                │
-          ▼                ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                      Smart Contracts (Solidity)                  │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐  │
-│  │ MixerPool   │  │  Hasher     │  │   Verifier              │  │
-│  │ (Deposit/   │  │  (MiMC)     │  │   (Groth16)             │  │
-│  │  Withdraw)  │  │             │  │                         │  │
-│  └──────┬──────┘  └─────────────┘  └─────────────────────────┘  │
-└─────────┼───────────────────────────────────────────────────────┘
-          │
-          ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                      Backend Services                            │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐  │
-│  │   Indexer   │  │   Relayer   │  │   Merkle Tree           │  │
-│  │  (Events)   │  │  (Gas Payer)│  │   Service               │  │
-│  └─────────────┘  └─────────────┘  └─────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────┘
-          │
-          ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                      ZK Circuits (Circom)                        │
-│  ┌─────────────────────────────────────────────────────────────┐│
-│  │  withdraw.circom                                             ││
-│  │  - Merkle membership proof                                   ││
-│  │  - Nullifier derivation                                      ││
-│  │  - Public input binding                                      ││
-│  └─────────────────────────────────────────────────────────────┘│
-└─────────────────────────────────────────────────────────────────┘
-```
+The system consists of four main components:
 
-## 📁 Project Structure
+- **Smart Contracts**: MixerPool contracts that manage deposits, withdrawals, and Merkle tree state
+- **Frontend**: Next.js web application for user interactions, note management, and proof generation
+- **Backend**: Indexer service for Merkle tree state management and optional relayer for gasless withdrawals
+- **ZK Circuits**: Circom circuits that generate proofs of valid withdrawals
+
+### Smart Contracts
+
+- **MixerPoolV2**: ERC20 token mixer with optional scheduled withdrawals
+- **MixerPoolNative**: Native token mixer (accepts native DOGE directly)
+- **MerkleTreeWithHistory**: Merkle tree implementation with historical root tracking
+- **Verifier**: Groth16 proof verifier contract
+- **Hasher**: MiMC hasher for Merkle tree operations
+
+### Frontend
+
+The frontend handles:
+- Wallet connection and transaction signing
+- Secret note generation and management
+- Zero-knowledge proof generation (client-side)
+- Merkle path fetching from indexer
+- Transaction submission (direct or via relayer)
+
+### Backend
+
+The backend provides:
+- Event indexing from blockchain
+- Merkle tree state synchronization
+- REST API for pool information and Merkle paths
+- Optional relayer service for withdrawal transactions
+
+## Network Configuration
+
+### DogeOS Testnet (Chikyū)
+
+- Chain ID: 6281971
+- RPC URL: https://rpc.testnet.dogeos.com
+- WebSocket: wss://ws.rpc.testnet.dogeos.com
+- Block Explorer: https://blockscout.testnet.dogeos.com
+- Faucet: https://faucet.testnet.dogeos.com
+
+### Supported Tokens
+
+The system supports multiple token types with fixed denomination pools:
+
+- Native DOGE: 1, 10, 100, 1000 DOGE
+- USDC: 1, 10, 100, 1000 USDC (18 decimals on DogeOS)
+- USDT: 1, 10, 100, 1000 USDT (18 decimals on DogeOS)
+- USD1: 1, 10, 100, 1000 USD1
+- WETH: 0.01, 0.1, 1, 10 WETH
+- LBTC: 0.001, 0.01, 0.1, 1 LBTC
+
+Token addresses are configured in `lib/dogeos-config.ts` for the frontend and `backend/src/config.ts` for the backend.
+
+## Project Structure
 
 ```
 dogenado/
-├── app/                    # Next.js frontend
-│   ├── page.tsx           # Landing page
-│   ├── dashboard/         # User dashboard
+├── app/                    # Next.js application
+│   ├── dashboard/         # User dashboard routes
 │   └── api/               # API routes
 ├── components/            # React components
 │   ├── deposit-interface.tsx
 │   ├── withdraw-interface.tsx
-│   └── mixer-interface.tsx
-├── lib/                   # Frontend utilities
-│   ├── dogeos-config.ts   # DogeOS chain config
-│   ├── note-service.ts    # Note generation/parsing
+│   ├── statistics.tsx
+│   └── dashboard-nav.tsx
+├── lib/                   # Frontend libraries
+│   ├── dogeos-config.ts   # Chain and contract configuration
+│   ├── note-service.ts    # Note generation and parsing
 │   ├── proof-service.ts   # ZK proof generation
-│   └── types.ts           # TypeScript types
+│   ├── contract-service.ts # Contract interaction utilities
+│   └── token-context.tsx  # Token selection and pricing
 ├── contracts/             # Smart contracts
 │   ├── src/
-│   │   ├── MixerPool.sol
+│   │   ├── MixerPoolV2.sol
+│   │   ├── MixerPoolNative.sol
 │   │   ├── MerkleTreeWithHistory.sol
-│   │   ├── Hasher.sol
-│   │   └── Verifier.sol
+│   │   └── interfaces/
 │   ├── scripts/           # Deployment scripts
 │   └── hardhat.config.ts
-├── circuits/              # ZK circuits
-│   ├── withdraw.circom
+├── backend/               # Backend services
+│   ├── src/
+│   │   ├── index.ts       # Combined indexer and relayer
+│   │   ├── config.ts      # Configuration
+│   │   ├── merkle/        # Merkle tree implementation
+│   │   └── database/      # Database storage layer
 │   └── package.json
-└── backend/               # Backend services
-    ├── src/
-    │   ├── indexer/       # Event indexer
-    │   ├── relayer/       # Withdrawal relayer
-    │   └── merkle/        # Merkle tree service
-    └── package.json
+└── docs/                  # Documentation
+    └── docs/              # Docusaurus documentation site
 ```
 
-## 🔧 DogeOS Testnet Configuration
-
-| Property | Value |
-|----------|-------|
-| Network Name | DogeOS Chikyū Testnet |
-| RPC URL | https://rpc.testnet.dogeos.com |
-| WebSocket | wss://ws.rpc.testnet.dogeos.com |
-| Chain ID | 6281971 |
-| Symbol | DOGE |
-| Block Explorer | https://blockscout.testnet.dogeos.com |
-| Faucet | https://faucet.testnet.dogeos.com |
-
-### Official Tokens
-
-| Token | Address |
-|-------|---------|
-| WDOGE | `0xF6BDB158A5ddF77F1B83bC9074F6a472c58D78aE` |
-| USDC | `0xD19d2Ffb1c284668b7AFe72cddae1BAF3Bc03925` |
-| USDT | `0xC81800b77D91391Ef03d7868cB81204E753093a9` |
-
-## 🚀 Getting Started
+## Development Setup
 
 ### Prerequisites
 
-- Node.js 18+
+- Node.js 18 or higher
 - pnpm or npm
-- Rust (for Circom)
+- PostgreSQL (for backend database)
+- Rust (required for Circom circuit compilation)
 
-### Frontend
+### Frontend Development
 
 ```bash
 # Install dependencies
 npm install
 
+# Set environment variables
+cp .env.example .env.local
+# Edit .env.local with your configuration
+
 # Run development server
 npm run dev
 ```
 
-### Smart Contracts
+The frontend will be available at http://localhost:3000
+
+### Smart Contract Development
 
 ```bash
 cd contracts
@@ -137,31 +136,20 @@ cd contracts
 npm install
 
 # Compile contracts
-npm run compile
+npx hardhat compile
 
-# Deploy to DogeOS testnet
-npm run deploy:testnet
+# Run tests
+npx hardhat test
+
+# Deploy to testnet
+npx hardhat run scripts/deploy-all-tokens.ts --network dogeosTestnet
 ```
 
-### ZK Circuits
+Environment variables required:
+- `PRIVATE_KEY`: Deployer private key
+- `DOGEOS_RPC_URL`: RPC endpoint (optional, defaults to public testnet)
 
-```bash
-cd circuits
-
-# Install dependencies
-npm install
-
-# Download Powers of Tau
-npm run download:ptau
-
-# Compile circuit
-npm run compile
-
-# Generate verifier
-npm run export:verifier
-```
-
-### Backend
+### Backend Development
 
 ```bash
 cd backend
@@ -169,82 +157,177 @@ cd backend
 # Install dependencies
 npm install
 
-# Run combined indexer + relayer
+# Set environment variables
+cp .env.example .env
+# Configure database and network settings
+
+# Initialize database
+npm run db:setup
+
+# Run development server
 npm run dev
 ```
 
-## 📖 How It Works
+Required environment variables:
+- `DATABASE_URL`: PostgreSQL connection string
+- `DOGEOS_RPC_URL`: RPC endpoint for blockchain access
+- `DOGEOS_WS_RPC_URL`: WebSocket RPC endpoint (optional, for real-time events)
+- `RELAYER_PRIVATE_KEY`: Private key for relayer wallet (optional)
 
-### 1. Deposit
+### Circuit Compilation
 
-1. User selects a pool denomination (e.g., 100 USDC)
-2. Frontend generates a secret note: `dogenado-1-usdc100-<secret>-<nullifier>`
-3. Commitment = Hash(secret, nullifier) is computed
-4. User approves token spending and calls `deposit(commitment)`
-5. User saves the secret note securely (CRITICAL!)
+The ZK circuits are compiled separately. See the circuits directory for compilation instructions.
 
-### 2. Mixing
+## Configuration
 
-- Commitment is added to the Merkle tree
-- User's funds join the anonymity set
-- No link between deposit and future withdrawal
+### Frontend Configuration
 
-### 3. Withdraw
+Pool addresses and token configurations are defined in `lib/dogeos-config.ts`. This includes:
+- Token contract addresses
+- Pool contract addresses for each denomination
+- Chain configuration
+- API endpoints
 
-1. User enters their secret note and a fresh recipient address
-2. Frontend fetches Merkle path from indexer
-3. ZK proof is generated client-side
-4. Proof is submitted (directly or via relayer)
-5. Contract verifies proof and releases funds
+### Backend Configuration
 
-## 🔐 Security Model
+Backend configuration is in `backend/src/config.ts`. This includes:
+- Pool contract addresses
+- Merkle tree depth
+- Relayer settings
+- Rate limiting configuration
 
-### What the ZK proof proves:
-- User knows the secret and nullifier for a valid commitment
-- The commitment exists in the Merkle tree
-- The nullifier hasn't been used before
-- The withdrawal parameters match the proof
+Both configurations must be kept in sync when deploying new pools.
 
-### What is NOT revealed:
-- Which deposit is being withdrawn
-- The depositor's address
-- The secret values
+## Deployment
 
-### Trust assumptions:
-- Contract code is correct (auditable)
-- ZK circuit is sound (auditable)
-- Trusted setup ceremony was honest (Powers of Tau)
+### Smart Contracts
 
-## ⚠️ Important Notes
+Contracts are deployed using Hardhat deployment scripts. Each token type has its own deployment script in `contracts/scripts/`.
 
-1. **SAVE YOUR NOTE**: If you lose your deposit note, your funds are **PERMANENTLY LOST**. There is no recovery mechanism.
+After deployment, update:
+- `lib/dogeos-config.ts` (frontend)
+- `backend/src/config.ts` (backend)
 
-2. **Privacy Tips**:
-   - Wait before withdrawing (increases anonymity set)
-   - Use fresh addresses for withdrawals
-   - Don't withdraw the same amount you deposited at the same time
+### Frontend
 
-3. **Testnet Only**: This is currently deployed on DogeOS testnet. Do not use real funds.
+The frontend can be deployed to Vercel or any static hosting service. Set the following environment variables:
 
-## 🛣️ Roadmap
+- `NEXT_PUBLIC_INDEXER_URL`: Backend API URL
+- `NEXT_PUBLIC_RELAYER_URL`: Relayer API URL (usually same as indexer)
 
-- [x] Smart contract development
-- [x] ZK circuit design
-- [x] Frontend integration
-- [x] Backend services
-- [ ] Contract deployment to testnet
-- [ ] Circuit trusted setup
-- [ ] Security audit
-- [ ] Mainnet deployment
+### Backend
 
-## 📄 License
+The backend should be deployed as a persistent service (Render, Railway, or similar) with:
+- PostgreSQL database
+- Persistent storage for Merkle tree state
+- WebSocket support for real-time event indexing
 
-MIT
+## How It Works
 
-## 🙏 Acknowledgments
+### Deposit Flow
 
-- [Tornado Cash](https://github.com/tornadocash) - Original privacy pool design
-- [DogeOS](https://docs.dogeos.com) - EVM-compatible L2 for Dogecoin
-- [Circom](https://github.com/iden3/circom) - ZK circuit compiler
-- [snarkjs](https://github.com/iden3/snarkjs) - ZK proof library
+1. User selects token and denomination
+2. Frontend generates a secret note containing random values
+3. Commitment hash is computed from the note components
+4. User approves token spending (ERC20) or sends native value (native DOGE)
+5. Deposit transaction is submitted with the commitment
+6. Contract adds commitment to Merkle tree
+7. User must securely store the secret note
 
+### Withdrawal Flow
+
+1. User provides secret note and recipient address
+2. Frontend fetches current Merkle root and path from indexer
+3. Zero-knowledge proof is generated client-side using the note and Merkle path
+4. Proof is submitted to contract (directly or via relayer)
+5. Contract verifies proof and transfers funds to recipient
+6. Nullifier is recorded to prevent double-spending
+
+### Merkle Tree State
+
+The backend indexer maintains Merkle tree state by:
+- Watching Deposit events from contracts
+- Inserting commitments into the Merkle tree
+- Serving Merkle paths to frontend for proof generation
+- Tracking nullifiers to prevent double-spends
+
+## Security Considerations
+
+### Trust Assumptions
+
+- Smart contracts are deployed correctly and audited
+- Zero-knowledge circuits are correctly implemented
+- Trusted setup ceremony was conducted honestly
+- Users properly secure their secret notes
+
+### Limitations
+
+- Anonymity set size depends on pool usage
+- Time correlation between deposit and withdrawal can reduce privacy
+- Large withdrawals may be linkable through amount analysis
+- Relayer transactions reveal relayer address (use direct transactions for maximum privacy)
+
+### Best Practices
+
+- Wait between deposit and withdrawal to increase anonymity set
+- Use fresh addresses for withdrawals
+- Avoid withdrawing immediately after deposit
+- Store secret notes securely offline
+- For maximum privacy, submit withdrawal transactions directly rather than through relayer
+
+## API Documentation
+
+The backend provides REST API endpoints:
+
+- `GET /api/pools` - List all pools
+- `GET /api/pool/:address` - Get pool information
+- `GET /api/pool/:address/root` - Get latest Merkle root
+- `GET /api/pool/:address/path/:leafIndex` - Get Merkle path for leaf
+- `POST /api/relay` - Submit withdrawal via relayer
+- `GET /api/health` - Health check
+
+See the backend source code for detailed API documentation.
+
+## Testing
+
+### Smart Contracts
+
+```bash
+cd contracts
+npx hardhat test
+```
+
+### Frontend
+
+```bash
+npm run test
+```
+
+### Backend
+
+```bash
+cd backend
+npm run test
+```
+
+## Contributing
+
+Contributions are welcome. Please ensure:
+- Code follows existing style conventions
+- Tests are added for new features
+- Documentation is updated
+- Security considerations are addressed
+
+## License
+
+MIT License
+
+## Acknowledgments
+
+This project is based on the privacy pool design pioneered by Tornado Cash. The implementation adapts the design for the DogeOS blockchain and adds improvements such as native token support and scheduled withdrawals.
+
+Key technologies:
+- [DogeOS](https://docs.dogeos.com) - EVM-compatible L2 blockchain
+- [Circom](https://github.com/iden3/circom) - Zero-knowledge circuit compiler
+- [snarkjs](https://github.com/iden3/snarkjs) - JavaScript library for ZK proofs
+- [Hardhat](https://hardhat.org) - Ethereum development environment
