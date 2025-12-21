@@ -35,38 +35,38 @@ export const config = {
   contracts: {
     hasher: process.env.HASHER_ADDRESS || '0x1931f2D78930f5c3b0ce65d27F56F35Fa4fdA67D',
     verifier: process.env.VERIFIER_ADDRESS || '0xE8Ef2495F741467D746E27548BF71948A0554Ad6',
-    // All pools (multi-token support)
+    // All pools (multi-token support) - Updated with 18 decimal pools
     pools: {
-      // USDC
-      'usdc-1': '0x381Ea9De3e18684Ceb27C484F9967b5e66192c39',
-      'usdc-10': '0xfaA751c76d4aEA7e729bDCfBFD2eb0B6edCc8cbb',
-      'usdc-100': '0x0843FfA3f936D671b5A8fcD7485589aD2DDe79E1',
-      'usdc-1000': '0xC832b63d408FA3Aa337Bcb6142820Dce42742dB8',
-      // USDT
-      'usdt-1': '0xed030C6747f58C0ae2577179E997Db7d4913161c',
-      'usdt-10': '0xe28FcC3C7699f4363F0ECA318545873b3ec776De',
-      'usdt-100': '0x397851793EB29a1cADb8bBd84cde191755550092',
-      'usdt-1000': '0x8Cb14297AB6CBBeE5A051359050c5e7b6bB749E4',
-      // USD1
-      'usd1-1': '0xac8b5d8CaD366B2CB4649CF6d19912143617d13c',
-      'usd1-10': '0xA03388ae4E6ed03eE5312C3AEFaD8418636040bf',
-      'usd1-100': '0x9EDAd2F0196e7B3ab38b1844964de1A06EB2e6B1',
-      'usd1-1000': '0xd9EB8AaD52806E47b5E7DcbE4Dffb95CA81a8fd9',
-      // WDOGE
+      // USDC (18 decimals on DogeOS testnet)
+      'usdc-1': '0x3c1FDFdBc9f436c9D370c57C658C1ca67EBAa146',
+      'usdc-10': '0xd8d301c460023D320f44da2f696831ECc7F60504',
+      'usdc-100': '0xe00bC9e7431dFF487ac9EB7b51d8B14C5B7b0847',
+      'usdc-1000': '0xde641902e9986eFD55A664230AC0203d3286E2b0',
+      // USDT (18 decimals on DogeOS testnet)
+      'usdt-1': '0x3B80e33752634d856AE6e6f68570157637912000',
+      'usdt-10': '0x6f9210EDd0985eA6f9FEeAB080FA85933178D38c',
+      'usdt-100': '0x13DC6fda3cF0990e7D15750A2c3ce8693c351e46',
+      'usdt-1000': '0x308C8f3692c6C19B84A24466D1792f7B794cF5ae',
+      // USD1 (18 decimals)
+      'usd1-1': '0x72CdC6eA899621be7dF24c8084C667276D23F5b3',
+      'usd1-10': '0x47fE455020B010c114356C88C291118918e32c57',
+      'usd1-100': '0x248A93958693fD9Cc260676B63440F5eBAf25B79',
+      'usd1-1000': '0x307d1D56a321eE5f4334b6A3A00E6Cc6ad8598b1',
+      // WDOGE (18 decimals - already correct)
       'wdoge-100': '0xAAbC0bF61d4c0C580f94133a2E905Ae3DB2C9689',
       'wdoge-1000': '0xF09a1A994610E50e38FC9535d9151127F126dAbe',
       'wdoge-10000': '0x687c1566B204350C91aB25f8B43235bF59e6535d',
       'wdoge-100000': '0x7d1cF893E6B2192D3a34369a3D2742F572879E17',
-      // WETH
+      // WETH (18 decimals - already correct)
       'weth-0.01': '0x72734eDD05E680a4dB4312974EE46ce903aE807C',
       'weth-0.1': '0x1d5d2c74e3b402749Fd9BeD709a749A0E5E2ea8e',
       'weth-1': '0xb3748014f9bDB54F7fc33d8aea6Fbff7a0750d6b',
       'weth-10': '0xfAfD381E6246E67607603BCf617AB522Ce4de1D9',
-      // LBTC
-      'lbtc-0.001': '0x144679135b82d21577409Ee9F479a06DC5f795cD',
-      'lbtc-0.01': '0x7C4702b79d3B1Faf63CA75e27365Ed69c6C7641d',
-      'lbtc-0.1': '0x568726722BC8170079DAb667813C8894A7c96b4D',
-      'lbtc-1': '0x6eCAAF4b39bb68f49b02f97191D40e5f5dccD419',
+      // LBTC (18 decimals on DogeOS testnet)
+      'lbtc-0.001': '0x821EdB78D739759F0E226DF9a0B8D87f7c78cA77',
+      'lbtc-0.01': '0xda43aA668640CA2F48364adCC01B1Ed5c11D6385',
+      'lbtc-0.1': '0x5ffc61930595BA9Fae2a0D0b0651cd65BC105e92',
+      'lbtc-1': '0x526A143FD0C0429cE71FB8FA09ACa6f4876d29a5',
     },
   },
 
