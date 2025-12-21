@@ -251,26 +251,27 @@ class ContractService {
   }
 
   /**
-   * Deposit native DOGE via DogeRouter (auto-wraps to wDOGE)
+   * Deposit native DOGE directly to MixerPoolNative
+   * The pool accepts native DOGE (payable deposit function)
    */
-  async depositDoge(poolAddress: string, commitment: string, amount: bigint): Promise<DepositResult> {
+  async depositNative(poolAddress: string, commitment: string, amount: bigint): Promise<DepositResult> {
     const connection = evmWalletService.getConnection();
     if (!connection) throw new Error('Wallet not connected');
 
     // Ensure commitment is properly formatted as bytes32
     const formattedCommitment = commitment.startsWith('0x') ? commitment : '0x' + commitment;
     
-    const data = encodeFunctionData(DogeRouterABI, 'depositDoge', [poolAddress, formattedCommitment]);
+    // Use the same deposit(bytes32) function but with native value
+    const data = encodeFunctionData(MixerPoolABI, 'deposit', [formattedCommitment]);
     
-    console.log('[Contract] Submitting DOGE deposit via router...');
-    console.log('[Contract] Router:', contracts.dogeRouter);
+    console.log('[Contract] Submitting native DOGE deposit...');
     console.log('[Contract] Pool:', poolAddress);
     console.log('[Contract] Commitment:', formattedCommitment);
     console.log('[Contract] Amount:', amount.toString());
     
-    // Send native DOGE with the transaction
+    // Send native DOGE with the deposit transaction
     const txHash = await evmWalletService.sendTransaction({
-      to: contracts.dogeRouter,
+      to: poolAddress,
       data,
       value: amount, // Send native DOGE
     });
@@ -280,10 +281,10 @@ class ContractService {
     // Wait for confirmation and get receipt
     const receipt = await this.waitForTransaction(txHash);
     
-    // Parse leaf index from logs (Deposit event from the wDOGE pool)
+    // Parse leaf index from logs (Deposit event)
     let leafIndex = 0;
     if (receipt.logs && receipt.logs.length > 0) {
-      // Look for Deposit event from the pool
+      // Look for Deposit event
       const depositLog = receipt.logs.find((log: any) => 
         log.topics && log.topics.length >= 3
       );

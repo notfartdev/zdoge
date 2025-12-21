@@ -867,6 +867,46 @@
         "IMixerPool",
         "IWrappedDoge"
       ]
+    },
+    "C:\\Users\\Ivan\\Desktop\\dogenado\\contracts\\src\\MixerPoolNative.sol": {
+      "lastModificationDate": 1766318079416,
+      "contentHash": "bfe7488ec593c4f93be2250c5a9e7b33",
+      "sourceName": "src/MixerPoolNative.sol",
+      "solcConfig": {
+        "version": "0.8.30",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "evmVersion": "prague",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "@openzeppelin/contracts/utils/ReentrancyGuard.sol",
+        "./MerkleTreeWithHistory.sol",
+        "./interfaces/IVerifier.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.30"
+      ],
+      "artifacts": [
+        "MixerPoolNative"
+      ]
     }
   }
 }

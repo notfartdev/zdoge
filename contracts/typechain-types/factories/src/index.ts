@@ -3,6 +3,7 @@
 /* eslint-disable */
 export * as dogeRouterSol from "./DogeRouter.sol";
 export * as hasherAdapterSol from "./HasherAdapter.sol";
+export * as mixerPoolNativeSol from "./MixerPoolNative.sol";
 export * as verifierSol from "./Verifier.sol";
 export * as verifierAdapterSol from "./VerifierAdapter.sol";
 export * as interfaces from "./interfaces";

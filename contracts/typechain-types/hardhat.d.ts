@@ -98,6 +98,18 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.MixerPool__factory>;
     getContractFactory(
+      name: "IHasher",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.IHasher__factory>;
+    getContractFactory(
+      name: "IVerifier",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.IVerifier__factory>;
+    getContractFactory(
+      name: "MixerPoolNative",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.MixerPoolNative__factory>;
+    getContractFactory(
       name: "MixerPoolV2",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.MixerPoolV2__factory>;
@@ -224,6 +236,21 @@ declare module "hardhat/types/runtime" {
       signer?: ethers.Signer
     ): Promise<Contracts.MixerPool>;
     getContractAt(
+      name: "IHasher",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.IHasher>;
+    getContractAt(
+      name: "IVerifier",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.IVerifier>;
+    getContractAt(
+      name: "MixerPoolNative",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.MixerPoolNative>;
+    getContractAt(
       name: "MixerPoolV2",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
@@ -334,6 +361,18 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.MixerPool>;
     deployContract(
+      name: "IHasher",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IHasher>;
+    deployContract(
+      name: "IVerifier",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IVerifier>;
+    deployContract(
+      name: "MixerPoolNative",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.MixerPoolNative>;
+    deployContract(
       name: "MixerPoolV2",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.MixerPoolV2>;
@@ -459,6 +498,21 @@ declare module "hardhat/types/runtime" {
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.MixerPool>;
+    deployContract(
+      name: "IHasher",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IHasher>;
+    deployContract(
+      name: "IVerifier",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IVerifier>;
+    deployContract(
+      name: "MixerPoolNative",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.MixerPoolNative>;
     deployContract(
       name: "MixerPoolV2",
       args: any[],

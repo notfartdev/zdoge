@@ -49,9 +49,8 @@ export function DepositInterface() {
     setSelectedAmount(amounts[0].toString())
   }, [selectedToken])
 
-  // Check if this token uses DogeRouter (native DOGE)
-  const usesRouter = tokenConfig.usesRouter === true
-  const isNativeDoge = selectedToken === 'DOGE'
+  // Check if this token uses native deposits (native DOGE)
+  const isNative = tokenConfig.isNative === true
 
   // Fetch token balance when wallet or token changes
   useEffect(() => {
@@ -59,7 +58,7 @@ export function DepositInterface() {
       if (wallet?.isConnected && wallet.address && currentToken) {
         try {
           let balance: bigint
-          if (isNativeDoge) {
+          if (isNative) {
             // For native DOGE, get the native balance
             balance = await contractService.getNativeBalance(wallet.address)
           } else {
@@ -75,7 +74,7 @@ export function DepositInterface() {
       }
     }
     fetchBalance()
-  }, [wallet?.isConnected, wallet?.address, selectedToken, isNativeDoge])
+  }, [wallet?.isConnected, wallet?.address, selectedToken, isNative])
 
   const handleDeposit = async () => {
     if (!wallet?.isConnected || !wallet.address) {
@@ -110,10 +109,7 @@ export function DepositInterface() {
 
     try {
       // Step 1: Generate secret note
-      // For DOGE, we use the wdoge pool internally
-      const poolId = isNativeDoge 
-        ? `wdoge${selectedAmount}` // DOGE uses wDOGE pools internally
-        : `${selectedToken.toLowerCase()}${selectedAmount}`
+      const poolId = `${selectedToken.toLowerCase()}${selectedAmount}`
       console.log("[Deposit] Generating note for pool:", poolId)
       const note = await generateNote(poolId)
       const noteString = serializeNote(note)
@@ -124,17 +120,17 @@ export function DepositInterface() {
 
       let result: { txHash: string; leafIndex: number }
 
-      if (isNativeDoge) {
-        // Native DOGE deposit via DogeRouter
-        // No approval needed - just send native DOGE directly
+      if (isNative) {
+        // Native DOGE deposit - send native DOGE directly to pool
+        // No approval needed - just send native DOGE with the deposit call
         setTxStatus("depositing")
         toast({
           title: "Confirm Deposit",
           description: `Please confirm the ${selectedAmount} DOGE deposit in your wallet.`,
         })
         
-        console.log("[Deposit] Using DogeRouter for native DOGE...")
-        result = await contractService.depositDoge(
+        console.log("[Deposit] Native DOGE deposit...")
+        result = await contractService.depositNative(
           poolAddress,
           commitment,
           denomination
@@ -366,12 +362,11 @@ Explorer: ${links.explorer}/tx/${txHash}
           </div>
           
           {/* DOGE Info Banner */}
-          {isNativeDoge && (
+          {isNative && (
             <div className="mt-3 p-3 bg-[#C2A633]/10 border border-[#C2A633]/30 rounded">
               <p className="font-mono text-xs text-[#C2A633]">
-                💡 <strong>Native DOGE:</strong> Your DOGE is auto-wrapped to wDOGE for the privacy pool. 
-                On withdrawal, you'll receive wDOGE which you can unwrap back to DOGE using our{" "}
-                <a href="/dashboard?tab=unwrap" className="underline hover:text-white">Unwrap tool</a>.
+                💡 <strong>Native DOGE:</strong> Your native DOGE is deposited directly into the privacy pool. 
+                On withdrawal, you'll receive native DOGE directly to your wallet.
               </p>
             </div>
           )}

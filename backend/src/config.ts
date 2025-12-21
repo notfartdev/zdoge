@@ -54,11 +54,11 @@ export const config = {
       'usd1-10': '0x47fE455020B010c114356C88C291118918e32c57',
       'usd1-100': '0x248A93958693fD9Cc260676B63440F5eBAf25B79',
       'usd1-1000': '0x307d1D56a321eE5f4334b6A3A00E6Cc6ad8598b1',
-      // WDOGE (18 decimals - NEW: 1, 10, 100, 1000 DOGE pools)
-      'wdoge-1': '0xD9743cB4D6ab805b28215E78e26A9CefD0d971E5',
-      'wdoge-10': '0x6fa72AF1E9CF420aE3a839eea9E3F9d6375028C0',
-      'wdoge-100': '0xFB652Db6668d476f2a4Af2783F2e7259Eb8a1a86',
-      'wdoge-1000': '0xa9143916C4Bf99d94AdD2578162f53164307E7A6',
+      // Native DOGE pools (MixerPoolNative - accepts native DOGE directly)
+      'doge-1': '0xb253d81E44bCE93Fb742EE8cD26D96eD910f401a',
+      'doge-10': '0x01aA22f48DBA28934b0aABB0D949F56d942775e6',
+      'doge-100': '0x0E9A2FD5b4176fFb7C3dE11a8D90D8AAD5dC0811',
+      'doge-1000': '0xe1c751D6F65768EB6d3BCb84760bDd68C6d3F7D4',
       // WETH (18 decimals - already correct)
       'weth-0.01': '0x72734eDD05E680a4dB4312974EE46ce903aE807C',
       'weth-0.1': '0x1d5d2c74e3b402749Fd9BeD709a749A0E5E2ea8e',

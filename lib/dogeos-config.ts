@@ -78,8 +78,8 @@ export const tokens = {
 } as const;
 
 // Supported tokens for mixing
-// DOGE temporarily disabled - DogeRouter needs wDOGE interface verification
-export const SUPPORTED_TOKENS = ['USDC', 'USDT', 'USD1', 'WETH', 'LBTC'] as const;
+// DOGE uses native pools (no wrapping needed)
+export const SUPPORTED_TOKENS = ['DOGE', 'USDC', 'USDT', 'USD1', 'WETH', 'LBTC'] as const;
 export type SupportedToken = typeof SUPPORTED_TOKENS[number];
 
 // Pool configuration per token
@@ -87,20 +87,20 @@ export const tokenPools: Record<SupportedToken, {
   token: typeof tokens[keyof typeof tokens];
   amounts: number[];
   pools: Record<string, `0x${string}`>;
-  usesRouter?: boolean; // If true, use DogeRouter instead of direct deposit
+  isNative?: boolean; // If true, deposit sends native value (no ERC20 approval)
 }> = {
-  // DOGE uses the same pools as WDOGE but goes through DogeRouter
+  // DOGE uses native pools - accepts native DOGE directly (no wrapping)
   DOGE: {
     token: tokens.DOGE,
     amounts: [1, 10, 100, 1000],
     pools: {
-      // These are the wDOGE pool addresses - DogeRouter wraps DOGE to wDOGE
-      '1': '0xD9743cB4D6ab805b28215E78e26A9CefD0d971E5',
-      '10': '0x6fa72AF1E9CF420aE3a839eea9E3F9d6375028C0',
-      '100': '0xFB652Db6668d476f2a4Af2783F2e7259Eb8a1a86',
-      '1000': '0xa9143916C4Bf99d94AdD2578162f53164307E7A6',
+      // Native DOGE pools - MixerPoolNative contracts
+      '1': '0xb253d81E44bCE93Fb742EE8cD26D96eD910f401a',
+      '10': '0x01aA22f48DBA28934b0aABB0D949F56d942775e6',
+      '100': '0x0E9A2FD5b4176fFb7C3dE11a8D90D8AAD5dC0811',
+      '1000': '0xe1c751D6F65768EB6d3BCb84760bDd68C6d3F7D4',
     },
-    usesRouter: true, // Flag to use DogeRouter
+    isNative: true, // Flag for native DOGE pools
   },
   USDC: {
     token: tokens.USDC,

@@ -48,6 +48,8 @@ export type { MiMCSponge } from "./src/MiMCSponge";
 export { MiMCSponge__factory } from "./factories/src/MiMCSponge__factory";
 export type { MixerPool } from "./src/MixerPool";
 export { MixerPool__factory } from "./factories/src/MixerPool__factory";
+export type { MixerPoolNative } from "./src/MixerPoolNative.sol/MixerPoolNative";
+export { MixerPoolNative__factory } from "./factories/src/MixerPoolNative.sol/MixerPoolNative__factory";
 export type { MixerPoolV2 } from "./src/MixerPoolV2";
 export { MixerPoolV2__factory } from "./factories/src/MixerPoolV2__factory";
 export type { MockERC20 } from "./src/mocks/MockERC20";

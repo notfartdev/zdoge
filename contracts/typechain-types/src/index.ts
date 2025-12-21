@@ -5,6 +5,8 @@ import type * as dogeRouterSol from "./DogeRouter.sol";
 export type { dogeRouterSol };
 import type * as hasherAdapterSol from "./HasherAdapter.sol";
 export type { hasherAdapterSol };
+import type * as mixerPoolNativeSol from "./MixerPoolNative.sol";
+export type { mixerPoolNativeSol };
 import type * as verifierSol from "./Verifier.sol";
 export type { verifierSol };
 import type * as verifierAdapterSol from "./VerifierAdapter.sol";
