@@ -491,16 +491,54 @@ app.get('/api/pools', apiLimiter, (req, res) => {
   res.json(poolList);
 });
 
+// Native pool ABI (MixerPoolNative returns 3 values, not 4)
+const MixerPoolNativeABI = [
+  {
+    type: 'function',
+    name: 'getPoolInfo',
+    inputs: [],
+    outputs: [
+      { name: '_denomination', type: 'uint256' },
+      { name: '_depositsCount', type: 'uint256' },
+      { name: '_root', type: 'bytes32' },
+    ],
+    stateMutability: 'view',
+  },
+] as const;
+
 // Get pool info
 app.get('/api/pool/:address', apiLimiter, async (req, res) => {
   const address = req.params.address as Address;
   
   try {
-    const poolInfo = await publicClient.readContract({
-      address,
-      abi: MixerPoolABI,
-      functionName: 'getPoolInfo',
-    });
+    let token: string = '0x0000000000000000000000000000000000000000';
+    let denomination: string;
+    let depositsCount: number;
+    let root: string;
+    
+    // Try ERC20 pool ABI first (4 return values)
+    try {
+      const poolInfo = await publicClient.readContract({
+        address,
+        abi: MixerPoolABI,
+        functionName: 'getPoolInfo',
+      });
+      token = poolInfo[0] as string;
+      denomination = poolInfo[1].toString();
+      depositsCount = Number(poolInfo[2]);
+      root = poolInfo[3] as string;
+    } catch {
+      // Fallback to native pool ABI (3 return values)
+      const nativePoolInfo = await publicClient.readContract({
+        address,
+        abi: MixerPoolNativeABI,
+        functionName: 'getPoolInfo',
+      });
+      token = '0x0000000000000000000000000000000000000000'; // Native token
+      denomination = nativePoolInfo[0].toString();
+      depositsCount = Number(nativePoolInfo[1]);
+      root = nativePoolInfo[2] as string;
+    }
 
     const pool = pools.get(address.toLowerCase());
     
@@ -523,10 +561,10 @@ app.get('/api/pool/:address', apiLimiter, async (req, res) => {
     }
     
     res.json({
-      token: poolInfo[0],
-      denomination: poolInfo[1].toString(),
-      depositsCount: Number(poolInfo[2]),
-      root: poolInfo[3],
+      token,
+      denomination,
+      depositsCount,
+      root,
       // Local state
       localDepositsCount: pool?.tree.getLeafCount() || 0,
       localRoot: pool ? '0x' + pool.tree.getRoot().toString(16).padStart(64, '0') : null,
