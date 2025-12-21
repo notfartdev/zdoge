@@ -35,6 +35,8 @@ export const config = {
   contracts: {
     hasher: process.env.HASHER_ADDRESS || '0x1931f2D78930f5c3b0ce65d27F56F35Fa4fdA67D',
     verifier: process.env.VERIFIER_ADDRESS || '0xE8Ef2495F741467D746E27548BF71948A0554Ad6',
+    // DogeRouter - allows native DOGE deposits/withdrawals (auto-wraps to wDOGE)
+    dogeRouter: '0x683880A8f74175Bd795E3754b332D41fdE447F2f',
     // All pools (multi-token support) - Updated with 18 decimal pools
     pools: {
       // USDC (18 decimals on DogeOS testnet)

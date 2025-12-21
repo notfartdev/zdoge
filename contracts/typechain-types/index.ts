@@ -26,6 +26,12 @@ export type { IERC165 } from "./@openzeppelin/contracts/utils/introspection/IERC
 export { IERC165__factory } from "./factories/@openzeppelin/contracts/utils/introspection/IERC165__factory";
 export type { ReentrancyGuard } from "./@openzeppelin/contracts/utils/ReentrancyGuard";
 export { ReentrancyGuard__factory } from "./factories/@openzeppelin/contracts/utils/ReentrancyGuard__factory";
+export type { DogeRouter } from "./src/DogeRouter.sol/DogeRouter";
+export { DogeRouter__factory } from "./factories/src/DogeRouter.sol/DogeRouter__factory";
+export type { IMixerPool } from "./src/DogeRouter.sol/IMixerPool";
+export { IMixerPool__factory } from "./factories/src/DogeRouter.sol/IMixerPool__factory";
+export type { IWrappedDoge } from "./src/DogeRouter.sol/IWrappedDoge";
+export { IWrappedDoge__factory } from "./factories/src/DogeRouter.sol/IWrappedDoge__factory";
 export type { Hasher } from "./src/Hasher";
 export { Hasher__factory } from "./factories/src/Hasher__factory";
 export type { HasherAdapter } from "./src/HasherAdapter.sol/HasherAdapter";

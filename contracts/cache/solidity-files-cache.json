@@ -827,6 +827,46 @@
       "artifacts": [
         "MixerPoolV2"
       ]
+    },
+    "C:\\Users\\Ivan\\Desktop\\dogenado\\contracts\\src\\DogeRouter.sol": {
+      "lastModificationDate": 1766314940094,
+      "contentHash": "db9f3e9e1f5c9608de2b604c4d257e27",
+      "sourceName": "src/DogeRouter.sol",
+      "solcConfig": {
+        "version": "0.8.30",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "evmVersion": "prague",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "@openzeppelin/contracts/utils/ReentrancyGuard.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.30"
+      ],
+      "artifacts": [
+        "DogeRouter",
+        "IMixerPool",
+        "IWrappedDoge"
+      ]
     }
   }
 }

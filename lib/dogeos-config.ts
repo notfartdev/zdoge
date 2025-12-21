@@ -274,6 +274,8 @@ export const priceConfig = {
 export const contracts = {
   hasher: '0x1931f2D78930f5c3b0ce65d27F56F35Fa4fdA67D' as `0x${string}`,
   verifier: '0xE8Ef2495F741467D746E27548BF71948A0554Ad6' as `0x${string}`,
+  // DogeRouter - allows native DOGE deposits/withdrawals (auto-wraps to wDOGE)
+  dogeRouter: '0x683880A8f74175Bd795E3754b332D41fdE447F2f' as `0x${string}`,
 };
 
 // Backend API URLs (indexer + relayer on same server)

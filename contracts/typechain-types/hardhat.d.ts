@@ -54,6 +54,18 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.ReentrancyGuard__factory>;
     getContractFactory(
+      name: "DogeRouter",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.DogeRouter__factory>;
+    getContractFactory(
+      name: "IMixerPool",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.IMixerPool__factory>;
+    getContractFactory(
+      name: "IWrappedDoge",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.IWrappedDoge__factory>;
+    getContractFactory(
       name: "Hasher",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.Hasher__factory>;
@@ -157,6 +169,21 @@ declare module "hardhat/types/runtime" {
       signer?: ethers.Signer
     ): Promise<Contracts.ReentrancyGuard>;
     getContractAt(
+      name: "DogeRouter",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.DogeRouter>;
+    getContractAt(
+      name: "IMixerPool",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.IMixerPool>;
+    getContractAt(
+      name: "IWrappedDoge",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.IWrappedDoge>;
+    getContractAt(
       name: "Hasher",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
@@ -263,6 +290,18 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.ReentrancyGuard>;
     deployContract(
+      name: "DogeRouter",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.DogeRouter>;
+    deployContract(
+      name: "IMixerPool",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IMixerPool>;
+    deployContract(
+      name: "IWrappedDoge",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IWrappedDoge>;
+    deployContract(
       name: "Hasher",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.Hasher>;
@@ -365,6 +404,21 @@ declare module "hardhat/types/runtime" {
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.ReentrancyGuard>;
+    deployContract(
+      name: "DogeRouter",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.DogeRouter>;
+    deployContract(
+      name: "IMixerPool",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IMixerPool>;
+    deployContract(
+      name: "IWrappedDoge",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IWrappedDoge>;
     deployContract(
       name: "Hasher",
       args: any[],
