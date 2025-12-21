@@ -36,7 +36,7 @@ export const config = {
     hasher: process.env.HASHER_ADDRESS || '0x1931f2D78930f5c3b0ce65d27F56F35Fa4fdA67D',
     verifier: process.env.VERIFIER_ADDRESS || '0xE8Ef2495F741467D746E27548BF71948A0554Ad6',
     // DogeRouter - allows native DOGE deposits/withdrawals (auto-wraps to wDOGE)
-    dogeRouter: '0x683880A8f74175Bd795E3754b332D41fdE447F2f',
+    dogeRouter: '0x0A26D94E458EA685dAb82445914519DE6D26EB57',
     // All pools (multi-token support) - Updated with 18 decimal pools
     pools: {
       // USDC (18 decimals on DogeOS testnet)
@@ -54,11 +54,11 @@ export const config = {
       'usd1-10': '0x47fE455020B010c114356C88C291118918e32c57',
       'usd1-100': '0x248A93958693fD9Cc260676B63440F5eBAf25B79',
       'usd1-1000': '0x307d1D56a321eE5f4334b6A3A00E6Cc6ad8598b1',
-      // WDOGE (18 decimals - already correct)
-      'wdoge-100': '0xAAbC0bF61d4c0C580f94133a2E905Ae3DB2C9689',
-      'wdoge-1000': '0xF09a1A994610E50e38FC9535d9151127F126dAbe',
-      'wdoge-10000': '0x687c1566B204350C91aB25f8B43235bF59e6535d',
-      'wdoge-100000': '0x7d1cF893E6B2192D3a34369a3D2742F572879E17',
+      // WDOGE (18 decimals - NEW: 1, 10, 100, 1000 DOGE pools)
+      'wdoge-1': '0xD9743cB4D6ab805b28215E78e26A9CefD0d971E5',
+      'wdoge-10': '0x6fa72AF1E9CF420aE3a839eea9E3F9d6375028C0',
+      'wdoge-100': '0xFB652Db6668d476f2a4Af2783F2e7259Eb8a1a86',
+      'wdoge-1000': '0xa9143916C4Bf99d94AdD2578162f53164307E7A6',
       // WETH (18 decimals - already correct)
       'weth-0.01': '0x72734eDD05E680a4dB4312974EE46ce903aE807C',
       'weth-0.1': '0x1d5d2c74e3b402749Fd9BeD709a749A0E5E2ea8e',

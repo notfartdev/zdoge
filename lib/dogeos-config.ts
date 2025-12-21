@@ -91,13 +91,13 @@ export const tokenPools: Record<SupportedToken, {
   // DOGE uses the same pools as WDOGE but goes through DogeRouter
   DOGE: {
     token: tokens.DOGE,
-    amounts: [100, 1000, 10000, 100000],
+    amounts: [1, 10, 100, 1000],
     pools: {
       // These are the wDOGE pool addresses - DogeRouter wraps DOGE to wDOGE
-      '100': '0xAAbC0bF61d4c0C580f94133a2E905Ae3DB2C9689',
-      '1000': '0xF09a1A994610E50e38FC9535d9151127F126dAbe',
-      '10000': '0x687c1566B204350C91aB25f8B43235bF59e6535d',
-      '100000': '0x7d1cF893E6B2192D3a34369a3D2742F572879E17',
+      '1': '0xD9743cB4D6ab805b28215E78e26A9CefD0d971E5',
+      '10': '0x6fa72AF1E9CF420aE3a839eea9E3F9d6375028C0',
+      '100': '0xFB652Db6668d476f2a4Af2783F2e7259Eb8a1a86',
+      '1000': '0xa9143916C4Bf99d94AdD2578162f53164307E7A6',
     },
     usesRouter: true, // Flag to use DogeRouter
   },
@@ -133,12 +133,12 @@ export const tokenPools: Record<SupportedToken, {
   },
   WDOGE: {
     token: tokens.WDOGE,
-    amounts: [100, 1000, 10000, 100000],
+    amounts: [1, 10, 100, 1000],
     pools: {
-      '100': '0xAAbC0bF61d4c0C580f94133a2E905Ae3DB2C9689',
-      '1000': '0xF09a1A994610E50e38FC9535d9151127F126dAbe',
-      '10000': '0x687c1566B204350C91aB25f8B43235bF59e6535d',
-      '100000': '0x7d1cF893E6B2192D3a34369a3D2742F572879E17',
+      '1': '0xD9743cB4D6ab805b28215E78e26A9CefD0d971E5',
+      '10': '0x6fa72AF1E9CF420aE3a839eea9E3F9d6375028C0',
+      '100': '0xFB652Db6668d476f2a4Af2783F2e7259Eb8a1a86',
+      '1000': '0xa9143916C4Bf99d94AdD2578162f53164307E7A6',
     },
   },
   WETH: {
@@ -297,7 +297,7 @@ export const contracts = {
   hasher: '0x1931f2D78930f5c3b0ce65d27F56F35Fa4fdA67D' as `0x${string}`,
   verifier: '0xE8Ef2495F741467D746E27548BF71948A0554Ad6' as `0x${string}`,
   // DogeRouter - allows native DOGE deposits/withdrawals (auto-wraps to wDOGE)
-  dogeRouter: '0x683880A8f74175Bd795E3754b332D41fdE447F2f' as `0x${string}`,
+  dogeRouter: '0x0A26D94E458EA685dAb82445914519DE6D26EB57' as `0x${string}`,
 };
 
 // Backend API URLs (indexer + relayer on same server)
