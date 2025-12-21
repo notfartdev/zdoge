@@ -6,7 +6,7 @@
  * For production, run them separately for better reliability.
  */
 
-import { createPublicClient, createWalletClient, http, type Address, parseAbiItem } from 'viem';
+import { createPublicClient, createWalletClient, http, webSocket, type Address, parseAbiItem } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import express from 'express';
 import cors from 'cors';
@@ -121,6 +121,12 @@ function createRateLimiter(type: keyof typeof RATE_LIMITS) {
   return (req: express.Request, res: express.Response, next: express.NextFunction) => {
     // Get client identifier (IP + endpoint for more granular limiting)
     const clientIp = req.ip || req.socket.remoteAddress || 'unknown';
+    
+    // Skip rate limiting for localhost (development)
+    if (clientIp === '127.0.0.1' || clientIp === '::1' || clientIp === '::ffff:127.0.0.1') {
+      return next();
+    }
+    
     const key = `${type}:${clientIp}`;
     
     const now = Date.now();
@@ -207,11 +213,25 @@ interface PoolState {
 
 const pools: Map<string, PoolState> = new Map();
 
-// Create viem client
+// Create viem client (HTTP for regular calls)
 const publicClient = createPublicClient({
   chain: dogeosTestnet,
   transport: http(config.rpcUrl),
 });
+
+// Create WebSocket client for real-time event watching (faster than HTTP polling)
+let wsClient: ReturnType<typeof createPublicClient> | null = null;
+try {
+  if (config.wsRpcUrl) {
+    wsClient = createPublicClient({
+      chain: dogeosTestnet,
+      transport: webSocket(config.wsRpcUrl),
+    });
+    console.log('[Indexer] WebSocket client initialized for real-time events');
+  }
+} catch (error) {
+  console.warn('[Indexer] WebSocket initialization failed, falling back to HTTP polling:', error);
+}
 
 // Create secure wallet for relayer (with retry logic and nonce management)
 let secureWallet: SecureWallet | null = null;
@@ -385,8 +405,11 @@ async function syncPoolFromChain(pool: PoolState): Promise<void> {
 async function watchPool(pool: PoolState): Promise<void> {
   const address = pool.address as Address;
   
+  // Use WebSocket client if available (real-time), otherwise fallback to HTTP (polling)
+  const eventClient = wsClient || publicClient;
+  
   // Watch for deposits
-  publicClient.watchContractEvent({
+  eventClient.watchContractEvent({
     address,
     abi: [DepositEventABI],
     eventName: 'Deposit',
@@ -439,7 +462,7 @@ async function watchPool(pool: PoolState): Promise<void> {
   });
 
   // Watch for withdrawals
-  publicClient.watchContractEvent({
+  eventClient.watchContractEvent({
     address,
     abi: [WithdrawalEventABI],
     eventName: 'Withdrawal',
