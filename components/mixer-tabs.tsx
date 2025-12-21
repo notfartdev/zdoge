@@ -2,6 +2,7 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { DepositInterface } from "./deposit-interface"
 import { WithdrawInterface } from "./withdraw-interface"
+import { UnwrapDoge } from "./unwrap-doge"
 
 export function MixerTabs() {
   return (
@@ -19,12 +20,21 @@ export function MixerTabs() {
         >
           WITHDRAW
         </TabsTrigger>
+        <TabsTrigger
+          value="unwrap"
+          className="flex-1 font-mono text-sm sm:text-base py-4 sm:py-5 px-4 sm:px-6 data-[state=active]:bg-transparent data-[state=active]:text-white data-[state=active]:border-l data-[state=active]:border-[#C2A633]/30 rounded-none transition-all duration-300 hover:bg-white/5"
+        >
+          UNWRAP
+        </TabsTrigger>
       </TabsList>
       <TabsContent value="deposit" className="mt-0">
         <DepositInterface />
       </TabsContent>
       <TabsContent value="withdraw" className="mt-0">
         <WithdrawInterface />
+      </TabsContent>
+      <TabsContent value="unwrap" className="mt-0">
+        <UnwrapDoge />
       </TabsContent>
     </Tabs>
   )

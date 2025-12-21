@@ -364,6 +364,17 @@ Explorer: ${links.explorer}/tx/${txHash}
             </select>
             <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-[#C2A633] pointer-events-none" />
           </div>
+          
+          {/* DOGE Info Banner */}
+          {isNativeDoge && (
+            <div className="mt-3 p-3 bg-[#C2A633]/10 border border-[#C2A633]/30 rounded">
+              <p className="font-mono text-xs text-[#C2A633]">
+                💡 <strong>Native DOGE:</strong> Your DOGE is auto-wrapped to wDOGE for the privacy pool. 
+                On withdrawal, you'll receive wDOGE which you can unwrap back to DOGE using our{" "}
+                <a href="/dashboard?tab=unwrap" className="underline hover:text-white">Unwrap tool</a>.
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Step 2: Amount Selection */}
