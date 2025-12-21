@@ -361,15 +361,6 @@ Explorer: ${links.explorer}/tx/${txHash}
             <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-[#C2A633] pointer-events-none" />
           </div>
           
-          {/* DOGE Info Banner */}
-          {isNative && (
-            <div className="mt-3 p-3 bg-[#C2A633]/10 border border-[#C2A633]/30 rounded">
-              <p className="font-mono text-xs text-[#C2A633]">
-                💡 <strong>Native DOGE:</strong> Your native DOGE is deposited directly into the privacy pool. 
-                On withdrawal, you'll receive native DOGE directly to your wallet.
-              </p>
-            </div>
-          )}
         </div>
 
         {/* Step 2: Amount Selection */}
