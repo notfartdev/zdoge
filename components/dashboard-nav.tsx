@@ -3,13 +3,15 @@
 import { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Inbox, Search, Menu, X } from "lucide-react"
+import { Inbox, Search, Menu, X, HelpCircle } from "lucide-react"
 import { WalletConnectButton } from "./wallet-connect-button"
 import { AccountModal } from "./account-modal"
+import { FAQModal } from "./faq-modal"
 
 export function DashboardNav() {
   const pathname = usePathname()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [faqOpen, setFaqOpen] = useState(false)
 
   return (
     <nav className="border-b border-[#C2A633]/20 bg-black">
@@ -38,6 +40,13 @@ export function DashboardNav() {
               >
                 Docs
               </a>
+              <button
+                onClick={() => setFaqOpen(true)}
+                className="font-mono text-sm text-gray-400 hover:text-white transition-colors flex items-center gap-2"
+              >
+                <HelpCircle className="w-4 h-4" />
+                How it Works
+              </button>
             </div>
           </div>
 
@@ -104,6 +113,16 @@ export function DashboardNav() {
               >
                 Docs
               </a>
+              <button
+                onClick={() => {
+                  setMobileMenuOpen(false)
+                  setFaqOpen(true)
+                }}
+                className="font-mono text-sm text-gray-400 hover:text-white transition-colors flex items-center gap-2 py-2"
+              >
+                <HelpCircle className="w-4 h-4" />
+                How it Works
+              </button>
               
               {/* Mobile Actions */}
               <div className="pt-3 border-t border-[#C2A633]/20 space-y-3">
@@ -139,6 +158,8 @@ export function DashboardNav() {
           </div>
         )}
       </div>
+      
+      <FAQModal open={faqOpen} onOpenChange={setFaqOpen} />
     </nav>
   )
 }

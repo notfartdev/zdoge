@@ -4,6 +4,8 @@ import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { HelpCircle } from "lucide-react"
+import { FAQModal } from "./faq-modal"
 
 const navLinks = [
   { label: "Mix", href: "#mix" },
@@ -14,6 +16,7 @@ const navLinks = [
 export function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false)
   const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const [faqOpen, setFaqOpen] = useState(false)
   const pathname = usePathname()
   const isHomePage = pathname === "/"
 
@@ -53,11 +56,20 @@ export function Navbar() {
 
           <div className="hidden md:flex items-center gap-3">
             {isHomePage ? (
-              <Link href="/dashboard">
-                <button className="px-6 py-2 bg-[#C2A633] text-black font-mono text-xs tracking-wider font-bold hover:bg-[#C2A633]/90 transition-colors">
-                  LAUNCH MIXER
+              <>
+                <button
+                  onClick={() => setFaqOpen(true)}
+                  className="px-4 py-2 text-gray-400 hover:text-white font-mono text-xs tracking-wider transition-colors flex items-center gap-2"
+                >
+                  <HelpCircle className="w-4 h-4" />
+                  How it Works
                 </button>
-              </Link>
+                <Link href="/dashboard">
+                  <button className="px-6 py-2 bg-[#C2A633] text-black font-mono text-xs tracking-wider font-bold hover:bg-[#C2A633]/90 transition-colors">
+                    LAUNCH MIXER
+                  </button>
+                </Link>
+              </>
             ) : (
               <>
                 <span className="relative flex h-2 w-2">
@@ -118,7 +130,17 @@ export function Navbar() {
                       {link.label}
                     </motion.button>
                   ))}
-                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.4 }}>
+                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.4 }} className="flex flex-col gap-4 items-center">
+                    <button
+                      onClick={() => {
+                        setIsMenuOpen(false)
+                        setFaqOpen(true)
+                      }}
+                      className="px-6 sm:px-8 py-3 sm:py-4 text-white font-mono text-xs sm:text-sm tracking-wider min-h-[44px] flex items-center gap-2"
+                    >
+                      <HelpCircle className="w-5 h-5" />
+                      How it Works
+                    </button>
                     <Link href="/dashboard">
                       <button className="px-6 sm:px-8 py-3 sm:py-4 bg-[#C2A633] text-black font-mono text-xs sm:text-sm tracking-wider font-bold min-h-[44px]">
                         LAUNCH MIXER
@@ -140,6 +162,8 @@ export function Navbar() {
           </motion.div>
         )}
       </AnimatePresence>
+      
+      <FAQModal open={faqOpen} onOpenChange={setFaqOpen} />
     </>
   )
 }
