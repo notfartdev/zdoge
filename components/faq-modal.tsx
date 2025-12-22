@@ -3,8 +3,6 @@
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
-  DialogTitle,
 } from "@/components/ui/dialog"
 
 interface FAQItem {
@@ -15,7 +13,7 @@ interface FAQItem {
 const faqData: FAQItem[] = [
   {
     question: "How does Dogenado work?",
-    answer: "Dogenado uses zero-knowledge proofs and Merkle trees to break the on-chain link between deposits and withdrawals. When you deposit, your funds are added to a privacy pool. When you withdraw, you prove you have a valid deposit without revealing which one.",
+    answer: "Dogenado uses zero-knowledge proofs and Merkle trees to break the on-chain link between deposits and withdrawals.",
   },
   {
     question: "What if observers try to guess based on the amount I deposited or withdrew?",
@@ -23,7 +21,7 @@ const faqData: FAQItem[] = [
   },
   {
     question: "What are the fees?",
-    answer: "Deposits are free (0% fee). Withdrawals have a 0.5% relayer fee plus gas costs if using the relayer service. You can also submit withdrawals directly for maximum privacy, paying only gas fees.",
+    answer: "Deposits are free (0% fee). Withdrawals have a 0.5% fee plus gas costs if using the withdrawal service. You can also submit withdrawals directly for maximum privacy, paying only gas fees.",
   },
   {
     question: "Can I directly withdraw to centralized exchanges or apps?",
@@ -42,13 +40,7 @@ const faqData: FAQItem[] = [
 export function FAQModal({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-black border-[#C2A633]/20 max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="font-mono text-xl text-white mb-6">
-            Frequently Asked Questions
-          </DialogTitle>
-        </DialogHeader>
-        
+      <DialogContent className="bg-black border-[#C2A633]/20 max-w-2xl max-h-[90vh] overflow-y-auto pt-6">
         <div className="space-y-6">
           {faqData.map((item, index) => (
             <div key={index} className="space-y-2">
