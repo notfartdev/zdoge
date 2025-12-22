@@ -2,10 +2,22 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { DepositInterface } from "./deposit-interface"
 import { WithdrawInterface } from "./withdraw-interface"
+import { useSearchParams } from "next/navigation"
+import { useEffect, useState } from "react"
 
 export function MixerTabs() {
+  const searchParams = useSearchParams()
+  const tabParam = searchParams.get('tab')
+  const initialTab = tabParam === 'withdraw' ? 'withdraw' : 'deposit'
+  const [activeTab, setActiveTab] = useState(initialTab)
+
+  useEffect(() => {
+    const tab = tabParam === 'withdraw' ? 'withdraw' : 'deposit'
+    setActiveTab(tab)
+  }, [tabParam])
+
   return (
-    <Tabs defaultValue="deposit" className="w-full">
+    <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
       <TabsList className="w-full glass-card p-0 h-auto rounded-none transition-all duration-300">
         <TabsTrigger
           value="deposit"

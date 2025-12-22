@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { AlertCircle, CheckCircle2, Copy } from "lucide-react"
 import { api, tokenPools } from "@/lib/dogeos-config"
+import Link from "next/link"
 
 // Token logo URLs - using Trust Wallet token list and CoinGecko
 const tokenLogos: Record<string, string> = {
@@ -189,9 +190,11 @@ export function MixerInterface() {
                     </div>
                   </div>
 
-                  <Button className="w-full bg-[#C2A633] hover:bg-[#C2A633]/90 text-black font-mono text-xs tracking-widest py-4 sm:py-6 min-h-[44px] cursor-default">
-                    GENERATE DEPOSIT
-                  </Button>
+                  <Link href="/dashboard?tab=deposit" className="block">
+                    <Button className="w-full bg-[#C2A633] hover:bg-[#C2A633]/90 text-black font-mono text-xs tracking-widest py-4 sm:py-6 min-h-[44px]">
+                      GENERATE DEPOSIT
+                    </Button>
+                  </Link>
                 </div>
               </TabsContent>
 
@@ -215,9 +218,11 @@ export function MixerInterface() {
                     <Input placeholder="D..." className="bg-black/40 border-white/10 font-mono text-xs" readOnly />
                   </div>
 
-                  <Button className="w-full bg-[#C2A633] hover:bg-[#C2A633]/90 text-black font-mono text-xs tracking-widest py-4 sm:py-6 min-h-[44px] cursor-default">
-                    WITHDRAW
-                  </Button>
+                  <Link href="/dashboard?tab=withdraw" className="block">
+                    <Button className="w-full bg-[#C2A633] hover:bg-[#C2A633]/90 text-black font-mono text-xs tracking-widest py-4 sm:py-6 min-h-[44px]">
+                      WITHDRAW
+                    </Button>
+                  </Link>
                 </div>
               </TabsContent>
             </Tabs>
