@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { useWallet } from "@/lib/wallet-context"
-import { Copy, Check, Loader2, AlertCircle, Download, ExternalLink, DollarSign, ChevronDown } from "lucide-react"
+import { Copy, Check, Loader2, AlertCircle, Download, ExternalLink, DollarSign, ChevronDown, Eye, EyeOff } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { generateNote, serializeNote, getCommitmentBytes, type Note } from "@/lib/note-service"
 import { tokens, links, dogeosTestnet, tokenPools, SUPPORTED_TOKENS, type SupportedToken } from "@/lib/dogeos-config"
@@ -29,6 +29,8 @@ export function DepositInterface() {
   const [copied, setCopied] = useState(false)
   const [tokenBalance, setTokenBalance] = useState<bigint>(0n)
   const [leafIndex, setLeafIndex] = useState<number>(0)
+  const [isNoteRevealed, setIsNoteRevealed] = useState(false)
+  const [isHolding, setIsHolding] = useState(false)
 
   // Get current token config
   const tokenConfig = tokenPools[selectedToken]
@@ -282,11 +284,70 @@ Explorer: ${links.explorer}/tx/${txHash}
             </div>
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-3">
             <Label className="font-mono text-xs text-[#C2A633] uppercase tracking-wider">Your Secret Note</Label>
-            <div className="p-4 bg-zinc-950 border border-[#C2A633]/30 font-mono text-xs break-all text-zinc-300 leading-relaxed">
-              {secretNote}
+            <div className="relative">
+              <div className="p-4 pr-32 bg-zinc-950 border border-[#C2A633]/30 font-mono text-xs break-all text-zinc-300 leading-relaxed min-h-[100px] flex items-center justify-center">
+                {isNoteRevealed ? (
+                  <span className="select-all">{secretNote}</span>
+                ) : (
+                  <span className="text-zinc-600 select-none tracking-wider">
+                    {secretNote.split('').map(() => '•').join('')}
+                  </span>
+                )}
+              </div>
+              <Button
+                onMouseDown={(e) => {
+                  e.preventDefault()
+                  setIsHolding(true)
+                  setIsNoteRevealed(true)
+                }}
+                onMouseUp={(e) => {
+                  e.preventDefault()
+                  setIsHolding(false)
+                  setIsNoteRevealed(false)
+                }}
+                onMouseLeave={(e) => {
+                  e.preventDefault()
+                  setIsHolding(false)
+                  setIsNoteRevealed(false)
+                }}
+                onTouchStart={(e) => {
+                  e.preventDefault()
+                  setIsHolding(true)
+                  setIsNoteRevealed(true)
+                }}
+                onTouchEnd={(e) => {
+                  e.preventDefault()
+                  setIsHolding(false)
+                  setIsNoteRevealed(false)
+                }}
+                variant="outline"
+                className={`
+                  absolute top-3 right-3 border-[#C2A633]/50 text-[#C2A633] hover:bg-[#C2A633]/10 font-mono
+                  active:bg-[#C2A633]/20 active:border-[#C2A633] transition-all
+                  ${isHolding ? 'bg-[#C2A633]/20 border-[#C2A633] scale-95' : ''}
+                `}
+                size="sm"
+              >
+                {isNoteRevealed ? (
+                  <>
+                    <Eye className="h-4 w-4 mr-2" />
+                    Revealing...
+                  </>
+                ) : (
+                  <>
+                    <EyeOff className="h-4 w-4 mr-2" />
+                    Hold to Reveal
+                  </>
+                )}
+              </Button>
             </div>
+            <p className="text-xs text-zinc-500 font-mono text-center">
+              {isNoteRevealed 
+                ? "👁️ Release to hide the note" 
+                : "👆 Hold the button above to reveal your secret note"}
+            </p>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
