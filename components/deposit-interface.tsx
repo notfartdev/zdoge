@@ -31,6 +31,7 @@ export function DepositInterface() {
   const [leafIndex, setLeafIndex] = useState<number>(0)
   const [isNoteRevealed, setIsNoteRevealed] = useState(false)
   const [isHolding, setIsHolding] = useState(false)
+  const [hasBeenRevealed, setHasBeenRevealed] = useState(false)
 
   // Get current token config
   const tokenConfig = tokenPools[selectedToken]
@@ -259,7 +260,7 @@ Explorer: ${links.explorer}/tx/${txHash}
   if (txStatus === "success" && secretNote) {
     return (
       <Card className="bg-black border-[#C2A633]/20 p-0 rounded-none overflow-hidden">
-        <div className="p-6 space-y-6">
+        <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center">
               <Check className="w-5 h-5 text-green-500" />
@@ -287,7 +288,7 @@ Explorer: ${links.explorer}/tx/${txHash}
           <div className="space-y-3">
             <Label className="font-mono text-xs text-[#C2A633] uppercase tracking-wider">Your Secret Note</Label>
             <div className="relative">
-              <div className="p-4 pr-32 bg-zinc-950 border border-[#C2A633]/30 font-mono text-xs break-all text-zinc-300 leading-relaxed min-h-[100px] flex items-center justify-center">
+              <div className={`p-4 bg-zinc-950 border border-[#C2A633]/30 font-mono text-xs break-all text-zinc-300 leading-relaxed min-h-[100px] flex items-center justify-center ${hasBeenRevealed ? 'pr-20 sm:pr-24' : ''}`}>
                 {isNoteRevealed ? (
                   <span className="select-all">{secretNote}</span>
                 ) : (
@@ -296,57 +297,89 @@ Explorer: ${links.explorer}/tx/${txHash}
                   </span>
                 )}
               </div>
-              <Button
-                onMouseDown={(e) => {
-                  e.preventDefault()
-                  setIsHolding(true)
-                  setIsNoteRevealed(true)
-                }}
-                onMouseUp={(e) => {
-                  e.preventDefault()
-                  setIsHolding(false)
-                  setIsNoteRevealed(false)
-                }}
-                onMouseLeave={(e) => {
-                  e.preventDefault()
-                  setIsHolding(false)
-                  setIsNoteRevealed(false)
-                }}
-                onTouchStart={(e) => {
-                  e.preventDefault()
-                  setIsHolding(true)
-                  setIsNoteRevealed(true)
-                }}
-                onTouchEnd={(e) => {
-                  e.preventDefault()
-                  setIsHolding(false)
-                  setIsNoteRevealed(false)
-                }}
-                variant="outline"
-                className={`
-                  absolute top-3 right-3 border-[#C2A633]/50 text-[#C2A633] hover:bg-[#C2A633]/10 font-mono
-                  active:bg-[#C2A633]/20 active:border-[#C2A633] transition-all
-                  ${isHolding ? 'bg-[#C2A633]/20 border-[#C2A633] scale-95' : ''}
-                `}
-                size="sm"
-              >
-                {isNoteRevealed ? (
-                  <>
-                    <Eye className="h-4 w-4 mr-2" />
-                    Revealing...
-                  </>
-                ) : (
-                  <>
-                    <EyeOff className="h-4 w-4 mr-2" />
-                    Hold to Reveal
-                  </>
-                )}
-              </Button>
+              
+              {!hasBeenRevealed ? (
+                // Initial "Hold to Reveal" button - centered
+                <Button
+                  onMouseDown={(e) => {
+                    e.preventDefault()
+                    setIsHolding(true)
+                    setIsNoteRevealed(true)
+                  }}
+                  onMouseUp={(e) => {
+                    e.preventDefault()
+                    setIsHolding(false)
+                    setHasBeenRevealed(true)
+                    setIsNoteRevealed(true)
+                  }}
+                  onMouseLeave={(e) => {
+                    e.preventDefault()
+                    if (isHolding) {
+                      setIsHolding(false)
+                      setHasBeenRevealed(true)
+                      setIsNoteRevealed(true)
+                    }
+                  }}
+                  onTouchStart={(e) => {
+                    e.preventDefault()
+                    setIsHolding(true)
+                    setIsNoteRevealed(true)
+                  }}
+                  onTouchEnd={(e) => {
+                    e.preventDefault()
+                    setIsHolding(false)
+                    setHasBeenRevealed(true)
+                    setIsNoteRevealed(true)
+                  }}
+                  variant="outline"
+                  className={`
+                    absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 border-[#C2A633]/50 text-[#C2A633] hover:bg-[#C2A633]/10 font-mono
+                    active:bg-[#C2A633]/20 active:border-[#C2A633] transition-all min-h-[44px] min-w-[140px]
+                    touch-manipulation
+                    ${isHolding ? 'bg-[#C2A633]/20 border-[#C2A633] scale-95' : ''}
+                  `}
+                  size="sm"
+                >
+                  {isHolding ? (
+                    <>
+                      <Eye className="h-4 w-4 mr-2" />
+                      Revealing...
+                    </>
+                  ) : (
+                    <>
+                      <EyeOff className="h-4 w-4 mr-2" />
+                      Hold to Reveal
+                    </>
+                  )}
+                </Button>
+              ) : (
+                // Toggle button after initial reveal - top right
+                <Button
+                  onClick={() => setIsNoteRevealed(!isNoteRevealed)}
+                  variant="outline"
+                  className="absolute top-2 right-2 sm:top-3 sm:right-3 border-[#C2A633]/50 text-[#C2A633] hover:bg-[#C2A633]/10 font-mono transition-all min-h-[44px] touch-manipulation"
+                  size="sm"
+                >
+                  {isNoteRevealed ? (
+                    <>
+                      <EyeOff className="h-4 w-4 mr-2" />
+                      Hide
+                    </>
+                  ) : (
+                    <>
+                      <Eye className="h-4 w-4 mr-2" />
+                      Show
+                    </>
+                  )}
+                </Button>
+              )}
             </div>
             <p className="text-xs text-zinc-500 font-mono text-center">
-              {isNoteRevealed 
-                ? "👁️ Release to hide the note" 
-                : "👆 Hold the button above to reveal your secret note"}
+              {!hasBeenRevealed 
+                ? "Hold the button above to reveal your secret note"
+                : isNoteRevealed
+                ? "Note is visible. Click the button to hide."
+                : "Note is hidden. Click the button to show."}
             </p>
           </div>
 
@@ -389,6 +422,9 @@ Explorer: ${links.explorer}/tx/${txHash}
                 setNoteData(null)
                 setNoteSaved(false)
                 setTxHash("")
+                setIsNoteRevealed(false)
+                setIsHolding(false)
+                setHasBeenRevealed(false)
               }}
               className="w-full h-12 bg-[#C2A633] hover:bg-[#C2A633]/90 text-black font-mono font-bold"
             >
