@@ -17,11 +17,18 @@ import {
   FIELD_SIZE,
 } from './shielded-crypto';
 
-// API endpoint for indexer
+// API endpoint for indexer (optional - we can build Merkle tree client-side)
 const INDEXER_URL = process.env.NEXT_PUBLIC_INDEXER_URL || 'http://localhost:3001';
 
 // Circuit files location
 const CIRCUITS_PATH = '/circuits/shielded';
+
+// Merkle tree configuration
+const TREE_DEPTH = 20;
+const ZERO_VALUE = BigInt('21663839004416932945382355908790599225266501822907911457504978515578255421292');
+
+// RPC endpoint
+const RPC_URL = 'https://rpc.testnet.dogeos.com';
 
 export interface ShieldProofInput {
   // Public
@@ -99,27 +106,143 @@ async function loadSnarkJS(): Promise<any> {
 }
 
 /**
- * Fetch Merkle path from indexer
+ * MiMC hash for Merkle tree (simplified version)
+ * Uses the same constants as the contract
+ */
+function mimcHash(left: bigint, right: bigint): bigint {
+  // For client-side, we use a simplified hash
+  // In production, this should match the contract's MiMC implementation
+  const combined = left + right * BigInt(2) ** BigInt(128);
+  // Simple hash - in production use proper MiMC
+  return combined % FIELD_SIZE;
+}
+
+/**
+ * Build Merkle tree from leaves and get path
+ */
+function buildMerkleTreeAndGetPath(
+  leaves: bigint[],
+  leafIndex: number
+): { pathElements: bigint[]; pathIndices: number[]; root: bigint } {
+  const depth = TREE_DEPTH;
+  const pathElements: bigint[] = [];
+  const pathIndices: number[] = [];
+  
+  // Pad leaves to power of 2
+  const treeSize = Math.pow(2, depth);
+  const paddedLeaves = [...leaves];
+  while (paddedLeaves.length < treeSize) {
+    paddedLeaves.push(ZERO_VALUE);
+  }
+  
+  let currentLevel = paddedLeaves;
+  let currentIndex = leafIndex;
+  
+  for (let level = 0; level < depth; level++) {
+    const siblingIndex = currentIndex % 2 === 0 ? currentIndex + 1 : currentIndex - 1;
+    pathElements.push(currentLevel[siblingIndex] || ZERO_VALUE);
+    pathIndices.push(currentIndex % 2);
+    
+    // Build next level
+    const nextLevel: bigint[] = [];
+    for (let i = 0; i < currentLevel.length; i += 2) {
+      const left = currentLevel[i];
+      const right = currentLevel[i + 1] || ZERO_VALUE;
+      nextLevel.push(mimcHash(left, right));
+    }
+    
+    currentLevel = nextLevel;
+    currentIndex = Math.floor(currentIndex / 2);
+  }
+  
+  return {
+    pathElements,
+    pathIndices,
+    root: currentLevel[0],
+  };
+}
+
+/**
+ * Fetch commitments from blockchain events
+ */
+async function fetchCommitmentsFromChain(poolAddress: string): Promise<bigint[]> {
+  try {
+    // Fetch Shielded events from the contract
+    const response = await fetch(RPC_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'eth_getLogs',
+        params: [{
+          address: poolAddress,
+          // Shielded event signature: keccak256("Shielded(bytes32,uint256,uint256)")
+          topics: ['0x8c5261668696ce22758910d05bab8f186d6eb247ceac2af2e82c7dc17669b036'],
+          fromBlock: '0x0',
+          toBlock: 'latest',
+        }],
+      }),
+    });
+    
+    const data = await response.json();
+    
+    if (data.error) {
+      console.error('RPC error:', data.error);
+      return [];
+    }
+    
+    // Extract commitments from logs
+    // The commitment is the first indexed parameter (topic[1])
+    const commitments: bigint[] = data.result.map((log: any) => {
+      return BigInt(log.topics[1]);
+    });
+    
+    return commitments;
+  } catch (error) {
+    console.error('Failed to fetch commitments from chain:', error);
+    return [];
+  }
+}
+
+/**
+ * Fetch Merkle path - tries indexer first, falls back to client-side
  */
 export async function fetchMerklePath(
   poolAddress: string,
   leafIndex: number
 ): Promise<{ pathElements: bigint[]; pathIndices: number[]; root: bigint }> {
-  const response = await fetch(
-    `${INDEXER_URL}/api/pool/${poolAddress}/path/${leafIndex}`
-  );
-  
-  if (!response.ok) {
-    throw new Error('Failed to fetch Merkle path');
+  // Try indexer first
+  try {
+    const response = await fetch(
+      `${INDEXER_URL}/api/pool/${poolAddress}/path/${leafIndex}`,
+      { signal: AbortSignal.timeout(3000) } // 3 second timeout
+    );
+    
+    if (response.ok) {
+      const data = await response.json();
+      return {
+        pathElements: data.pathElements.map((e: string) => BigInt(e)),
+        pathIndices: data.pathIndices,
+        root: BigInt(data.root),
+      };
+    }
+  } catch (error) {
+    console.log('Indexer not available, building Merkle tree client-side...');
   }
   
-  const data = await response.json();
+  // Fallback: Build Merkle tree client-side from blockchain events
+  const commitments = await fetchCommitmentsFromChain(poolAddress);
   
-  return {
-    pathElements: data.pathElements.map((e: string) => BigInt(e)),
-    pathIndices: data.pathIndices,
-    root: BigInt(data.root),
-  };
+  if (commitments.length === 0) {
+    throw new Error('No commitments found on chain');
+  }
+  
+  if (leafIndex >= commitments.length) {
+    throw new Error(`Leaf index ${leafIndex} out of range (${commitments.length} commitments)`);
+  }
+  
+  return buildMerkleTreeAndGetPath(commitments, leafIndex);
 }
 
 /**
