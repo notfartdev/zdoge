@@ -3,7 +3,7 @@
 import { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Inbox, Search, Menu, X, HelpCircle } from "lucide-react"
+import { Inbox, Search, Menu, X, HelpCircle, Shield } from "lucide-react"
 import { WalletConnectButton } from "./wallet-connect-button"
 import { AccountModal } from "./account-modal"
 import { FAQModal } from "./faq-modal"
@@ -31,6 +31,15 @@ export function DashboardNav() {
                 }`}
               >
                 Mixer
+              </Link>
+              <Link
+                href="/dashboard/shielded"
+                className={`font-mono text-sm transition-colors flex items-center gap-1.5 ${
+                  pathname === "/dashboard/shielded" ? "text-[#C2A633] font-bold" : "text-gray-400 hover:text-white"
+                }`}
+              >
+                <Shield className="w-4 h-4" />
+                Shielded
               </Link>
               <a
                 href="https://docs.dogenado.cash"
@@ -103,6 +112,16 @@ export function DashboardNav() {
                 }`}
               >
                 Mixer
+              </Link>
+              <Link
+                href="/dashboard/shielded"
+                onClick={() => setMobileMenuOpen(false)}
+                className={`font-mono text-sm transition-colors flex items-center gap-2 py-2 ${
+                  pathname === "/dashboard/shielded" ? "text-[#C2A633] font-bold" : "text-gray-400 hover:text-white"
+                }`}
+              >
+                <Shield className="w-4 h-4" />
+                Shielded
               </Link>
               <a
                 href="https://docs.dogenado.cash"
