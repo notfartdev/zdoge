@@ -37,6 +37,7 @@ import { ShieldedNotesList } from "./shielded-notes-list"
 
 export function ShieldedWallet() {
   const { toast } = useToast()
+  const [mounted, setMounted] = useState(false)
   const [isInitialized, setIsInitialized] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [walletState, setWalletState] = useState<ShieldedWalletState | null>(null)
@@ -44,8 +45,15 @@ export function ShieldedWallet() {
   const [copied, setCopied] = useState(false)
   const [activeTab, setActiveTab] = useState("shield")
   
+  // Ensure client-side only rendering to prevent hydration mismatch
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+  
   // Initialize wallet on mount
   useEffect(() => {
+    if (!mounted) return
+    
     async function init() {
       try {
         await initializeShieldedWallet()
@@ -63,7 +71,7 @@ export function ShieldedWallet() {
       }
     }
     init()
-  }, [])
+  }, [mounted])
   
   // Refresh wallet state
   const refreshState = () => {
@@ -105,7 +113,8 @@ export function ShieldedWallet() {
     })
   }
   
-  if (isLoading) {
+  // Show loading state during SSR and initial mount
+  if (!mounted || isLoading) {
     return (
       <Card className="w-full">
         <CardContent className="flex items-center justify-center py-12">
