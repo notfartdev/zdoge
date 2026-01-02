@@ -61,11 +61,15 @@ let walletState: ShieldedWalletState = {
   isInitialized: false,
 };
 
+// Default pool address - imported at runtime
+const DEFAULT_POOL_ADDRESS = '0x6d237c2ed7036bf2F2006BcA6D3cA98E6E45b5f6';
+
 /**
  * Initialize shielded wallet
  * Loads existing identity or creates a new one
+ * Automatically syncs notes with on-chain data
  */
-export async function initializeShieldedWallet(): Promise<ShieldedIdentity> {
+export async function initializeShieldedWallet(poolAddress?: string): Promise<ShieldedIdentity> {
   // Try to load existing identity
   const storedIdentity = loadIdentityFromStorage();
   
@@ -73,6 +77,17 @@ export async function initializeShieldedWallet(): Promise<ShieldedIdentity> {
     walletState.identity = storedIdentity;
     walletState.notes = loadNotesFromStorage();
     walletState.isInitialized = true;
+    
+    // Auto-sync notes with chain if we have any
+    if (walletState.notes.length > 0) {
+      console.log('Auto-syncing notes with blockchain...');
+      try {
+        await syncNotesWithChain(poolAddress || DEFAULT_POOL_ADDRESS);
+      } catch (error) {
+        console.warn('Auto-sync failed, continuing with stored notes:', error);
+      }
+    }
+    
     return storedIdentity;
   }
   
