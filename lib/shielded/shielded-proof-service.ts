@@ -165,9 +165,11 @@ function buildMerkleTreeAndGetPath(
 /**
  * Fetch commitments from blockchain events
  */
-async function fetchCommitmentsFromChain(poolAddress: string): Promise<bigint[]> {
+async function fetchCommitmentsFromChain(poolAddress: string): Promise<{ commitment: bigint; leafIndex: number }[]> {
   try {
-    // Fetch Shielded events from the contract
+    // Fetch Deposit events from the contract
+    // Event: Deposit(bytes32 indexed commitment, uint256 indexed leafIndex, uint256 timestamp)
+    // keccak256("Deposit(bytes32,uint256,uint256)") = 0xa945e51eec50ab98c161376f0db4cf2aeba3ec92755fe2fcd388bdbbb80ff196
     const response = await fetch(RPC_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -177,8 +179,7 @@ async function fetchCommitmentsFromChain(poolAddress: string): Promise<bigint[]>
         method: 'eth_getLogs',
         params: [{
           address: poolAddress,
-          // Shielded event signature: keccak256("Shielded(bytes32,uint256,uint256)")
-          topics: ['0x8c5261668696ce22758910d05bab8f186d6eb247ceac2af2e82c7dc17669b036'],
+          topics: ['0xa945e51eec50ab98c161376f0db4cf2aeba3ec92755fe2fcd388bdbbb80ff196'],
           fromBlock: '0x0',
           toBlock: 'latest',
         }],
@@ -192,13 +193,45 @@ async function fetchCommitmentsFromChain(poolAddress: string): Promise<bigint[]>
       return [];
     }
     
-    // Extract commitments from logs
-    // The commitment is the first indexed parameter (topic[1])
-    const commitments: bigint[] = data.result.map((log: any) => {
-      return BigInt(log.topics[1]);
-    });
+    if (!data.result || data.result.length === 0) {
+      console.log('No Deposit events found, checking with broader search...');
+      // Try fetching all logs from the contract
+      const allLogsResponse = await fetch(RPC_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 2,
+          method: 'eth_getLogs',
+          params: [{
+            address: poolAddress,
+            fromBlock: '0x0',
+            toBlock: 'latest',
+          }],
+        }),
+      });
+      
+      const allLogsData = await allLogsResponse.json();
+      console.log('All logs from contract:', allLogsData.result?.length || 0, 'events');
+      
+      if (allLogsData.result && allLogsData.result.length > 0) {
+        // Log the event signatures we found
+        const uniqueTopics = new Set(allLogsData.result.map((log: any) => log.topics[0]));
+        console.log('Event signatures found:', Array.from(uniqueTopics));
+      }
+    }
     
-    return commitments;
+    // Extract commitments from logs
+    // commitment is topics[1], leafIndex is topics[2]
+    const results: { commitment: bigint; leafIndex: number }[] = (data.result || []).map((log: any) => ({
+      commitment: BigInt(log.topics[1]),
+      leafIndex: parseInt(log.topics[2], 16),
+    }));
+    
+    // Sort by leafIndex to ensure correct order
+    results.sort((a, b) => a.leafIndex - b.leafIndex);
+    
+    return results;
   } catch (error) {
     console.error('Failed to fetch commitments from chain:', error);
     return [];
@@ -232,14 +265,28 @@ export async function fetchMerklePath(
   }
   
   // Fallback: Build Merkle tree client-side from blockchain events
-  const commitments = await fetchCommitmentsFromChain(poolAddress);
+  console.log(`Fetching commitments from chain for pool ${poolAddress}...`);
+  const commitmentsData = await fetchCommitmentsFromChain(poolAddress);
   
-  if (commitments.length === 0) {
-    throw new Error('No commitments found on chain');
+  if (commitmentsData.length === 0) {
+    throw new Error('No commitments found on chain. Make sure the pool address is correct and has deposits.');
   }
   
-  if (leafIndex >= commitments.length) {
-    throw new Error(`Leaf index ${leafIndex} out of range (${commitments.length} commitments)`);
+  console.log(`Found ${commitmentsData.length} commitments on chain`);
+  
+  // Find the commitment at the requested leafIndex
+  const targetCommitment = commitmentsData.find(c => c.leafIndex === leafIndex);
+  if (!targetCommitment) {
+    console.log(`Available leaf indices: ${commitmentsData.map(c => c.leafIndex).join(', ')}`);
+    throw new Error(`Leaf index ${leafIndex} not found on chain. Available indices: ${commitmentsData.map(c => c.leafIndex).slice(0, 10).join(', ')}...`);
+  }
+  
+  // Build array of commitments in order
+  const maxLeafIndex = Math.max(...commitmentsData.map(c => c.leafIndex));
+  const commitments: bigint[] = new Array(maxLeafIndex + 1).fill(ZERO_VALUE);
+  
+  for (const { commitment, leafIndex: idx } of commitmentsData) {
+    commitments[idx] = commitment;
   }
   
   return buildMerkleTreeAndGetPath(commitments, leafIndex);
