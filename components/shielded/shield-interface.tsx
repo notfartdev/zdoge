@@ -8,13 +8,12 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { 
   Loader2, 
   Download, 
-  AlertTriangle, 
-  CheckCircle2, 
+  AlertCircle, 
+  Check, 
   Copy, 
   Eye, 
   EyeOff,
-  ShieldPlus,
-  Sparkles
+  ShieldPlus
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { useWallet } from "@/lib/wallet-context"
@@ -172,7 +171,7 @@ export function ShieldInterface({ onSuccess }: ShieldInterfaceProps) {
           </div>
           
           <Button 
-            className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700" 
+            className="w-full" 
             onClick={handleShield}
             disabled={!wallet?.isConnected}
           >
@@ -230,13 +229,10 @@ export function ShieldInterface({ onSuccess }: ShieldInterfaceProps) {
       
       {status === "success" && (
         <div className="space-y-4">
-          <Alert className="border-emerald-500/50 bg-emerald-500/10">
-            <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-            <AlertDescription className="text-emerald-200">
-              <span className="flex items-center gap-2">
-                <Sparkles className="h-4 w-4" />
-                Successfully shielded {amount} DOGE! Your funds are now private.
-              </span>
+          <Alert>
+            <Check className="h-4 w-4 text-green-500" />
+            <AlertDescription>
+              Successfully shielded {amount} DOGE! Your funds are now private.
             </AlertDescription>
           </Alert>
           
