@@ -469,6 +469,115 @@ export function clearWallet(): void {
   }
 }
 
+/**
+ * Sync notes with on-chain data
+ * Matches stored note commitments with on-chain commitments to fix leaf indices
+ */
+export async function syncNotesWithChain(poolAddress: string): Promise<{
+  synced: number;
+  notFound: number;
+  errors: string[];
+}> {
+  const errors: string[] = [];
+  let synced = 0;
+  let notFound = 0;
+  
+  if (walletState.notes.length === 0) {
+    return { synced: 0, notFound: 0, errors: ['No notes to sync'] };
+  }
+  
+  try {
+    // Fetch all commitments from chain
+    const RPC_URL = 'https://rpc.testnet.dogeos.com';
+    
+    const response = await fetch(RPC_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'eth_getLogs',
+        params: [{
+          address: poolAddress,
+          fromBlock: '0x0',
+          toBlock: 'latest',
+        }],
+      }),
+    });
+    
+    const data = await response.json();
+    
+    if (data.error) {
+      throw new Error(`RPC error: ${data.error.message}`);
+    }
+    
+    const logs = data.result || [];
+    
+    // Filter deposit-style events (3+ topics)
+    const depositLogs = logs.filter((log: any) => 
+      log.topics && log.topics.length >= 3
+    );
+    
+    console.log(`Found ${depositLogs.length} deposits on chain`);
+    
+    // Build a map of commitment -> leafIndex
+    const commitmentMap = new Map<string, number>();
+    for (const log of depositLogs) {
+      const commitment = log.topics[1].toLowerCase();
+      const leafIndex = parseInt(log.topics[2], 16);
+      // Only keep first occurrence (in case of duplicates)
+      if (!commitmentMap.has(commitment)) {
+        commitmentMap.set(commitment, leafIndex);
+      }
+    }
+    
+    console.log(`Unique commitments on chain: ${commitmentMap.size}`);
+    
+    // Match each stored note to on-chain data
+    for (const note of walletState.notes) {
+      // Convert note commitment to hex string for matching
+      const noteCommitmentHex = '0x' + note.commitment.toString(16).padStart(64, '0').toLowerCase();
+      
+      const onChainLeafIndex = commitmentMap.get(noteCommitmentHex);
+      
+      if (onChainLeafIndex !== undefined) {
+        if (note.leafIndex !== onChainLeafIndex) {
+          console.log(`Fixing note: old leafIndex=${note.leafIndex}, new leafIndex=${onChainLeafIndex}`);
+          note.leafIndex = onChainLeafIndex;
+          synced++;
+        } else {
+          console.log(`Note already has correct leafIndex=${note.leafIndex}`);
+        }
+      } else {
+        console.warn(`Note commitment not found on chain: ${noteCommitmentHex.slice(0, 20)}...`);
+        errors.push(`Note with amount ${Number(note.amount) / 1e18} DOGE not found on chain`);
+        notFound++;
+      }
+    }
+    
+    // Save updated notes
+    if (synced > 0) {
+      saveNotesToStorage(walletState.notes);
+    }
+    
+    return { synced, notFound, errors };
+    
+  } catch (error: any) {
+    console.error('Sync error:', error);
+    return { synced: 0, notFound: 0, errors: [error.message] };
+  }
+}
+
+/**
+ * Clear only notes (keep identity)
+ */
+export function clearNotes(): void {
+  walletState.notes = [];
+  if (typeof localStorage !== 'undefined') {
+    localStorage.removeItem(NOTES_STORAGE_KEY);
+  }
+}
+
 // ============ Storage Helpers ============
 
 function saveIdentityToStorage(identity: ShieldedIdentity): void {

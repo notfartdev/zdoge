@@ -28,8 +28,10 @@ import {
   getShieldedBalance,
   getNotes,
   backupWallet,
+  syncNotesWithChain,
   type ShieldedWalletState,
 } from "@/lib/shielded/shielded-service"
+import { shieldedPool } from "@/lib/dogeos-config"
 import { shortenAddress } from "@/lib/shielded/shielded-address"
 import { formatWeiToAmount } from "@/lib/shielded/shielded-note"
 import { ShieldInterface } from "./shield-interface"
@@ -154,6 +156,43 @@ export function ShieldedWallet() {
     })
   }
   
+  // Sync notes with blockchain
+  const [isSyncing, setIsSyncing] = useState(false)
+  
+  const handleSyncNotes = async () => {
+    setIsSyncing(true)
+    try {
+      const result = await syncNotesWithChain(shieldedPool.address)
+      
+      if (result.synced > 0) {
+        toast({
+          title: "Notes Synced!",
+          description: `Fixed ${result.synced} note(s) with correct on-chain data`,
+        })
+        refreshState()
+      } else if (result.notFound > 0) {
+        toast({
+          title: "Sync Complete",
+          description: `${result.notFound} note(s) not found on chain. These may be from a different pool.`,
+          variant: "destructive",
+        })
+      } else {
+        toast({
+          title: "All Notes Valid",
+          description: "All notes already have correct leaf indices",
+        })
+      }
+    } catch (error: any) {
+      toast({
+        title: "Sync Failed",
+        description: error.message || "Could not sync notes with chain",
+        variant: "destructive",
+      })
+    } finally {
+      setIsSyncing(false)
+    }
+  }
+  
   // Show loading state during SSR
   if (!mounted) {
     return (
@@ -214,6 +253,15 @@ export function ShieldedWallet() {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handleSyncNotes}
+                disabled={isSyncing || notes.length === 0}
+              >
+                <RefreshCw className={`h-4 w-4 mr-2 ${isSyncing ? 'animate-spin' : ''}`} />
+                {isSyncing ? 'Syncing...' : 'Sync'}
+              </Button>
               <Button variant="outline" size="sm" onClick={handleBackup}>
                 <Key className="h-4 w-4 mr-2" />
                 Backup
