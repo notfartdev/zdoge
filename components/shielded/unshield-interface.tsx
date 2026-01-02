@@ -69,10 +69,10 @@ export function UnshieldInterface({ notes, onSuccess }: UnshieldInterfaceProps) 
       return
     }
     
-    const selectedNote = spendableNotes[uiNoteIndex]
+    const selectedNoteFromProps = spendableNotes[uiNoteIndex]
     
     // Validate amount
-    if (!selectedNote.amount || selectedNote.amount <= 0n) {
+    if (!selectedNoteFromProps.amount || selectedNoteFromProps.amount <= 0n) {
       toast({
         title: "Invalid Amount",
         description: "The selected note has no valid amount",
@@ -81,21 +81,27 @@ export function UnshieldInterface({ notes, onSuccess }: UnshieldInterfaceProps) 
       return
     }
     
-    // Find the actual index in the full notes array
-    const allNotes = getNotes()
-    const actualNoteIndex = allNotes.findIndex(n => 
-      n.commitment === selectedNote.commitment && 
-      n.leafIndex === selectedNote.leafIndex
+    // Get fresh notes from service (in case sync updated them)
+    const freshNotes = getNotes()
+    
+    // Find the note by commitment (unique identifier), NOT by leafIndex (which might be stale in props)
+    const actualNoteIndex = freshNotes.findIndex(n => 
+      n.commitment === selectedNoteFromProps.commitment
     )
     
     if (actualNoteIndex === -1) {
       toast({
         title: "Note Not Found",
-        description: "Could not find the selected note",
+        description: "Could not find the selected note. Try refreshing the page.",
         variant: "destructive",
       })
       return
     }
+    
+    // Use the fresh note with updated leafIndex
+    const selectedNote = freshNotes[actualNoteIndex]
+    
+    console.log(`Unshielding note: commitment=${selectedNote.commitment.toString(16).slice(0,16)}..., leafIndex=${selectedNote.leafIndex}`)
     
     try {
       setStatus("proving")
