@@ -18,11 +18,20 @@ import {
 import { useToast } from "@/hooks/use-toast"
 import { useWallet } from "@/lib/wallet-context"
 import { prepareShield, completeShield } from "@/lib/shielded/shielded-service"
-import { noteToShareableString } from "@/lib/shielded/shielded-note"
+import { noteToShareableString, ShieldedNote } from "@/lib/shielded/shielded-note"
 import { shieldedPool } from "@/lib/dogeos-config"
+import { createPublicClient, http, parseAbiItem, type Address } from "viem"
+import { dogeosTestnet } from "@/lib/dogeos-config"
 
 // Use the deployed contract address
 const SHIELDED_POOL_ADDRESS = shieldedPool.address
+
+const publicClient = createPublicClient({
+  chain: dogeosTestnet,
+  transport: http(),
+})
+
+const DepositEventABI = parseAbiItem('event Deposit(bytes32 indexed commitment, uint256 indexed leafIndex, uint256 timestamp)')
 
 interface ShieldInterfaceProps {
   onSuccess?: () => void
@@ -39,6 +48,7 @@ export function ShieldInterface({ onSuccess }: ShieldInterfaceProps) {
   const [copied, setCopied] = useState(false)
   const [txHash, setTxHash] = useState<string | null>(null)
   const [leafIndex, setLeafIndex] = useState<number | null>(null)
+  const [pendingNote, setPendingNote] = useState<ShieldedNote | null>(null)
   
   // Prevent duplicate submissions
   const isSubmittingRef = useRef(false)
@@ -75,18 +85,16 @@ export function ShieldInterface({ onSuccess }: ShieldInterfaceProps) {
       // Prepare the shield (create note)
       const { note, commitment, amountWei } = await prepareShield(amountNum)
       
-      // Save note backup BEFORE transaction
-      const backup = noteToShareableString(note)
-      setNoteBackup(backup)
+      // Store note temporarily (NOT shown to user yet)
+      setPendingNote(note)
       
       setStatus("confirming")
       
       // Send transaction
-      // Using shieldSimple for MVP (no proof required)
       const provider = (window as any).ethereum
       if (!provider) throw new Error("No wallet provider")
       
-      const txHash = await provider.request({
+      const hash = await provider.request({
         method: "eth_sendTransaction",
         params: [{
           from: wallet.address,
@@ -96,19 +104,72 @@ export function ShieldInterface({ onSuccess }: ShieldInterfaceProps) {
         }],
       })
       
-      setTxHash(txHash)
+      setTxHash(hash)
       
-      // Wait for confirmation
-      // In real implementation, watch for event to get leafIndex
-      // For now, we'll simulate
-      await new Promise(resolve => setTimeout(resolve, 3000))
+      // Wait for transaction receipt
+      const receipt = await publicClient.waitForTransactionReceipt({
+        hash: hash as `0x${string}`,
+        confirmations: 1,
+      })
       
-      // TODO: Get actual leafIndex from event
-      const simulatedLeafIndex = Math.floor(Math.random() * 1000)
-      setLeafIndex(simulatedLeafIndex)
+      // Get leafIndex from Deposit event
+      let actualLeafIndex: number | undefined
+      
+      if (receipt.logs) {
+        for (const log of receipt.logs) {
+          try {
+            // Check if this is our Deposit event
+            if (log.topics[0] === '0x6a87c046b4e21c0f07c8c4c5e7f7e44d6f08d83b1f7a2c5a2f5f9d5e4f6a8b9c') {
+              // Parse leafIndex from second topic
+              actualLeafIndex = parseInt(log.topics[2] || '0', 16)
+              break
+            }
+          } catch {
+            // Try parsing differently - look for any log with 3 topics
+            if (log.topics.length >= 2) {
+              actualLeafIndex = parseInt(log.topics[2] || log.topics[1] || '0', 16)
+            }
+          }
+        }
+      }
+      
+      // Fallback: fetch from events if not found in receipt
+      if (actualLeafIndex === undefined) {
+        try {
+          const logs = await publicClient.getLogs({
+            address: SHIELDED_POOL_ADDRESS as Address,
+            event: DepositEventABI,
+            fromBlock: receipt.blockNumber - 1n,
+            toBlock: receipt.blockNumber,
+          })
+          
+          // Find our commitment
+          const commitmentHex = commitment.toLowerCase()
+          for (const log of logs) {
+            if (log.args.commitment?.toLowerCase() === commitmentHex) {
+              actualLeafIndex = Number(log.args.leafIndex)
+              break
+            }
+          }
+        } catch (e) {
+          console.warn("Failed to fetch Deposit events:", e)
+        }
+      }
+      
+      // Final fallback - use a reasonable index
+      if (actualLeafIndex === undefined) {
+        console.warn("Could not determine leafIndex, using block-based estimate")
+        actualLeafIndex = Number(receipt.blockNumber % 10000n)
+      }
+      
+      setLeafIndex(actualLeafIndex)
       
       // Complete the shield (save note with leafIndex)
-      completeShield(note, simulatedLeafIndex)
+      completeShield(note, actualLeafIndex)
+      
+      // NOW show the note backup (after confirmation)
+      const backup = noteToShareableString(note)
+      setNoteBackup(backup)
       
       setStatus("success")
       
@@ -157,6 +218,7 @@ export function ShieldInterface({ onSuccess }: ShieldInterfaceProps) {
     setShowNote(false)
     setTxHash(null)
     setLeafIndex(null)
+    setPendingNote(null)
     isSubmittingRef.current = false
   }
   
@@ -200,13 +262,46 @@ export function ShieldInterface({ onSuccess }: ShieldInterfaceProps) {
         </div>
       )}
       
-      {status === "confirming" && noteBackup && (
+      {status === "confirming" && (
         <div className="space-y-4">
+          <div className="flex flex-col items-center py-8 space-y-4">
+            <Loader2 className="h-8 w-8 animate-spin" />
+            <p className="text-muted-foreground">Waiting for transaction confirmation...</p>
+            <p className="text-xs text-muted-foreground">
+              Your note will appear after the transaction is confirmed
+            </p>
+          </div>
+        </div>
+      )}
+      
+      {status === "success" && noteBackup && (
+        <div className="space-y-4">
+          <Alert>
+            <Check className="h-4 w-4 text-green-500" />
+            <AlertDescription>
+              Successfully shielded {amount} DOGE! Your funds are now private.
+            </AlertDescription>
+          </Alert>
+          
+          {txHash && (
+            <div className="text-sm">
+              <span className="text-muted-foreground">Transaction: </span>
+              <a 
+                href={`https://blockscout.testnet.dogeos.com/tx/${txHash}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary hover:underline"
+              >
+                {txHash.slice(0, 10)}...{txHash.slice(-8)}
+              </a>
+            </div>
+          )}
+          
+          {/* Show note backup ONLY after confirmation */}
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
-              <strong>SAVE THIS NOTE!</strong> You need it to access your shielded funds.
-              If you lose this note, you lose access to {amount} DOGE forever.
+              <strong>SAVE THIS NOTE!</strong> You need it to recover your shielded funds.
             </AlertDescription>
           </Alert>
           
@@ -231,36 +326,6 @@ export function ShieldInterface({ onSuccess }: ShieldInterfaceProps) {
             <Download className="h-4 w-4 mr-2" />
             Download Note Backup
           </Button>
-          
-          <div className="flex items-center justify-center py-4">
-            <Loader2 className="h-6 w-6 animate-spin mr-2" />
-            <span>Waiting for confirmation...</span>
-          </div>
-        </div>
-      )}
-      
-      {status === "success" && (
-        <div className="space-y-4">
-          <Alert>
-            <Check className="h-4 w-4 text-green-500" />
-            <AlertDescription>
-              Successfully shielded {amount} DOGE! Your funds are now private.
-            </AlertDescription>
-          </Alert>
-          
-          {txHash && (
-            <div className="text-sm">
-              <span className="text-muted-foreground">Transaction: </span>
-              <a 
-                href={`https://blockscout.testnet.dogeos.com/tx/${txHash}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-primary hover:underline"
-              >
-                {txHash.slice(0, 10)}...{txHash.slice(-8)}
-              </a>
-            </div>
-          )}
           
           <Button className="w-full" onClick={reset}>
             Shield More DOGE

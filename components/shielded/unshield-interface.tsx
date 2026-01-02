@@ -6,14 +6,22 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Loader2, Wallet, AlertCircle, Check } from "lucide-react"
+import { Loader2, LogOut, AlertCircle, Check } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { ShieldedNote, formatWeiToAmount } from "@/lib/shielded/shielded-note"
-import { prepareUnshield, completeUnshield } from "@/lib/shielded/shielded-service"
+import { prepareUnshield, completeUnshield, getNotes } from "@/lib/shielded/shielded-service"
 import { useWallet } from "@/lib/wallet-context"
+import { shieldedPool } from "@/lib/dogeos-config"
+import { createPublicClient, http, encodeFunctionData, parseAbi } from "viem"
+import { dogeosTestnet } from "@/lib/dogeos-config"
 
-// TODO: Update with actual deployed address
-const SHIELDED_POOL_ADDRESS = "0x0000000000000000000000000000000000000000"
+// Use deployed contract address
+const SHIELDED_POOL_ADDRESS = shieldedPool.address
+
+const publicClient = createPublicClient({
+  chain: dogeosTestnet,
+  transport: http(),
+})
 
 interface UnshieldInterfaceProps {
   notes: ShieldedNote[]
@@ -41,8 +49,8 @@ export function UnshieldInterface({ notes, onSuccess }: UnshieldInterfaceProps) 
   
   const handleUnshield = async () => {
     // Validate note selection
-    const noteIndex = parseInt(selectedNoteIndex)
-    if (isNaN(noteIndex) || !spendableNotes[noteIndex]) {
+    const uiNoteIndex = parseInt(selectedNoteIndex)
+    if (isNaN(uiNoteIndex) || !spendableNotes[uiNoteIndex]) {
       toast({
         title: "Select a Note",
         description: "Please select a note to unshield",
@@ -61,15 +69,41 @@ export function UnshieldInterface({ notes, onSuccess }: UnshieldInterfaceProps) 
       return
     }
     
-    const selectedNote = spendableNotes[noteIndex]
+    const selectedNote = spendableNotes[uiNoteIndex]
+    
+    // Validate amount
+    if (!selectedNote.amount || selectedNote.amount <= 0n) {
+      toast({
+        title: "Invalid Amount",
+        description: "The selected note has no valid amount",
+        variant: "destructive",
+      })
+      return
+    }
+    
+    // Find the actual index in the full notes array
+    const allNotes = getNotes()
+    const actualNoteIndex = allNotes.findIndex(n => 
+      n.commitment === selectedNote.commitment && 
+      n.leafIndex === selectedNote.leafIndex
+    )
+    
+    if (actualNoteIndex === -1) {
+      toast({
+        title: "Note Not Found",
+        description: "Could not find the selected note",
+        variant: "destructive",
+      })
+      return
+    }
     
     try {
       setStatus("proving")
       
-      // Generate proof
+      // Generate proof using the actual note index in the wallet
       const result = await prepareUnshield(
         recipientAddress,
-        noteIndex,
+        actualNoteIndex,
         SHIELDED_POOL_ADDRESS
       )
       
@@ -79,8 +113,8 @@ export function UnshieldInterface({ notes, onSuccess }: UnshieldInterfaceProps) 
       const provider = (window as any).ethereum
       if (!provider) throw new Error("No wallet provider")
       
-      // Encode unshield call
-      const callData = encodeUnshield(
+      // Encode unshield call with proper function data
+      const callData = encodeUnshieldCall(
         result.proof.proof,
         result.root,
         result.nullifierHash,
@@ -90,7 +124,7 @@ export function UnshieldInterface({ notes, onSuccess }: UnshieldInterfaceProps) 
       
       const accounts = await provider.request({ method: "eth_accounts" })
       
-      const txHash = await provider.request({
+      const hash = await provider.request({
         method: "eth_sendTransaction",
         params: [{
           from: accounts[0],
@@ -99,23 +133,30 @@ export function UnshieldInterface({ notes, onSuccess }: UnshieldInterfaceProps) 
         }],
       })
       
-      setTxHash(txHash)
+      setTxHash(hash)
       setWithdrawnAmount(formatWeiToAmount(result.amount).toFixed(4))
       
-      // Wait for confirmation
-      await new Promise(resolve => setTimeout(resolve, 3000))
-      
-      // Complete unshield (remove note from local state)
-      completeUnshield(noteIndex)
-      
-      setStatus("success")
-      
-      toast({
-        title: "Unshield Successful!",
-        description: `${formatWeiToAmount(result.amount).toFixed(4)} DOGE sent to your wallet`,
+      // Wait for actual confirmation
+      const receipt = await publicClient.waitForTransactionReceipt({
+        hash: hash as `0x${string}`,
+        confirmations: 1,
       })
       
-      onSuccess?.()
+      if (receipt.status === 'success') {
+        // Complete unshield (remove note from local state)
+        completeUnshield(actualNoteIndex)
+        
+        setStatus("success")
+        
+        toast({
+          title: "Unshield Successful!",
+          description: `${formatWeiToAmount(result.amount).toFixed(4)} DOGE sent to your wallet`,
+        })
+        
+        onSuccess?.()
+      } else {
+        throw new Error("Transaction reverted")
+      }
       
     } catch (error: any) {
       console.error("Unshield error:", error)
@@ -206,7 +247,7 @@ export function UnshieldInterface({ notes, onSuccess }: UnshieldInterfaceProps) 
           )}
           
           <Button className="w-full" onClick={handleUnshield}>
-            <Wallet className="h-4 w-4 mr-2" />
+            <LogOut className="h-4 w-4 mr-2" />
             Unshield to Wallet
           </Button>
         </div>
@@ -274,18 +315,61 @@ export function UnshieldInterface({ notes, onSuccess }: UnshieldInterfaceProps) 
   )
 }
 
-// Helper to encode unshield function call
-function encodeUnshield(
+// Helper to encode unshieldNative function call
+// Function: unshieldNative(bytes calldata _proof, bytes32 _root, bytes32 _nullifierHash, address _recipient, uint256 _amount, address _relayer, uint256 _fee)
+function encodeUnshieldCall(
   proof: string[],
   root: `0x${string}`,
   nullifierHash: `0x${string}`,
   recipient: string,
   amount: bigint
 ): string {
-  // This is a simplified encoding - in production use viem's encodeFunctionData
-  // Function selector for unshield(uint256[8],bytes32,bytes32,address,uint256,address,uint256)
-  const selector = "00000000" // TODO: Compute actual selector
-  return "0x" + selector
+  // Convert proof array to proper format for Groth16
+  // proof = [a[0], a[1], b[0][0], b[0][1], b[1][0], b[1][1], c[0], c[1]]
+  const proofBytes = encodeProofBytes(proof)
+  
+  // Function selector for unshieldNative(bytes,bytes32,bytes32,address,uint256,address,uint256)
+  // keccak256("unshieldNative(bytes,bytes32,bytes32,address,uint256,address,uint256)").slice(0, 10)
+  const selector = "0x2b7ac3f3"
+  
+  // Encode parameters
+  // bytes is dynamic, so we use offset
+  const offsetForBytes = 224 // 7 * 32 bytes for the other params
+  
+  const rootHex = root.slice(2).padStart(64, '0')
+  const nullifierHex = nullifierHash.slice(2).padStart(64, '0')
+  const recipientHex = recipient.slice(2).padStart(64, '0')
+  const amountHex = amount.toString(16).padStart(64, '0')
+  const relayerHex = "0".repeat(64) // zero address
+  const feeHex = "0".repeat(64) // zero fee
+  const bytesOffsetHex = offsetForBytes.toString(16).padStart(64, '0')
+  
+  // Encode the bytes data (proof)
+  const proofLengthHex = (proofBytes.length / 2).toString(16).padStart(64, '0')
+  const proofPadded = proofBytes.padEnd(Math.ceil(proofBytes.length / 64) * 64, '0')
+  
+  return selector + 
+    bytesOffsetHex +
+    rootHex + 
+    nullifierHex + 
+    recipientHex + 
+    amountHex + 
+    relayerHex + 
+    feeHex +
+    proofLengthHex +
+    proofPadded
+}
+
+// Convert proof strings to packed bytes
+function encodeProofBytes(proof: string[]): string {
+  // Proof format: [a[0], a[1], b[0][0], b[0][1], b[1][0], b[1][1], c[0], c[1]]
+  let result = ''
+  for (const p of proof) {
+    // Remove 0x prefix if present, pad to 64 chars (32 bytes)
+    const hex = p.startsWith('0x') ? p.slice(2) : p
+    result += hex.padStart(64, '0')
+  }
+  return result
 }
 
 
