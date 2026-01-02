@@ -167,10 +167,10 @@ function buildMerkleTreeAndGetPath(
  */
 async function fetchCommitmentsFromChain(poolAddress: string): Promise<{ commitment: bigint; leafIndex: number }[]> {
   try {
-    // Fetch Deposit events from the contract
-    // Event: Deposit(bytes32 indexed commitment, uint256 indexed leafIndex, uint256 timestamp)
-    // keccak256("Deposit(bytes32,uint256,uint256)") = 0xa945e51eec50ab98c161376f0db4cf2aeba3ec92755fe2fcd388bdbbb80ff196
-    const response = await fetch(RPC_URL, {
+    // First, fetch ALL logs from the contract to find the actual event signature
+    console.log(`Fetching all events from pool ${poolAddress}...`);
+    
+    const allLogsResponse = await fetch(RPC_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -179,54 +179,46 @@ async function fetchCommitmentsFromChain(poolAddress: string): Promise<{ commitm
         method: 'eth_getLogs',
         params: [{
           address: poolAddress,
-          topics: ['0xa945e51eec50ab98c161376f0db4cf2aeba3ec92755fe2fcd388bdbbb80ff196'],
           fromBlock: '0x0',
           toBlock: 'latest',
         }],
       }),
     });
     
-    const data = await response.json();
+    const allLogsData = await allLogsResponse.json();
     
-    if (data.error) {
-      console.error('RPC error:', data.error);
+    if (allLogsData.error) {
+      console.error('RPC error:', allLogsData.error);
       return [];
     }
     
-    if (!data.result || data.result.length === 0) {
-      console.log('No Deposit events found, checking with broader search...');
-      // Try fetching all logs from the contract
-      const allLogsResponse = await fetch(RPC_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          id: 2,
-          method: 'eth_getLogs',
-          params: [{
-            address: poolAddress,
-            fromBlock: '0x0',
-            toBlock: 'latest',
-          }],
-        }),
-      });
-      
-      const allLogsData = await allLogsResponse.json();
-      console.log('All logs from contract:', allLogsData.result?.length || 0, 'events');
-      
-      if (allLogsData.result && allLogsData.result.length > 0) {
-        // Log the event signatures we found
-        const uniqueTopics = new Set(allLogsData.result.map((log: any) => log.topics[0]));
-        console.log('Event signatures found:', Array.from(uniqueTopics));
-      }
+    const logs = allLogsData.result || [];
+    console.log(`Found ${logs.length} total events from pool`);
+    
+    if (logs.length === 0) {
+      return [];
     }
+    
+    // Log unique event signatures for debugging
+    const uniqueTopics = new Set(logs.map((log: any) => log.topics[0]));
+    console.log('Event signatures found:', Array.from(uniqueTopics));
+    
+    // The Shielded/Deposit event has 3 topics: [eventSig, commitment, leafIndex]
+    // Filter logs that have exactly 3 topics (deposit-style events)
+    const depositLogs = logs.filter((log: any) => 
+      log.topics && log.topics.length >= 3
+    );
+    
+    console.log(`Found ${depositLogs.length} deposit-style events`);
     
     // Extract commitments from logs
     // commitment is topics[1], leafIndex is topics[2]
-    const results: { commitment: bigint; leafIndex: number }[] = (data.result || []).map((log: any) => ({
-      commitment: BigInt(log.topics[1]),
-      leafIndex: parseInt(log.topics[2], 16),
-    }));
+    const results: { commitment: bigint; leafIndex: number }[] = depositLogs.map((log: any) => {
+      const commitment = BigInt(log.topics[1]);
+      const leafIndex = parseInt(log.topics[2], 16);
+      console.log(`  Commitment: ${log.topics[1].slice(0, 20)}... leafIndex: ${leafIndex}`);
+      return { commitment, leafIndex };
+    });
     
     // Sort by leafIndex to ensure correct order
     results.sort((a, b) => a.leafIndex - b.leafIndex);
