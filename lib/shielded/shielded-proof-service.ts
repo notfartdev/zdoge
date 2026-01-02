@@ -142,53 +142,108 @@ async function mimcHash(left: bigint, right: bigint): Promise<bigint> {
   return mimcSponge.F.toObject(result);
 }
 
+// Pre-computed zero hashes for each level (cached after first computation)
+let zeroHashes: bigint[] | null = null;
+
 /**
- * Build Merkle tree from leaves and get path
- * Uses proper MiMC hash matching the circuit
+ * Pre-compute zero hashes for each level of the Merkle tree
+ * zeros[0] = keccak256("dogenado") % FIELD_SIZE
+ * zeros[i] = MiMC(zeros[i-1], zeros[i-1])
+ */
+async function getZeroHashes(): Promise<bigint[]> {
+  if (zeroHashes) return zeroHashes;
+  
+  await initMimcForTree();
+  const zeros: bigint[] = [];
+  
+  // Level 0: the base zero value
+  zeros[0] = await getZeroValue();
+  
+  // Each subsequent level: hash of two zeros from the level below
+  for (let i = 1; i < TREE_DEPTH; i++) {
+    zeros[i] = await mimcHash(zeros[i - 1], zeros[i - 1]);
+  }
+  
+  zeroHashes = zeros;
+  console.log(`[Merkle] Pre-computed ${TREE_DEPTH} zero hashes`);
+  return zeros;
+}
+
+/**
+ * Build Merkle path efficiently using sparse tree
+ * Only computes hashes for filled nodes, uses pre-computed zeros elsewhere
  */
 async function buildMerkleTreeAndGetPath(
   leaves: bigint[],
   leafIndex: number
 ): Promise<{ pathElements: bigint[]; pathIndices: number[]; root: bigint }> {
   const depth = TREE_DEPTH;
-  const pathElements: bigint[] = [];
-  const pathIndices: number[] = [];
   
-  // Initialize MiMC and get zero value
-  await initMimcForTree();
-  const zeroValue = await getZeroValue();
+  // Get pre-computed zero hashes
+  const zeros = await getZeroHashes();
   
-  // Pad leaves to power of 2
-  const treeSize = Math.pow(2, depth);
-  const paddedLeaves = [...leaves];
-  while (paddedLeaves.length < treeSize) {
-    paddedLeaves.push(zeroValue);
+  console.log(`[Merkle] Building sparse path for leaf ${leafIndex} in tree with ${leaves.length} leaves`);
+  const startTime = Date.now();
+  
+  // Use sparse representation: Map of (level, index) -> hash
+  const nodes: Map<string, bigint> = new Map();
+  
+  // Helper to get node key
+  const key = (level: number, idx: number) => `${level}:${idx}`;
+  
+  // Helper to get node (returns zero hash if not exists)
+  const getNode = (level: number, idx: number): bigint => {
+    return nodes.get(key(level, idx)) ?? zeros[level];
+  };
+  
+  // Insert leaf level (level 0)
+  for (let i = 0; i < leaves.length; i++) {
+    nodes.set(key(0, i), leaves[i]);
   }
   
-  let currentLevel = paddedLeaves;
+  // Build tree bottom-up, only computing parents of filled nodes
+  for (let level = 0; level < depth; level++) {
+    // Find all unique parent indices needed
+    const parentIndices = new Set<number>();
+    for (const k of nodes.keys()) {
+      const [l, idx] = k.split(':').map(Number);
+      if (l === level) {
+        parentIndices.add(Math.floor(idx / 2));
+      }
+    }
+    
+    // Compute parent hashes
+    for (const parentIdx of parentIndices) {
+      const leftIdx = parentIdx * 2;
+      const rightIdx = parentIdx * 2 + 1;
+      const left = getNode(level, leftIdx);
+      const right = getNode(level, rightIdx);
+      const hash = await mimcHash(left, right);
+      nodes.set(key(level + 1, parentIdx), hash);
+    }
+  }
+  
+  // Extract path for target leaf
+  const pathElements: bigint[] = [];
+  const pathIndices: number[] = [];
   let currentIndex = leafIndex;
   
   for (let level = 0; level < depth; level++) {
-    const siblingIndex = currentIndex % 2 === 0 ? currentIndex + 1 : currentIndex - 1;
-    pathElements.push(currentLevel[siblingIndex] || zeroValue);
+    const siblingIdx = currentIndex % 2 === 0 ? currentIndex + 1 : currentIndex - 1;
+    pathElements.push(getNode(level, siblingIdx));
     pathIndices.push(currentIndex % 2);
-    
-    // Build next level with proper MiMC hashing
-    const nextLevel: bigint[] = [];
-    for (let i = 0; i < currentLevel.length; i += 2) {
-      const left = currentLevel[i];
-      const right = currentLevel[i + 1] || zeroValue;
-      nextLevel.push(await mimcHash(left, right));
-    }
-    
-    currentLevel = nextLevel;
     currentIndex = Math.floor(currentIndex / 2);
   }
+  
+  // Root is at level depth, index 0
+  const root = getNode(depth, 0);
+  
+  console.log(`[Merkle] Path built in ${Date.now() - startTime}ms, root: ${root.toString().slice(0, 20)}...`);
   
   return {
     pathElements,
     pathIndices,
-    root: currentLevel[0],
+    root,
   };
 }
 
