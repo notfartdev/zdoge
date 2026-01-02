@@ -18,7 +18,7 @@ import {
 } from './shielded-crypto';
 
 // API endpoint for indexer (optional - we can build Merkle tree client-side)
-const INDEXER_URL = process.env.NEXT_PUBLIC_INDEXER_URL || 'http://localhost:3001';
+const INDEXER_URL = process.env.NEXT_PUBLIC_INDEXER_URL || 'https://dogenadocash.onrender.com';
 
 // Circuit files location
 const CIRCUITS_PATH = '/circuits/shielded';
