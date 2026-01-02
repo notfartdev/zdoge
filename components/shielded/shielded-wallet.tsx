@@ -48,11 +48,43 @@ export function ShieldedWallet() {
   const [showAddress, setShowAddress] = useState(false)
   const [copied, setCopied] = useState(false)
   const [activeTab, setActiveTab] = useState("shield")
+  const [publicBalance, setPublicBalance] = useState<string>("0")
   
   // Ensure client-side only rendering to prevent hydration mismatch
   useEffect(() => {
     setMounted(true)
   }, [])
+  
+  // Fetch public wallet balance
+  useEffect(() => {
+    if (!mounted || !wallet?.isConnected || !wallet?.address) {
+      setPublicBalance("0")
+      return
+    }
+    
+    async function fetchBalance() {
+      try {
+        const provider = (window as any).ethereum
+        if (!provider) return
+        
+        const balance = await provider.request({
+          method: "eth_getBalance",
+          params: [wallet.address, "latest"],
+        })
+        // Convert hex to decimal and format
+        const balanceWei = BigInt(balance)
+        const balanceDoge = Number(balanceWei) / 1e18
+        setPublicBalance(balanceDoge.toFixed(4))
+      } catch (error) {
+        console.error("Failed to fetch balance:", error)
+      }
+    }
+    
+    fetchBalance()
+    // Refresh balance every 10 seconds
+    const interval = setInterval(fetchBalance, 10000)
+    return () => clearInterval(interval)
+  }, [mounted, wallet?.isConnected, wallet?.address])
   
   // Initialize shielded wallet only when main wallet is connected
   useEffect(() => {
@@ -193,17 +225,34 @@ export function ShieldedWallet() {
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Balance */}
-          <div className="p-4 rounded-lg bg-muted/50">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-              <Lock className="h-3.5 w-3.5" />
-              Shielded Balance
+          {/* Balances */}
+          <div className="grid grid-cols-2 gap-4">
+            {/* Public Balance */}
+            <div className="p-4 rounded-lg border">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
+                <Wallet className="h-3.5 w-3.5" />
+                Public Balance
+              </div>
+              <div className="text-2xl font-bold">
+                {publicBalance} DOGE
+              </div>
+              <div className="text-xs text-muted-foreground mt-1">
+                Available to shield
+              </div>
             </div>
-            <div className="text-3xl font-bold">
-              {formatWeiToAmount(balance).toFixed(4)} DOGE
-            </div>
-            <div className="text-sm text-muted-foreground mt-1">
-              {notes.length} note{notes.length !== 1 ? "s" : ""}
+            
+            {/* Shielded Balance */}
+            <div className="p-4 rounded-lg bg-muted/50">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
+                <Lock className="h-3.5 w-3.5" />
+                Shielded Balance
+              </div>
+              <div className="text-2xl font-bold">
+                {formatWeiToAmount(balance).toFixed(4)} DOGE
+              </div>
+              <div className="text-xs text-muted-foreground mt-1">
+                {notes.length} note{notes.length !== 1 ? "s" : ""} • Private
+              </div>
             </div>
           </div>
           
