@@ -29,6 +29,7 @@ import {
   getNotes,
   backupWallet,
   syncNotesWithChain,
+  clearNotes,
   type ShieldedWalletState,
 } from "@/lib/shielded/shielded-service"
 import { shieldedPool } from "@/lib/dogeos-config"
@@ -193,6 +194,19 @@ export function ShieldedWallet() {
     }
   }
   
+  // Clear all notes (for debugging / starting fresh)
+  const handleClearNotes = () => {
+    if (confirm("Are you sure? This will remove all stored notes. Only do this if notes are corrupted.")) {
+      clearNotes()
+      refreshState()
+      toast({
+        title: "Notes Cleared",
+        description: "All stored notes have been removed. Shield new funds to create new notes.",
+        variant: "destructive",
+      })
+    }
+  }
+  
   // Show loading state during SSR
   if (!mounted) {
     return (
@@ -269,6 +283,18 @@ export function ShieldedWallet() {
               <Button variant="outline" size="sm" onClick={refreshState}>
                 <RefreshCw className="h-4 w-4" />
               </Button>
+              {/* Clear notes button - for debugging corrupted notes */}
+              {notes.length > 0 && (
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={handleClearNotes}
+                  className="text-destructive hover:text-destructive"
+                  title="Clear all notes (use if notes are corrupted)"
+                >
+                  ×
+                </Button>
+              )}
             </div>
           </div>
         </CardHeader>

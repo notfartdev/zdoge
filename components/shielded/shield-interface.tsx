@@ -113,53 +113,68 @@ export function ShieldInterface({ onSuccess }: ShieldInterfaceProps) {
       })
       
       // Get leafIndex from Deposit event
+      // The correct event signature: keccak256("Deposit(bytes32,uint256,uint256)")
+      const DEPOSIT_EVENT_SIG = '0x9b29a377f3cdb67f8d2b8c7f3a4d7d9d3b6f8a2c1e4d7a9b2c5e8f1a4d7b0c3e'.toLowerCase() // placeholder
+      
       let actualLeafIndex: number | undefined
       
-      if (receipt.logs) {
+      // Method 1: Parse using viem's getLogs with proper ABI
+      try {
+        console.log("Fetching Deposit event from block", receipt.blockNumber)
+        const logs = await publicClient.getLogs({
+          address: SHIELDED_POOL_ADDRESS as Address,
+          event: DepositEventABI,
+          fromBlock: receipt.blockNumber,
+          toBlock: receipt.blockNumber,
+        })
+        
+        console.log(`Found ${logs.length} Deposit events in block`)
+        
+        // Find our commitment
+        const commitmentHex = commitment.toLowerCase()
+        for (const log of logs) {
+          const logCommitment = log.args.commitment?.toString().toLowerCase()
+          console.log(`Comparing: ${logCommitment} vs ${commitmentHex}`)
+          if (logCommitment === commitmentHex) {
+            actualLeafIndex = Number(log.args.leafIndex)
+            console.log(`Found matching commitment at leafIndex: ${actualLeafIndex}`)
+            break
+          }
+        }
+      } catch (e) {
+        console.warn("Method 1 (getLogs with ABI) failed:", e)
+      }
+      
+      // Method 2: Parse raw logs manually if method 1 failed
+      if (actualLeafIndex === undefined && receipt.logs) {
+        console.log("Trying raw log parsing...")
         for (const log of receipt.logs) {
-          try {
-            // Check if this is our Deposit event
-            if (log.topics[0] === '0x6a87c046b4e21c0f07c8c4c5e7f7e44d6f08d83b1f7a2c5a2f5f9d5e4f6a8b9c') {
-              // Parse leafIndex from second topic
+          // Look for logs from our contract with 3 topics (indexed event)
+          if (
+            log.address.toLowerCase() === SHIELDED_POOL_ADDRESS.toLowerCase() &&
+            log.topics.length >= 3
+          ) {
+            // topics[1] = commitment (indexed), topics[2] = leafIndex (indexed)
+            const logCommitment = log.topics[1]?.toLowerCase()
+            const commitmentHex = commitment.toLowerCase()
+            
+            console.log(`Raw log check: ${logCommitment} vs ${commitmentHex}`)
+            
+            if (logCommitment === commitmentHex) {
               actualLeafIndex = parseInt(log.topics[2] || '0', 16)
+              console.log(`Found via raw parsing at leafIndex: ${actualLeafIndex}`)
               break
-            }
-          } catch {
-            // Try parsing differently - look for any log with 3 topics
-            if (log.topics.length >= 2) {
-              actualLeafIndex = parseInt(log.topics[2] || log.topics[1] || '0', 16)
             }
           }
         }
       }
       
-      // Fallback: fetch from events if not found in receipt
+      // NO FALLBACK - if we can't find the leafIndex, throw an error
       if (actualLeafIndex === undefined) {
-        try {
-          const logs = await publicClient.getLogs({
-            address: SHIELDED_POOL_ADDRESS as Address,
-            event: DepositEventABI,
-            fromBlock: receipt.blockNumber - 1n,
-            toBlock: receipt.blockNumber,
-          })
-          
-          // Find our commitment
-          const commitmentHex = commitment.toLowerCase()
-          for (const log of logs) {
-            if (log.args.commitment?.toLowerCase() === commitmentHex) {
-              actualLeafIndex = Number(log.args.leafIndex)
-              break
-            }
-          }
-        } catch (e) {
-          console.warn("Failed to fetch Deposit events:", e)
-        }
-      }
-      
-      // Final fallback - use a reasonable index
-      if (actualLeafIndex === undefined) {
-        console.warn("Could not determine leafIndex, using block-based estimate")
-        actualLeafIndex = Number(receipt.blockNumber % 10000n)
+        throw new Error(
+          "Could not find Deposit event in transaction. " +
+          "This shouldn't happen - please check the transaction on block explorer."
+        )
       }
       
       setLeafIndex(actualLeafIndex)

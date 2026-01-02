@@ -548,24 +548,43 @@ export async function syncNotesWithChain(poolAddress: string): Promise<{
     
     console.log(`Unique commitments on chain: ${commitmentMap.size}`);
     
+    // Debug: Print all on-chain commitments
+    console.log('=== ON-CHAIN COMMITMENTS ===');
+    commitmentMap.forEach((leafIndex, commitment) => {
+      console.log(`  ${commitment} -> leafIndex: ${leafIndex}`);
+    });
+    
     // Match each stored note to on-chain data
     for (const note of walletState.notes) {
       // Convert note commitment to hex string for matching
       const noteCommitmentHex = '0x' + note.commitment.toString(16).padStart(64, '0').toLowerCase();
       
+      console.log(`=== CHECKING NOTE ===`);
+      console.log(`  Amount: ${Number(note.amount) / 1e18} DOGE`);
+      console.log(`  Local commitment: ${noteCommitmentHex}`);
+      console.log(`  Current leafIndex: ${note.leafIndex}`);
+      
       const onChainLeafIndex = commitmentMap.get(noteCommitmentHex);
       
       if (onChainLeafIndex !== undefined) {
         if (note.leafIndex !== onChainLeafIndex) {
-          console.log(`Fixing note: old leafIndex=${note.leafIndex}, new leafIndex=${onChainLeafIndex}`);
+          console.log(`  ✅ MATCH FOUND! Fixing leafIndex: ${note.leafIndex} -> ${onChainLeafIndex}`);
           note.leafIndex = onChainLeafIndex;
           synced++;
         } else {
-          console.log(`Note already has correct leafIndex=${note.leafIndex}`);
+          console.log(`  ✅ Already correct, leafIndex=${note.leafIndex}`);
         }
       } else {
-        console.warn(`Note commitment not found on chain: ${noteCommitmentHex.slice(0, 20)}...`);
-        errors.push(`Note with amount ${Number(note.amount) / 1e18} DOGE not found on chain`);
+        console.warn(`  ❌ NOT FOUND ON CHAIN!`);
+        console.log(`  Closest matches:`);
+        // Find similar commitments for debugging
+        const notePrefix = noteCommitmentHex.slice(0, 20);
+        commitmentMap.forEach((idx, comm) => {
+          if (comm.startsWith(notePrefix.slice(0, 10))) {
+            console.log(`    ${comm} (leafIndex: ${idx})`);
+          }
+        });
+        errors.push(`Note with amount ${Number(note.amount) / 1e18} DOGE not found on chain - commitment mismatch`);
         notFound++;
       }
     }
