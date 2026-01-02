@@ -277,8 +277,8 @@ export function ShieldInterface({ onSuccess }: ShieldInterfaceProps) {
 // Helper to encode shieldNative function call
 function encodeShieldNative(commitment: `0x${string}`): string {
   // Function selector for shieldNative(bytes32)
-  // keccak256("shieldNative(bytes32)") = 0x8bae4db3...
-  const selector = "8bae4db3"
+  // Computed via: new ethers.Interface(['function shieldNative(bytes32)']).getFunction('shieldNative').selector
+  const selector = "b13d48f2"
   const commitmentHex = commitment.slice(2).padStart(64, "0")
   return selector + commitmentHex
 }
