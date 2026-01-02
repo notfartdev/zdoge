@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: dogenadocash
+    runtime: node
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3001
+      - key: DOGEOS_RPC_URL
+        value: https://rpc.testnet.dogeos.com
+      - key: SHIELDED_POOL_ADDRESS
+        value: 0x6d237c2ed7036bf2F2006BcA6D3cA98E6E45b5f6
+
