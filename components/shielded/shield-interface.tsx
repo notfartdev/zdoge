@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -40,7 +40,15 @@ export function ShieldInterface({ onSuccess }: ShieldInterfaceProps) {
   const [txHash, setTxHash] = useState<string | null>(null)
   const [leafIndex, setLeafIndex] = useState<number | null>(null)
   
+  // Prevent duplicate submissions
+  const isSubmittingRef = useRef(false)
+  
   const handleShield = async () => {
+    // Prevent duplicate calls
+    if (isSubmittingRef.current || status !== "idle") {
+      return
+    }
+    
     if (!wallet?.isConnected) {
       toast({
         title: "Wallet Not Connected",
@@ -61,6 +69,7 @@ export function ShieldInterface({ onSuccess }: ShieldInterfaceProps) {
     }
     
     try {
+      isSubmittingRef.current = true
       setStatus("preparing")
       
       // Prepare the shield (create note)
@@ -118,6 +127,8 @@ export function ShieldInterface({ onSuccess }: ShieldInterfaceProps) {
         description: error.message || "Transaction failed",
         variant: "destructive",
       })
+    } finally {
+      isSubmittingRef.current = false
     }
   }
   
@@ -146,6 +157,7 @@ export function ShieldInterface({ onSuccess }: ShieldInterfaceProps) {
     setShowNote(false)
     setTxHash(null)
     setLeafIndex(null)
+    isSubmittingRef.current = false
   }
   
   return (
@@ -173,7 +185,7 @@ export function ShieldInterface({ onSuccess }: ShieldInterfaceProps) {
           <Button 
             className="w-full" 
             onClick={handleShield}
-            disabled={!wallet?.isConnected}
+            disabled={!wallet?.isConnected || status !== "idle"}
           >
             <ShieldPlus className="h-4 w-4 mr-2" />
             Shield DOGE
