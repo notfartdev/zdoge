@@ -322,7 +322,7 @@ export function UnshieldInterface({ notes, onSuccess }: UnshieldInterfaceProps) 
 }
 
 // Helper to encode unshieldNative function call
-// Function: unshieldNative(bytes calldata _proof, bytes32 _root, bytes32 _nullifierHash, address _recipient, uint256 _amount, address _relayer, uint256 _fee)
+// Function: unshieldNative(uint256[8] calldata _proof, bytes32 _root, bytes32 _nullifierHash, address payable _recipient, uint256 _amount, address _relayer, uint256 _fee)
 function encodeUnshieldCall(
   proof: string[],
   root: `0x${string}`,
@@ -330,52 +330,52 @@ function encodeUnshieldCall(
   recipient: string,
   amount: bigint
 ): string {
-  // Convert proof array to proper format for Groth16
-  // proof = [a[0], a[1], b[0][0], b[0][1], b[1][0], b[1][1], c[0], c[1]]
-  const proofBytes = encodeProofBytes(proof)
+  // Function selector for unshieldNative(uint256[8],bytes32,bytes32,address,uint256,address,uint256)
+  // keccak256("unshieldNative(uint256[8],bytes32,bytes32,address,uint256,address,uint256)").slice(0, 10)
+  // Verified: 0xf2b87ac2
+  const selector = "f2b87ac2"
   
-  // Function selector for unshieldNative(bytes,bytes32,bytes32,address,uint256,address,uint256)
-  // keccak256("unshieldNative(bytes,bytes32,bytes32,address,uint256,address,uint256)").slice(0, 10)
-  const selector = "0x2b7ac3f3"
+  // Proof format from snarkjs: [a[0], a[1], b[0][0], b[0][1], b[1][0], b[1][1], c[0], c[1]]
+  // Each is a uint256 (32 bytes)
+  const proofHex = proof.map(p => {
+    const hex = p.startsWith('0x') ? p.slice(2) : p
+    return hex.padStart(64, '0')
+  }).join('')
   
-  // Encode parameters
-  // bytes is dynamic, so we use offset
-  const offsetForBytes = 224 // 7 * 32 bytes for the other params
+  // Ensure we have exactly 8 proof elements
+  if (proof.length !== 8) {
+    console.error(`Expected 8 proof elements, got ${proof.length}`)
+  }
   
   const rootHex = root.slice(2).padStart(64, '0')
   const nullifierHex = nullifierHash.slice(2).padStart(64, '0')
-  const recipientHex = recipient.slice(2).padStart(64, '0')
+  const recipientHex = recipient.slice(2).toLowerCase().padStart(64, '0')
   const amountHex = amount.toString(16).padStart(64, '0')
   const relayerHex = "0".repeat(64) // zero address
   const feeHex = "0".repeat(64) // zero fee
-  const bytesOffsetHex = offsetForBytes.toString(16).padStart(64, '0')
   
-  // Encode the bytes data (proof)
-  const proofLengthHex = (proofBytes.length / 2).toString(16).padStart(64, '0')
-  const proofPadded = proofBytes.padEnd(Math.ceil(proofBytes.length / 64) * 64, '0')
+  // All parameters are static - no offsets needed
+  // Order: proof[8], root, nullifierHash, recipient, amount, relayer, fee
+  const calldata = selector + 
+    proofHex +        // 8 * 32 = 256 bytes
+    rootHex +         // 32 bytes
+    nullifierHex +    // 32 bytes
+    recipientHex +    // 32 bytes
+    amountHex +       // 32 bytes
+    relayerHex +      // 32 bytes
+    feeHex            // 32 bytes
   
-  return selector + 
-    bytesOffsetHex +
-    rootHex + 
-    nullifierHex + 
-    recipientHex + 
-    amountHex + 
-    relayerHex + 
-    feeHex +
-    proofLengthHex +
-    proofPadded
-}
-
-// Convert proof strings to packed bytes
-function encodeProofBytes(proof: string[]): string {
-  // Proof format: [a[0], a[1], b[0][0], b[0][1], b[1][0], b[1][1], c[0], c[1]]
-  let result = ''
-  for (const p of proof) {
-    // Remove 0x prefix if present, pad to 64 chars (32 bytes)
-    const hex = p.startsWith('0x') ? p.slice(2) : p
-    result += hex.padStart(64, '0')
-  }
-  return result
+  console.log('Unshield calldata:', {
+    selector,
+    proofLength: proof.length,
+    root: rootHex.slice(0, 16) + '...',
+    nullifier: nullifierHex.slice(0, 16) + '...',
+    recipient: recipientHex.slice(0, 16) + '...',
+    amount: amount.toString(),
+    totalLength: calldata.length
+  })
+  
+  return '0x' + calldata
 }
 
 
