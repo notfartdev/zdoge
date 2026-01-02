@@ -25,7 +25,21 @@ const CIRCUITS_PATH = '/circuits/shielded';
 
 // Merkle tree configuration
 const TREE_DEPTH = 20;
-const ZERO_VALUE = BigInt('21663839004416932945382355908790599225266501822907911457504978515578255421292');
+// ZERO_VALUE must match contract: keccak256("dogenado") % FIELD_SIZE
+// keccak256("dogenado") = 0x67e5b9f9f4f21c4d8e3b76c9c7f8d0e2a1b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8 (example)
+// We'll compute this dynamically to ensure it matches
+let ZERO_VALUE: bigint | null = null;
+
+async function getZeroValue(): Promise<bigint> {
+  if (ZERO_VALUE !== null) return ZERO_VALUE;
+  
+  // Use ethers or viem to compute keccak256("dogenado")
+  const { keccak256, toBytes } = await import('viem');
+  const hash = keccak256(toBytes('dogenado'));
+  ZERO_VALUE = BigInt(hash) % FIELD_SIZE;
+  console.log(`[Merkle] Zero value: ${ZERO_VALUE}`);
+  return ZERO_VALUE;
+}
 
 // RPC endpoint
 const RPC_URL = 'https://rpc.testnet.dogeos.com';
@@ -105,34 +119,50 @@ async function loadSnarkJS(): Promise<any> {
   return snarkjs;
 }
 
+// MiMC Sponge instance for Merkle tree (lazy loaded)
+let mimcSponge: any = null;
+
 /**
- * MiMC hash for Merkle tree (simplified version)
- * Uses the same constants as the contract
+ * Initialize MiMC from circomlibjs
  */
-function mimcHash(left: bigint, right: bigint): bigint {
-  // For client-side, we use a simplified hash
-  // In production, this should match the contract's MiMC implementation
-  const combined = left + right * BigInt(2) ** BigInt(128);
-  // Simple hash - in production use proper MiMC
-  return combined % FIELD_SIZE;
+async function initMimcForTree(): Promise<void> {
+  if (mimcSponge) return;
+  const circomlibjs = await import('circomlibjs');
+  mimcSponge = await circomlibjs.buildMimcSponge();
+  console.log('[Merkle] MiMC initialized for tree building');
+}
+
+/**
+ * MiMC hash for Merkle tree - MUST match the circuit's MiMC
+ * Uses circomlibjs MiMCSponge(2, 220, 1) for compatibility
+ */
+async function mimcHash(left: bigint, right: bigint): Promise<bigint> {
+  await initMimcForTree();
+  const result = mimcSponge.multiHash([left, right]);
+  return mimcSponge.F.toObject(result);
 }
 
 /**
  * Build Merkle tree from leaves and get path
+ * Uses proper MiMC hash matching the circuit
  */
-function buildMerkleTreeAndGetPath(
+async function buildMerkleTreeAndGetPath(
   leaves: bigint[],
   leafIndex: number
-): { pathElements: bigint[]; pathIndices: number[]; root: bigint } {
+): Promise<{ pathElements: bigint[]; pathIndices: number[]; root: bigint }> {
   const depth = TREE_DEPTH;
   const pathElements: bigint[] = [];
   const pathIndices: number[] = [];
+  
+  // Initialize MiMC and get zero value
+  await initMimcForTree();
+  const zeroValue = await getZeroValue();
   
   // Pad leaves to power of 2
   const treeSize = Math.pow(2, depth);
   const paddedLeaves = [...leaves];
   while (paddedLeaves.length < treeSize) {
-    paddedLeaves.push(ZERO_VALUE);
+    paddedLeaves.push(zeroValue);
   }
   
   let currentLevel = paddedLeaves;
@@ -140,15 +170,15 @@ function buildMerkleTreeAndGetPath(
   
   for (let level = 0; level < depth; level++) {
     const siblingIndex = currentIndex % 2 === 0 ? currentIndex + 1 : currentIndex - 1;
-    pathElements.push(currentLevel[siblingIndex] || ZERO_VALUE);
+    pathElements.push(currentLevel[siblingIndex] || zeroValue);
     pathIndices.push(currentIndex % 2);
     
-    // Build next level
+    // Build next level with proper MiMC hashing
     const nextLevel: bigint[] = [];
     for (let i = 0; i < currentLevel.length; i += 2) {
       const left = currentLevel[i];
-      const right = currentLevel[i + 1] || ZERO_VALUE;
-      nextLevel.push(mimcHash(left, right));
+      const right = currentLevel[i + 1] || zeroValue;
+      nextLevel.push(await mimcHash(left, right));
     }
     
     currentLevel = nextLevel;
@@ -274,14 +304,17 @@ export async function fetchMerklePath(
   }
   
   // Build array of commitments in order
+  // Get zero value for empty slots
+  const zeroValue = await getZeroValue();
   const maxLeafIndex = Math.max(...commitmentsData.map(c => c.leafIndex));
-  const commitments: bigint[] = new Array(maxLeafIndex + 1).fill(ZERO_VALUE);
+  const commitments: bigint[] = new Array(maxLeafIndex + 1).fill(zeroValue);
   
   for (const { commitment, leafIndex: idx } of commitmentsData) {
     commitments[idx] = commitment;
   }
   
-  return buildMerkleTreeAndGetPath(commitments, leafIndex);
+  console.log(`Building Merkle tree with ${commitments.length} leaves, zeroValue=${zeroValue.toString().slice(0,20)}...`);
+  return await buildMerkleTreeAndGetPath(commitments, leafIndex);
 }
 
 /**
