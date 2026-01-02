@@ -300,8 +300,12 @@ export function formatNoteAmount(note: ShieldedNote): string {
  */
 export function parseAmountToWei(amount: string | number, decimals: number = 18): bigint {
   const num = typeof amount === 'string' ? parseFloat(amount) : amount;
-  if (isNaN(num) || num <= 0) {
+  if (isNaN(num) || num < 0) {
     throw new Error('Invalid amount');
+  }
+  // Allow 0 for fee-less transactions
+  if (num === 0) {
+    return 0n;
   }
   return BigInt(Math.floor(num * (10 ** decimals)));
 }
