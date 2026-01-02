@@ -28,10 +28,11 @@ next-env.d.ts
 .vercel
 .env*.local
 
-# ZK circuits - large binary files
+# ZK circuits - large binary files (except public deployment)
 *.ptau
-*.zkey
 circuits/shielded/build/
+# Allow circuit files in public folder for frontend proof generation
+!public/circuits/
 
 # Contract artifacts (regenerated on compile)
 contracts/artifacts/
