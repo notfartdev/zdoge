@@ -33,9 +33,9 @@ export function DashboardNav() {
                 Mixer
               </Link>
               <Link
-                href="/dashboard/shielded"
+                href="/shield"
                 className={`font-mono text-sm transition-colors flex items-center gap-1.5 ${
-                  pathname === "/dashboard/shielded" ? "text-[#C2A633] font-bold" : "text-gray-400 hover:text-white"
+                  pathname === "/shield" ? "text-[#C2A633] font-bold" : "text-gray-400 hover:text-white"
                 }`}
               >
                 <Shield className="w-4 h-4" />
@@ -114,10 +114,10 @@ export function DashboardNav() {
                 Mixer
               </Link>
               <Link
-                href="/dashboard/shielded"
+                href="/shield"
                 onClick={() => setMobileMenuOpen(false)}
                 className={`font-mono text-sm transition-colors flex items-center gap-2 py-2 ${
-                  pathname === "/dashboard/shielded" ? "text-[#C2A633] font-bold" : "text-gray-400 hover:text-white"
+                  pathname === "/shield" ? "text-[#C2A633] font-bold" : "text-gray-400 hover:text-white"
                 }`}
               >
                 <Shield className="w-4 h-4" />

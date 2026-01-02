@@ -3,7 +3,7 @@
 import { ShieldedWallet } from "@/components/shielded"
 import { DashboardNav } from "@/components/dashboard-nav"
 
-export default function ShieldedPage() {
+export default function ShieldPage() {
   return (
     <div className="min-h-screen bg-background">
       <DashboardNav />
@@ -21,5 +21,4 @@ export default function ShieldedPage() {
     </div>
   )
 }
-
 
