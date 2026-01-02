@@ -4,16 +4,26 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Loader2, Download, AlertCircle, Check, Copy, Eye, EyeOff } from "lucide-react"
+import { 
+  Loader2, 
+  Download, 
+  AlertTriangle, 
+  CheckCircle2, 
+  Copy, 
+  Eye, 
+  EyeOff,
+  ShieldPlus,
+  Sparkles
+} from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { useWallet } from "@/lib/wallet-context"
 import { prepareShield, completeShield } from "@/lib/shielded/shielded-service"
-import { noteToShareableString, formatWeiToAmount } from "@/lib/shielded/shielded-note"
+import { noteToShareableString } from "@/lib/shielded/shielded-note"
+import { shieldedPool } from "@/lib/dogeos-config"
 
-// TODO: Update with actual deployed address
-const SHIELDED_POOL_ADDRESS = "0x0000000000000000000000000000000000000000"
+// Use the deployed contract address
+const SHIELDED_POOL_ADDRESS = shieldedPool.address
 
 interface ShieldInterfaceProps {
   onSuccess?: () => void
@@ -74,7 +84,7 @@ export function ShieldInterface({ onSuccess }: ShieldInterfaceProps) {
           from: wallet.address,
           to: SHIELDED_POOL_ADDRESS,
           value: `0x${amountWei.toString(16)}`,
-          data: `0x${encodeShieldSimple(commitment)}`,
+          data: `0x${encodeShieldNative(commitment)}`,
         }],
       })
       
@@ -162,11 +172,11 @@ export function ShieldInterface({ onSuccess }: ShieldInterfaceProps) {
           </div>
           
           <Button 
-            className="w-full" 
+            className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700" 
             onClick={handleShield}
             disabled={!wallet?.isConnected}
           >
-            <Download className="h-4 w-4 mr-2" />
+            <ShieldPlus className="h-4 w-4 mr-2" />
             Shield DOGE
           </Button>
         </div>
@@ -220,10 +230,13 @@ export function ShieldInterface({ onSuccess }: ShieldInterfaceProps) {
       
       {status === "success" && (
         <div className="space-y-4">
-          <Alert>
-            <Check className="h-4 w-4 text-green-500" />
-            <AlertDescription>
-              Successfully shielded {amount} DOGE! Your funds are now private.
+          <Alert className="border-emerald-500/50 bg-emerald-500/10">
+            <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+            <AlertDescription className="text-emerald-200">
+              <span className="flex items-center gap-2">
+                <Sparkles className="h-4 w-4" />
+                Successfully shielded {amount} DOGE! Your funds are now private.
+              </span>
             </AlertDescription>
           </Alert>
           
@@ -265,10 +278,11 @@ export function ShieldInterface({ onSuccess }: ShieldInterfaceProps) {
   )
 }
 
-// Helper to encode shieldSimple function call
-function encodeShieldSimple(commitment: `0x${string}`): string {
-  // Function selector for shieldSimple(bytes32)
-  const selector = "a3a15621" // keccak256("shieldSimple(bytes32)").slice(0, 8)
+// Helper to encode shieldNative function call
+function encodeShieldNative(commitment: `0x${string}`): string {
+  // Function selector for shieldNative(bytes32)
+  // keccak256("shieldNative(bytes32)") = 0x8bae4db3...
+  const selector = "8bae4db3"
   const commitmentHex = commitment.slice(2).padStart(64, "0")
   return selector + commitmentHex
 }

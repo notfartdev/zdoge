@@ -6,17 +6,20 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { 
-  Shield, 
+  ShieldPlus,
+  ShieldCheck,
   Send, 
-  Download, 
+  ArrowDownToLine, 
   Copy, 
   Check, 
   Eye, 
   EyeOff,
-  Wallet,
+  Wallet2,
   RefreshCw,
-  Key,
-  AlertCircle
+  KeyRound,
+  ArrowLeftRight,
+  Sparkles,
+  Lock
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import {
@@ -130,24 +133,27 @@ export function ShieldedWallet() {
   return (
     <div className="space-y-6">
       {/* Wallet Header */}
-      <Card>
+      <Card className="border-emerald-500/20 bg-gradient-to-br from-black to-emerald-950/20">
         <CardHeader>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-full bg-primary/10">
-                <Shield className="h-6 w-6 text-primary" />
+              <div className="p-2.5 rounded-xl bg-emerald-500/20 border border-emerald-500/30">
+                <ShieldCheck className="h-6 w-6 text-emerald-400" />
               </div>
               <div>
-                <CardTitle>Shielded Wallet</CardTitle>
+                <CardTitle className="flex items-center gap-2">
+                  Shielded Wallet
+                  <Sparkles className="h-4 w-4 text-emerald-400" />
+                </CardTitle>
                 <CardDescription>Private DOGE transactions</CardDescription>
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={handleBackup}>
-                <Key className="h-4 w-4 mr-2" />
+              <Button variant="outline" size="sm" onClick={handleBackup} className="border-emerald-500/30 hover:bg-emerald-500/10">
+                <KeyRound className="h-4 w-4 mr-2" />
                 Backup
               </Button>
-              <Button variant="outline" size="sm" onClick={refreshState}>
+              <Button variant="outline" size="sm" onClick={refreshState} className="border-emerald-500/30 hover:bg-emerald-500/10">
                 <RefreshCw className="h-4 w-4" />
               </Button>
             </div>
@@ -155,13 +161,16 @@ export function ShieldedWallet() {
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Balance */}
-          <div className="p-4 rounded-lg bg-muted/50">
-            <div className="text-sm text-muted-foreground mb-1">Shielded Balance</div>
-            <div className="text-3xl font-bold">
-              {formatWeiToAmount(balance).toFixed(4)} DOGE
+          <div className="p-4 rounded-xl bg-gradient-to-r from-emerald-900/30 to-teal-900/30 border border-emerald-500/20">
+            <div className="flex items-center gap-2 text-sm text-emerald-400/80 mb-1">
+              <Lock className="h-3.5 w-3.5" />
+              Shielded Balance
+            </div>
+            <div className="text-3xl font-bold text-white">
+              {formatWeiToAmount(balance).toFixed(4)} <span className="text-emerald-400">DOGE</span>
             </div>
             <div className="text-sm text-muted-foreground mt-1">
-              {notes.length} note{notes.length !== 1 ? "s" : ""}
+              {notes.length} note{notes.length !== 1 ? "s" : ""} • Private
             </div>
           </div>
           
@@ -206,21 +215,21 @@ export function ShieldedWallet() {
       <Card>
         <CardContent className="pt-6">
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="grid w-full grid-cols-4">
-              <TabsTrigger value="shield" className="flex items-center gap-2">
-                <Download className="h-4 w-4" />
+            <TabsList className="grid w-full grid-cols-4 bg-black/40">
+              <TabsTrigger value="shield" className="flex items-center gap-2 data-[state=active]:bg-emerald-600/20 data-[state=active]:text-emerald-400">
+                <ShieldPlus className="h-4 w-4" />
                 Shield
               </TabsTrigger>
-              <TabsTrigger value="swap" className="flex items-center gap-2">
-                <RefreshCw className="h-4 w-4" />
+              <TabsTrigger value="swap" className="flex items-center gap-2 data-[state=active]:bg-purple-600/20 data-[state=active]:text-purple-400">
+                <ArrowLeftRight className="h-4 w-4" />
                 Swap
               </TabsTrigger>
-              <TabsTrigger value="transfer" className="flex items-center gap-2">
+              <TabsTrigger value="transfer" className="flex items-center gap-2 data-[state=active]:bg-blue-600/20 data-[state=active]:text-blue-400">
                 <Send className="h-4 w-4" />
                 Send
               </TabsTrigger>
-              <TabsTrigger value="unshield" className="flex items-center gap-2">
-                <Wallet className="h-4 w-4" />
+              <TabsTrigger value="unshield" className="flex items-center gap-2 data-[state=active]:bg-amber-600/20 data-[state=active]:text-amber-400">
+                <ArrowDownToLine className="h-4 w-4" />
                 Unshield
               </TabsTrigger>
             </TabsList>
