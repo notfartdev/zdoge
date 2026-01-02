@@ -27,3 +27,16 @@ yarn-error.log*
 next-env.d.ts
 .vercel
 .env*.local
+
+# ZK circuits - large binary files
+*.ptau
+*.zkey
+circuits/shielded/build/
+
+# Contract artifacts (regenerated on compile)
+contracts/artifacts/
+contracts/cache/
+contracts/typechain-types/
+
+# Backend dist (regenerated on build)
+backend/dist/

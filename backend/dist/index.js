@@ -1,20 +1,22 @@
-"use strict";
+// @ts-nocheck
 /**
  * Dogenado Backend - Combined Entry Point
  *
  * Runs both indexer and relayer in a single process.
  * For production, run them separately for better reliability.
  */
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", { value: true });
-const viem_1 = require("viem");
-const accounts_1 = require("viem/accounts");
-const express_1 = __importDefault(require("express"));
-const cors_1 = __importDefault(require("cors"));
-const config_js_1 = require("./config.js");
-const MerkleTree_js_1 = require("./merkle/MerkleTree.js");
+import { createPublicClient, createWalletClient, http, webSocket, parseAbiItem } from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
+import express from 'express';
+import cors from 'cors';
+import { config, MixerPoolABI, dogeosTestnet } from './config.js';
+import { MerkleTree } from './merkle/MerkleTree.js';
+import { createSecureWallet, createErrorResponse, getSecurityWarnings } from './utils/secure-wallet.js';
+import { getMetrics, recordTransaction, updateRelayerBalance } from './utils/monitoring.js';
+import { getEndpointStatus } from './utils/rpc-fallback.js';
+import { initStorage } from './database/storage.js';
+import { shieldedRouter } from './shielded/shielded-routes.js';
+import { initializeShieldedPool, syncShieldedPool, watchShieldedPool, } from './shielded/shielded-indexer.js';
 console.log(`
 ╔═══════════════════════════════════════════════════════════════╗
 ║                                                               ║
@@ -30,34 +32,149 @@ console.log(`
 ╚═══════════════════════════════════════════════════════════════╝
 `);
 // App setup
-const app = (0, express_1.default)();
-app.use((0, cors_1.default)());
-app.use(express_1.default.json());
+const app = express();
+// CORS configuration - allow frontend domains
+const allowedOrigins = [
+    'https://dogenado.cash',
+    'https://www.dogenado.cash',
+    'http://localhost:3000', // Development
+    'http://localhost:3001', // Development
+];
+app.use(cors({
+    origin: (origin, callback) => {
+        // Allow requests with no origin (like mobile apps or curl)
+        if (!origin)
+            return callback(null, true);
+        if (allowedOrigins.includes(origin)) {
+            callback(null, true);
+        }
+        else {
+            console.warn(`[CORS] Blocked request from: ${origin}`);
+            callback(null, true); // Still allow for now, just log
+        }
+    },
+    credentials: true,
+}));
+app.use(express.json());
+// In-memory rate limit store (use Redis for production with multiple instances)
+const rateLimitStore = new Map();
+// Rate limit configuration per endpoint type
+const RATE_LIMITS = {
+    relay: { maxRequests: 5, windowMs: 60000 }, // 5 requests per minute for relay
+    schedule: { maxRequests: 10, windowMs: 60000 }, // 10 requests per minute for scheduling
+    api: { maxRequests: 100, windowMs: 60000 }, // 100 requests per minute for general API
+    health: { maxRequests: 1000, windowMs: 60000 }, // 1000 requests per minute for health checks
+};
+// Clean up expired entries periodically
+setInterval(() => {
+    const now = Date.now();
+    for (const [key, entry] of rateLimitStore.entries()) {
+        if (now > entry.resetTime) {
+            rateLimitStore.delete(key);
+        }
+    }
+}, 60000); // Clean every minute
+// Rate limiting middleware factory
+function createRateLimiter(type) {
+    const config = RATE_LIMITS[type];
+    return (req, res, next) => {
+        // Get client identifier (IP + endpoint for more granular limiting)
+        const clientIp = req.ip || req.socket.remoteAddress || 'unknown';
+        // Skip rate limiting for localhost (development)
+        if (clientIp === '127.0.0.1' || clientIp === '::1' || clientIp === '::ffff:127.0.0.1') {
+            return next();
+        }
+        const key = `${type}:${clientIp}`;
+        const now = Date.now();
+        let entry = rateLimitStore.get(key);
+        if (!entry || now > entry.resetTime) {
+            // Create new entry
+            entry = { count: 1, resetTime: now + config.windowMs };
+            rateLimitStore.set(key, entry);
+        }
+        else {
+            entry.count++;
+        }
+        // Set rate limit headers
+        res.setHeader('X-RateLimit-Limit', config.maxRequests);
+        res.setHeader('X-RateLimit-Remaining', Math.max(0, config.maxRequests - entry.count));
+        res.setHeader('X-RateLimit-Reset', Math.ceil(entry.resetTime / 1000));
+        if (entry.count > config.maxRequests) {
+            console.warn(`[RateLimit] ${type} limit exceeded for ${clientIp}`);
+            return res.status(429).json({
+                error: 'Too many requests',
+                message: `Rate limit exceeded. Try again in ${Math.ceil((entry.resetTime - now) / 1000)} seconds.`,
+                retryAfter: Math.ceil((entry.resetTime - now) / 1000),
+            });
+        }
+        next();
+    };
+}
+// Create rate limiters
+const relayLimiter = createRateLimiter('relay');
+const scheduleLimiter = createRateLimiter('schedule');
+const apiLimiter = createRateLimiter('api');
+const healthLimiter = createRateLimiter('health');
+// Track deposits by wallet address
+const walletDeposits = new Map();
+const walletScheduledWithdrawals = new Map();
+const walletWithdrawals = new Map();
 const pools = new Map();
-// Create viem client
-const publicClient = (0, viem_1.createPublicClient)({
-    chain: config_js_1.dogeosTestnet,
-    transport: (0, viem_1.http)(config_js_1.config.rpcUrl),
+// Create viem client (HTTP for regular calls)
+const publicClient = createPublicClient({
+    chain: dogeosTestnet,
+    transport: http(config.rpcUrl),
 });
-// Create wallet client for relayer (if private key is available)
-let walletClient = null;
+// Create WebSocket client for real-time event watching (faster than HTTP polling)
+let wsClient = null;
+try {
+    if (config.wsRpcUrl) {
+        wsClient = createPublicClient({
+            chain: dogeosTestnet,
+            transport: webSocket(config.wsRpcUrl),
+        });
+        console.log('[Indexer] WebSocket client initialized for real-time events');
+    }
+}
+catch (error) {
+    console.warn('[Indexer] WebSocket initialization failed, falling back to HTTP polling:', error);
+}
+// Create secure wallet for relayer (with retry logic and nonce management)
+let secureWallet = null;
 let relayerAddress = null;
+// Legacy wallet client for compatibility (will be phased out)
+let walletClient = null;
 if (process.env.RELAYER_PRIVATE_KEY) {
-    const account = (0, accounts_1.privateKeyToAccount)(`0x${process.env.RELAYER_PRIVATE_KEY.replace('0x', '')}`);
-    relayerAddress = account.address;
-    walletClient = (0, viem_1.createWalletClient)({
-        account,
-        chain: config_js_1.dogeosTestnet,
-        transport: (0, viem_1.http)(config_js_1.config.rpcUrl),
-    });
-    console.log(`[Relayer] Initialized with address: ${relayerAddress}`);
+    // Initialize secure wallet with retry logic
+    secureWallet = createSecureWallet(config.rpcUrl);
+    if (secureWallet) {
+        relayerAddress = secureWallet.address;
+        console.log(`[Relayer] Secure wallet initialized: ${relayerAddress}`);
+        // Also create legacy wallet client for backward compatibility
+        const account = privateKeyToAccount(`0x${process.env.RELAYER_PRIVATE_KEY.replace('0x', '')}`);
+        walletClient = createWalletClient({
+            account,
+            chain: dogeosTestnet,
+            transport: http(config.rpcUrl),
+        });
+    }
+    // Log security warnings
+    const warnings = getSecurityWarnings();
+    if (warnings.length > 0) {
+        console.log('\n⚠️  SECURITY WARNINGS:');
+        warnings.forEach(w => console.log(`   - ${w}`));
+        console.log('');
+    }
+}
+else {
+    console.warn('⚠️  RELAYER_PRIVATE_KEY not set - relayer functionality disabled');
 }
 // ============ Event ABI ============
-const DepositEventABI = (0, viem_1.parseAbiItem)('event Deposit(bytes32 indexed commitment, uint256 indexed leafIndex, uint256 timestamp)');
-const WithdrawalEventABI = (0, viem_1.parseAbiItem)('event Withdrawal(address indexed recipient, bytes32 indexed nullifierHash, address indexed relayer, uint256 fee)');
+const DepositEventABI = parseAbiItem('event Deposit(bytes32 indexed commitment, uint256 indexed leafIndex, uint256 timestamp)');
+const WithdrawalEventABI = parseAbiItem('event Withdrawal(address indexed recipient, bytes32 indexed nullifierHash, address indexed relayer, uint256 fee)');
 // ============ Pool Management ============
 async function initializePool(address) {
-    const tree = new MerkleTree_js_1.MerkleTree(config_js_1.config.merkleTreeDepth);
+    const tree = new MerkleTree(config.merkleTreeDepth);
     await tree.initialize();
     const state = {
         address,
@@ -89,16 +206,39 @@ async function syncPoolFromChain(pool) {
             const commitment = log.args.commitment;
             const leafIndex = Number(log.args.leafIndex);
             const timestamp = Number(log.args.timestamp);
+            const txHash = log.transactionHash;
             // Add to tree if not already present
             if (!pool.deposits.has(commitment)) {
                 const commitmentBigInt = BigInt(commitment);
                 pool.tree.insert(commitmentBigInt);
-                pool.deposits.set(commitment, {
+                const depositInfo = {
                     leafIndex,
                     timestamp,
                     blockNumber: Number(log.blockNumber),
-                    txHash: log.transactionHash,
-                });
+                    txHash,
+                };
+                pool.deposits.set(commitment, depositInfo);
+                // Try to get depositor address from transaction
+                try {
+                    const tx = await publicClient.getTransaction({ hash: txHash });
+                    if (tx && tx.from) {
+                        const depositorAddress = tx.from.toLowerCase();
+                        const existing = walletDeposits.get(depositorAddress) || [];
+                        // Check if already tracked
+                        if (!existing.some(d => d.commitment === commitment)) {
+                            existing.push({
+                                poolAddress: address,
+                                commitment,
+                                info: depositInfo,
+                            });
+                            walletDeposits.set(depositorAddress, existing);
+                            console.log(`[Indexer] Tracked deposit for wallet ${depositorAddress.slice(0, 10)}...`);
+                        }
+                    }
+                }
+                catch (err) {
+                    console.log(`[Indexer] Could not fetch tx ${txHash.slice(0, 10)}... for depositor`);
+                }
                 console.log(`[Indexer] Added deposit ${leafIndex}: ${commitment.slice(0, 18)}...`);
             }
         }
@@ -110,10 +250,30 @@ async function syncPoolFromChain(pool) {
             toBlock: currentBlock,
         });
         console.log(`[Indexer] Found ${withdrawalLogs.length} withdrawal events`);
-        // Track nullifiers
+        // Track nullifiers and record withdrawals by recipient
         for (const log of withdrawalLogs) {
             const nullifierHash = log.args.nullifierHash;
+            const recipient = log.args.recipient;
+            const relayer = log.args.relayer;
+            const fee = log.args.fee;
             pool.nullifiers.add(nullifierHash);
+            // Track withdrawal by recipient
+            const recipientLower = recipient.toLowerCase();
+            const existing = walletWithdrawals.get(recipientLower) || [];
+            // Check if already tracked
+            if (!existing.some(w => w.nullifierHash === nullifierHash)) {
+                existing.push({
+                    poolAddress: address,
+                    recipient,
+                    nullifierHash,
+                    relayer,
+                    fee: fee.toString(),
+                    timestamp: Math.floor(Date.now() / 1000), // Use current time as approx
+                    txHash: log.transactionHash || '',
+                    blockNumber: Number(log.blockNumber || 0),
+                });
+                walletWithdrawals.set(recipientLower, existing);
+            }
         }
         pool.lastSyncBlock = Number(currentBlock);
         console.log(`[Indexer] Pool synced to block ${currentBlock}. Total deposits: ${pool.tree.getLeafCount()}`);
@@ -125,12 +285,14 @@ async function syncPoolFromChain(pool) {
 // Watch for new events
 async function watchPool(pool) {
     const address = pool.address;
+    // Use WebSocket client if available (real-time), otherwise fallback to HTTP (polling)
+    const eventClient = wsClient || publicClient;
     // Watch for deposits
-    publicClient.watchContractEvent({
+    eventClient.watchContractEvent({
         address,
         abi: [DepositEventABI],
         eventName: 'Deposit',
-        onLogs: (logs) => {
+        onLogs: async (logs) => {
             for (const log of logs) {
                 const commitment = log.args.commitment;
                 const leafIndex = Number(log.args.leafIndex);
@@ -138,19 +300,42 @@ async function watchPool(pool) {
                 if (!pool.deposits.has(commitment)) {
                     const commitmentBigInt = BigInt(commitment);
                     pool.tree.insert(commitmentBigInt);
-                    pool.deposits.set(commitment, {
+                    // Try to get depositor from transaction
+                    let depositor;
+                    try {
+                        const tx = await publicClient.getTransaction({ hash: log.transactionHash });
+                        depositor = tx.from.toLowerCase();
+                    }
+                    catch (e) {
+                        // Ignore errors
+                    }
+                    const depositInfo = {
                         leafIndex,
                         timestamp,
                         blockNumber: Number(log.blockNumber),
                         txHash: log.transactionHash,
-                    });
-                    console.log(`[Indexer] NEW deposit ${leafIndex}: ${commitment.slice(0, 18)}...`);
+                        depositor,
+                    };
+                    pool.deposits.set(commitment, depositInfo);
+                    // Track by wallet
+                    if (depositor) {
+                        const walletKey = depositor.toLowerCase();
+                        if (!walletDeposits.has(walletKey)) {
+                            walletDeposits.set(walletKey, []);
+                        }
+                        walletDeposits.get(walletKey).push({
+                            poolAddress: address,
+                            commitment,
+                            info: depositInfo,
+                        });
+                    }
+                    console.log(`[Indexer] NEW deposit ${leafIndex} from ${depositor?.slice(0, 10) || 'unknown'}`);
                 }
             }
         },
     });
     // Watch for withdrawals
-    publicClient.watchContractEvent({
+    eventClient.watchContractEvent({
         address,
         abi: [WithdrawalEventABI],
         eventName: 'Withdrawal',
@@ -166,7 +351,7 @@ async function watchPool(pool) {
 }
 // ============ API Routes ============
 // Get all pools
-app.get('/api/pools', (req, res) => {
+app.get('/api/pools', apiLimiter, (req, res) => {
     const poolList = Array.from(pools.entries()).map(([address, state]) => ({
         address,
         depositsCount: state.tree.getLeafCount(),
@@ -175,24 +360,80 @@ app.get('/api/pools', (req, res) => {
     }));
     res.json(poolList);
 });
+// Native pool ABI (MixerPoolNative returns 3 values, not 4)
+const MixerPoolNativeABI = [
+    {
+        type: 'function',
+        name: 'getPoolInfo',
+        inputs: [],
+        outputs: [
+            { name: '_denomination', type: 'uint256' },
+            { name: '_depositsCount', type: 'uint256' },
+            { name: '_root', type: 'bytes32' },
+        ],
+        stateMutability: 'view',
+    },
+];
 // Get pool info
-app.get('/api/pool/:address', async (req, res) => {
+app.get('/api/pool/:address', apiLimiter, async (req, res) => {
     const address = req.params.address;
     try {
-        const poolInfo = await publicClient.readContract({
-            address,
-            abi: config_js_1.MixerPoolABI,
-            functionName: 'getPoolInfo',
-        });
+        let token = '0x0000000000000000000000000000000000000000';
+        let denomination;
+        let depositsCount;
+        let root;
+        // Try ERC20 pool ABI first (4 return values)
+        try {
+            const poolInfo = await publicClient.readContract({
+                address,
+                abi: MixerPoolABI,
+                functionName: 'getPoolInfo',
+            });
+            token = poolInfo[0];
+            denomination = poolInfo[1].toString();
+            depositsCount = Number(poolInfo[2]);
+            root = poolInfo[3];
+        }
+        catch {
+            // Fallback to native pool ABI (3 return values)
+            const nativePoolInfo = await publicClient.readContract({
+                address,
+                abi: MixerPoolNativeABI,
+                functionName: 'getPoolInfo',
+            });
+            token = '0x0000000000000000000000000000000000000000'; // Native token
+            denomination = nativePoolInfo[0].toString();
+            depositsCount = Number(nativePoolInfo[1]);
+            root = nativePoolInfo[2];
+        }
         const pool = pools.get(address.toLowerCase());
+        // Get recent deposits (last 2)
+        const deposits = [];
+        if (pool) {
+            const depositEntries = Array.from(pool.deposits.entries());
+            // Sort by leafIndex descending (newest first)
+            depositEntries.sort((a, b) => b[1].leafIndex - a[1].leafIndex);
+            // Take last 2
+            depositEntries.slice(0, 2).forEach(([commitment, info]) => {
+                deposits.push({
+                    commitment,
+                    leafIndex: info.leafIndex,
+                    timestamp: info.timestamp,
+                    blockNumber: Number(info.blockNumber),
+                    txHash: info.txHash,
+                });
+            });
+        }
         res.json({
-            token: poolInfo[0],
-            denomination: poolInfo[1].toString(),
-            depositsCount: poolInfo[2].toString(),
-            root: poolInfo[3],
+            token,
+            denomination,
+            depositsCount,
+            root,
             // Local state
             localDepositsCount: pool?.tree.getLeafCount() || 0,
             localRoot: pool ? '0x' + pool.tree.getRoot().toString(16).padStart(64, '0') : null,
+            // Recent deposits for statistics
+            deposits,
         });
     }
     catch (error) {
@@ -200,7 +441,7 @@ app.get('/api/pool/:address', async (req, res) => {
     }
 });
 // Get latest root
-app.get('/api/pool/:address/root', (req, res) => {
+app.get('/api/pool/:address/root', apiLimiter, (req, res) => {
     const pool = pools.get(req.params.address.toLowerCase());
     if (!pool) {
         return res.status(404).json({ error: 'Pool not found' });
@@ -211,7 +452,7 @@ app.get('/api/pool/:address/root', (req, res) => {
     });
 });
 // Get Merkle path
-app.get('/api/pool/:address/path/:leafIndex', async (req, res) => {
+app.get('/api/pool/:address/path/:leafIndex', apiLimiter, async (req, res) => {
     const pool = pools.get(req.params.address.toLowerCase());
     if (!pool) {
         return res.status(404).json({ error: 'Pool not found' });
@@ -233,7 +474,7 @@ app.get('/api/pool/:address/path/:leafIndex', async (req, res) => {
     }
 });
 // Get deposit info by commitment
-app.get('/api/pool/:address/deposit/:commitment', (req, res) => {
+app.get('/api/pool/:address/deposit/:commitment', apiLimiter, (req, res) => {
     const pool = pools.get(req.params.address.toLowerCase());
     if (!pool) {
         return res.status(404).json({ error: 'Pool not found' });
@@ -249,7 +490,7 @@ app.get('/api/pool/:address/deposit/:commitment', (req, res) => {
     res.json(found);
 });
 // Check nullifier
-app.get('/api/pool/:address/nullifier/:hash', (req, res) => {
+app.get('/api/pool/:address/nullifier/:hash', apiLimiter, (req, res) => {
     const pool = pools.get(req.params.address.toLowerCase());
     if (!pool) {
         return res.status(404).json({ error: 'Pool not found' });
@@ -259,24 +500,34 @@ app.get('/api/pool/:address/nullifier/:hash', (req, res) => {
     res.json({ isSpent });
 });
 // Relay withdrawal
-app.post('/api/relay', async (req, res) => {
-    if (!walletClient || !relayerAddress) {
-        return res.status(503).json({
-            error: 'Relayer not configured. Set RELAYER_PRIVATE_KEY environment variable.'
-        });
+app.post('/api/relay', relayLimiter, async (req, res) => {
+    if (!secureWallet || !relayerAddress) {
+        return res.status(503).json(createErrorResponse('RELAY_NOT_CONFIGURED'));
     }
     const { pool: poolAddress, proof, root, nullifierHash, recipient, fee } = req.body;
     if (!poolAddress || !proof || !root || !nullifierHash || !recipient) {
-        return res.status(400).json({ error: 'Missing required fields' });
+        return res.status(400).json(createErrorResponse('INVALID_PARAMS', 'Missing required fields: pool, proof, root, nullifierHash, recipient'));
     }
+    const startTime = Date.now();
     try {
-        console.log(`[Relayer] Processing withdrawal to ${recipient}`);
+        // Check relayer balance before processing
+        const relayerBalance = await secureWallet.getBalance();
+        const minBalance = BigInt(0.01 * 1e18); // Minimum 0.01 DOGE for gas
+        if (relayerBalance < minBalance) {
+            console.error(`[Relayer] Insufficient balance: ${relayerBalance} < ${minBalance}`);
+            return res.status(503).json(createErrorResponse('RELAY_INSUFFICIENT_BALANCE'));
+        }
+        console.log(`[Relayer] Processing withdrawal to ${recipient} (balance: ${Number(relayerBalance) / 1e18} DOGE)`);
         // Convert proof strings to bigints
         const proofBigInts = proof.map((p) => BigInt(p));
         // Submit transaction
+        if (!walletClient) {
+            return res.status(503).json({ error: 'Wallet not initialized' });
+        }
         const txHash = await walletClient.writeContract({
+            chain: dogeosTestnet,
             address: poolAddress,
-            abi: config_js_1.MixerPoolABI,
+            abi: MixerPoolABI,
             functionName: 'withdraw',
             args: [
                 proofBigInts,
@@ -293,7 +544,9 @@ app.post('/api/relay', async (req, res) => {
         if (receipt.status === 'reverted') {
             throw new Error('Transaction reverted');
         }
-        console.log(`[Relayer] Withdrawal confirmed in block ${receipt.blockNumber}`);
+        const duration = Date.now() - startTime;
+        console.log(`[Relayer] Withdrawal confirmed in block ${receipt.blockNumber} (${duration}ms)`);
+        recordTransaction(true, duration);
         res.json({
             txHash,
             blockNumber: Number(receipt.blockNumber),
@@ -301,20 +554,34 @@ app.post('/api/relay', async (req, res) => {
         });
     }
     catch (error) {
+        const duration = Date.now() - startTime;
         console.error('[Relayer] Error:', error.message);
-        res.status(500).json({ error: error.message });
+        recordTransaction(false, duration, 'TX_FAILED');
+        // Parse error for better messages
+        const errorMsg = error.message || String(error);
+        if (errorMsg.includes('InvalidProof')) {
+            return res.status(400).json(createErrorResponse('INVALID_PROOF'));
+        }
+        if (errorMsg.includes('InvalidMerkleRoot') || errorMsg.includes('Unknown root')) {
+            return res.status(400).json(createErrorResponse('INVALID_ROOT'));
+        }
+        if (errorMsg.includes('NullifierSpent') || errorMsg.includes('already spent')) {
+            return res.status(400).json(createErrorResponse('NULLIFIER_SPENT'));
+        }
+        if (errorMsg.includes('insufficient funds')) {
+            return res.status(503).json(createErrorResponse('RELAY_INSUFFICIENT_BALANCE'));
+        }
+        res.status(500).json(createErrorResponse('TX_FAILED', errorMsg));
     }
 });
 // Schedule withdrawal (V2 pools with timelock)
-app.post('/api/relay/schedule', async (req, res) => {
-    if (!walletClient || !relayerAddress) {
-        return res.status(503).json({
-            error: 'Relayer not configured.'
-        });
+app.post('/api/relay/schedule', scheduleLimiter, async (req, res) => {
+    if (!secureWallet || !relayerAddress) {
+        return res.status(503).json(createErrorResponse('RELAY_NOT_CONFIGURED'));
     }
     const { pool: poolAddress, proof, root, nullifierHash, recipient, fee, delay } = req.body;
     if (!poolAddress || !proof || !root || !nullifierHash || !recipient || !delay) {
-        return res.status(400).json({ error: 'Missing required fields' });
+        return res.status(400).json(createErrorResponse('INVALID_PARAMS', 'Missing required fields'));
     }
     // Validate delay (1 hour to 7 days)
     const delaySeconds = parseInt(delay);
@@ -322,6 +589,16 @@ app.post('/api/relay/schedule', async (req, res) => {
         return res.status(400).json({ error: 'Delay must be between 1 hour and 7 days' });
     }
     try {
+        // Check relayer balance before processing
+        const relayerBalance = await publicClient.getBalance({ address: relayerAddress });
+        const minBalance = BigInt(0.01 * 1e18); // Minimum 0.01 DOGE for gas
+        if (relayerBalance < minBalance) {
+            console.error(`[Relayer] Insufficient balance for scheduling`);
+            return res.status(503).json({
+                error: 'Relayer temporarily unavailable',
+                message: 'Relayer balance too low for gas.'
+            });
+        }
         console.log(`[Relayer] Scheduling withdrawal to ${recipient} with ${delaySeconds}s delay`);
         const proofBigInts = proof.map((p) => BigInt(p));
         // Call scheduleWithdrawal on V2 pool
@@ -342,7 +619,11 @@ app.post('/api/relay/schedule', async (req, res) => {
                 stateMutability: 'nonpayable',
             },
         ];
+        if (!walletClient) {
+            return res.status(503).json({ error: 'Wallet not initialized' });
+        }
         const txHash = await walletClient.writeContract({
+            chain: dogeosTestnet,
             address: poolAddress,
             abi: MixerPoolV2ABI,
             functionName: 'scheduleWithdrawal',
@@ -362,7 +643,22 @@ app.post('/api/relay/schedule', async (req, res) => {
             throw new Error('Transaction reverted');
         }
         const unlockTime = Math.floor(Date.now() / 1000) + delaySeconds;
-        console.log(`[Relayer] Withdrawal scheduled, unlocks at ${new Date(unlockTime * 1000).toISOString()}`);
+        // Track scheduled withdrawal by recipient wallet
+        const recipientKey = recipient.toLowerCase();
+        if (!walletScheduledWithdrawals.has(recipientKey)) {
+            walletScheduledWithdrawals.set(recipientKey, []);
+        }
+        walletScheduledWithdrawals.get(recipientKey).push({
+            nullifierHash,
+            poolAddress,
+            recipient: recipientKey,
+            relayer: relayerAddress,
+            fee: (fee || 0).toString(),
+            unlockTime,
+            status: 'pending',
+            scheduledTxHash: txHash,
+        });
+        console.log(`[Relayer] Withdrawal scheduled for ${recipientKey}, unlocks at ${new Date(unlockTime * 1000).toISOString()}`);
         res.json({
             txHash,
             blockNumber: Number(receipt.blockNumber),
@@ -372,15 +668,17 @@ app.post('/api/relay/schedule', async (req, res) => {
     }
     catch (error) {
         console.error('[Relayer] Schedule error:', error.message);
-        res.status(500).json({ error: error.message });
+        const errorMsg = error.message || String(error);
+        if (errorMsg.includes('InvalidProof')) {
+            return res.status(400).json(createErrorResponse('INVALID_PROOF'));
+        }
+        res.status(500).json(createErrorResponse('TX_FAILED', errorMsg));
     }
 });
 // Execute scheduled withdrawal
-app.post('/api/relay/execute', async (req, res) => {
-    if (!walletClient || !relayerAddress) {
-        return res.status(503).json({
-            error: 'Relayer not configured.'
-        });
+app.post('/api/relay/execute', relayLimiter, async (req, res) => {
+    if (!secureWallet || !relayerAddress) {
+        return res.status(503).json(createErrorResponse('RELAY_NOT_CONFIGURED'));
     }
     const { pool: poolAddress, nullifierHash } = req.body;
     if (!poolAddress || !nullifierHash) {
@@ -397,7 +695,11 @@ app.post('/api/relay/execute', async (req, res) => {
                 stateMutability: 'nonpayable',
             },
         ];
+        if (!walletClient) {
+            return res.status(503).json({ error: 'Wallet not initialized' });
+        }
         const txHash = await walletClient.writeContract({
+            chain: dogeosTestnet,
             address: poolAddress,
             abi: MixerPoolV2ABI,
             functionName: 'executeScheduledWithdrawal',
@@ -409,6 +711,15 @@ app.post('/api/relay/execute', async (req, res) => {
             throw new Error('Transaction reverted');
         }
         console.log(`[Relayer] Scheduled withdrawal executed in block ${receipt.blockNumber}`);
+        // Update status in our tracking
+        for (const [walletKey, withdrawals] of walletScheduledWithdrawals.entries()) {
+            const found = withdrawals.find(w => w.nullifierHash.toLowerCase() === nullifierHash.toLowerCase());
+            if (found) {
+                found.status = 'executed';
+                found.executedTxHash = txHash;
+                break;
+            }
+        }
         res.json({
             txHash,
             blockNumber: Number(receipt.blockNumber),
@@ -416,11 +727,11 @@ app.post('/api/relay/execute', async (req, res) => {
     }
     catch (error) {
         console.error('[Relayer] Execute error:', error.message);
-        res.status(500).json({ error: error.message });
+        res.status(500).json(createErrorResponse('TX_FAILED', error.message));
     }
 });
 // Get scheduled withdrawal status
-app.get('/api/pool/:address/scheduled/:nullifierHash', async (req, res) => {
+app.get('/api/pool/:address/scheduled/:nullifierHash', apiLimiter, async (req, res) => {
     const poolAddress = req.params.address;
     const nullifierHash = req.params.nullifierHash;
     try {
@@ -458,7 +769,7 @@ app.get('/api/pool/:address/scheduled/:nullifierHash', async (req, res) => {
     }
 });
 // Force sync pool
-app.post('/api/pool/:address/sync', async (req, res) => {
+app.post('/api/pool/:address/sync', apiLimiter, async (req, res) => {
     const pool = pools.get(req.params.address.toLowerCase());
     if (!pool) {
         return res.status(404).json({ error: 'Pool not found' });
@@ -476,36 +787,188 @@ app.post('/api/pool/:address/sync', async (req, res) => {
     }
 });
 // Health check
-app.get('/api/health', (req, res) => {
+app.get('/api/health', healthLimiter, async (req, res) => {
+    let relayerBalance = null;
+    let relayerHealthy = false;
+    if (relayerAddress) {
+        try {
+            const balance = await publicClient.getBalance({ address: relayerAddress });
+            const balanceDoge = Number(balance) / 1e18;
+            relayerBalance = balanceDoge.toFixed(4);
+            relayerHealthy = balance >= BigInt(0.01 * 1e18); // At least 0.01 DOGE
+            // Update monitoring
+            updateRelayerBalance(balanceDoge);
+        }
+        catch (e) {
+            console.error('[Health] Failed to fetch relayer balance');
+        }
+    }
+    const securityWarnings = getSecurityWarnings();
+    const metrics = getMetrics();
+    const rpcStatus = getEndpointStatus();
     res.json({
         status: 'ok',
         timestamp: Date.now(),
         chain: 'DogeOS Chikyū Testnet',
-        chainId: config_js_1.config.chainId,
+        chainId: config.chainId,
         pools: pools.size,
-        relayerAvailable: !!walletClient,
+        relayerAvailable: !!secureWallet && relayerHealthy,
         relayerAddress: relayerAddress || null,
+        relayerBalance: relayerBalance,
+        relayerHealthy: relayerHealthy,
+        securityWarnings: securityWarnings.length > 0 ? securityWarnings : undefined,
+        // Transaction metrics
+        metrics: {
+            transactions: metrics.transactions,
+            health: metrics.health,
+        },
+        // RPC endpoint status
+        rpcEndpoints: rpcStatus.map(e => ({
+            name: e.name,
+            healthy: e.healthy,
+            priority: e.priority,
+        })),
+        // Rate limits
+        rateLimits: {
+            relay: `${RATE_LIMITS.relay.maxRequests} requests per ${RATE_LIMITS.relay.windowMs / 1000}s`,
+            schedule: `${RATE_LIMITS.schedule.maxRequests} requests per ${RATE_LIMITS.schedule.windowMs / 1000}s`,
+            api: `${RATE_LIMITS.api.maxRequests} requests per ${RATE_LIMITS.api.windowMs / 1000}s`,
+        },
+    });
+});
+// Detailed metrics endpoint (for monitoring dashboards)
+app.get('/api/metrics', apiLimiter, (req, res) => {
+    const metrics = getMetrics();
+    const rpcStatus = getEndpointStatus();
+    res.json({
+        timestamp: Date.now(),
+        transactions: metrics.transactions,
+        relayer: metrics.relayer,
+        health: metrics.health,
+        errors: metrics.errors,
+        rpcEndpoints: rpcStatus,
+        pools: Array.from(pools.entries()).map(([address, pool]) => ({
+            address,
+            deposits: pool.tree.getLeafCount(),
+            nullifiers: pool.nullifiers.size,
+            lastSyncBlock: pool.lastSyncBlock,
+        })),
+    });
+});
+// Get deposits for a specific wallet
+app.get('/api/wallet/:address/deposits', apiLimiter, (req, res) => {
+    const walletAddress = req.params.address.toLowerCase();
+    const deposits = walletDeposits.get(walletAddress) || [];
+    // Sort by timestamp descending (newest first)
+    const sorted = [...deposits].sort((a, b) => b.info.timestamp - a.info.timestamp);
+    // Check pool status for each deposit
+    const depositsWithStatus = sorted.map(d => {
+        const pool = pools.get(d.poolAddress.toLowerCase());
+        const totalWithdrawals = pool ? pool.nullifiers.size : 0;
+        const totalDeposits = pool ? pool.deposits.size : 0;
+        return {
+            poolAddress: d.poolAddress,
+            commitment: d.commitment,
+            leafIndex: d.info.leafIndex,
+            timestamp: d.info.timestamp,
+            blockNumber: d.info.blockNumber,
+            txHash: d.info.txHash,
+            poolStats: {
+                totalDeposits,
+                totalWithdrawals,
+            }
+        };
+    });
+    res.json({
+        wallet: walletAddress,
+        count: deposits.length,
+        deposits: depositsWithStatus,
+    });
+});
+// Check if a specific nullifierHash has been spent
+app.get('/api/nullifier/:poolAddress/:nullifierHash', apiLimiter, (req, res) => {
+    const { poolAddress, nullifierHash } = req.params;
+    const pool = pools.get(poolAddress.toLowerCase());
+    if (!pool) {
+        return res.status(404).json({ error: 'Pool not found' });
+    }
+    const isSpent = pool.nullifiers.has(nullifierHash);
+    res.json({ nullifierHash, isSpent });
+});
+// Get inbox summary (for notification badge)
+app.get('/api/wallet/:address/inbox-summary', apiLimiter, (req, res) => {
+    const walletAddress = req.params.address.toLowerCase();
+    const deposits = walletDeposits.get(walletAddress) || [];
+    const scheduled = walletScheduledWithdrawals.get(walletAddress) || [];
+    const withdrawals = walletWithdrawals.get(walletAddress) || [];
+    // Count ready-to-execute withdrawals
+    const now = Math.floor(Date.now() / 1000);
+    const readyCount = scheduled.filter(sw => sw.status !== 'executed' && sw.unlockTime <= now).length;
+    // Count pending scheduled withdrawals
+    const pendingCount = scheduled.filter(sw => sw.status !== 'executed' && sw.unlockTime > now).length;
+    // Recent activity (last 24 hours)
+    const oneDayAgo = now - 86400;
+    const recentDeposits = deposits.filter(d => d.info.timestamp > oneDayAgo).length;
+    const recentWithdrawals = withdrawals.filter(w => w.timestamp > oneDayAgo).length;
+    res.json({
+        wallet: walletAddress,
+        totalDeposits: deposits.length,
+        totalWithdrawals: withdrawals.length,
+        readyToExecute: readyCount,
+        pendingScheduled: pendingCount,
+        recentActivity: recentDeposits + recentWithdrawals,
+        hasNotifications: readyCount > 0 || recentDeposits > 0 || recentWithdrawals > 0,
+    });
+});
+// Get scheduled withdrawals for a specific wallet (by recipient)
+app.get('/api/wallet/:address/scheduled', apiLimiter, (req, res) => {
+    const walletAddress = req.params.address.toLowerCase();
+    const scheduled = walletScheduledWithdrawals.get(walletAddress) || [];
+    // Sort by unlockTime ascending
+    const sorted = [...scheduled].sort((a, b) => a.unlockTime - b.unlockTime);
+    res.json({
+        wallet: walletAddress,
+        count: scheduled.length,
+        scheduled: sorted,
+    });
+});
+// Get withdrawal history for a specific wallet (by recipient address)
+app.get('/api/wallet/:address/withdrawals', apiLimiter, (req, res) => {
+    const walletAddress = req.params.address.toLowerCase();
+    const withdrawals = walletWithdrawals.get(walletAddress) || [];
+    // Sort by timestamp descending (newest first)
+    const sorted = [...withdrawals].sort((a, b) => b.timestamp - a.timestamp);
+    res.json({
+        wallet: walletAddress,
+        count: withdrawals.length,
+        withdrawals: sorted,
     });
 });
 // Network info
-app.get('/api/network', (req, res) => {
+app.get('/api/network', apiLimiter, (req, res) => {
     res.json({
         name: 'DogeOS Chikyū Testnet',
-        chainId: config_js_1.config.chainId,
-        rpcUrl: config_js_1.config.rpcUrl,
-        wsRpcUrl: config_js_1.config.wsRpcUrl,
+        chainId: config.chainId,
+        rpcUrl: config.rpcUrl,
+        wsRpcUrl: config.wsRpcUrl,
         blockExplorer: 'https://blockscout.testnet.dogeos.com',
-        tokens: config_js_1.config.tokens,
+        tokens: config.tokens,
     });
 });
+// ============ Shielded Pool Routes ============
+// Mount shielded pool API routes
+app.use('/api/shielded', apiLimiter, shieldedRouter);
 // ============ Main ============
 async function main() {
     console.log('[Backend] Starting Dogenado Backend...');
-    console.log(`[Backend] Chain: DogeOS Chikyū Testnet (${config_js_1.config.chainId})`);
-    console.log(`[Backend] RPC: ${config_js_1.config.rpcUrl}`);
+    console.log(`[Backend] Chain: DogeOS Chikyū Testnet (${config.chainId})`);
+    console.log(`[Backend] RPC: ${config.rpcUrl}`);
+    // Initialize storage (database or fallback to file/memory)
+    const storageType = await initStorage();
+    console.log(`[Backend] Storage initialized: ${storageType}`);
     // Start server first (non-blocking)
-    app.listen(config_js_1.config.server.port, config_js_1.config.server.host, () => {
-        console.log(`[Backend] Server running on http://${config_js_1.config.server.host}:${config_js_1.config.server.port}`);
+    app.listen(config.server.port, config.server.host, () => {
+        console.log(`[Backend] Server running on http://${config.server.host}:${config.server.port}`);
         console.log('[Backend] Endpoints:');
         console.log('  GET  /api/health        - Health check');
         console.log('  GET  /api/network       - Network info');
@@ -517,13 +980,40 @@ async function main() {
         console.log('  GET  /api/pool/:addr/nullifier/:hash - Check nullifier');
         console.log('  POST /api/pool/:addr/sync - Force sync');
         console.log('  POST /api/relay         - Submit withdrawal (relayer)');
+        console.log('');
+        console.log('[Shielded Pool Endpoints]');
+        console.log('  GET  /api/shielded/pool/:addr      - Shielded pool info');
+        console.log('  GET  /api/shielded/pool/:addr/root - Merkle root');
+        console.log('  GET  /api/shielded/pool/:addr/path/:idx - Merkle path');
+        console.log('  GET  /api/shielded/pool/:addr/memos - Transfer memos (discovery)');
+        console.log('  POST /api/shielded/discover - Discover notes');
     });
     // Initialize pools in background (non-blocking)
-    const poolAddresses = Object.values(config_js_1.config.contracts.pools).filter(Boolean);
+    const poolAddresses = Object.values(config.contracts.pools).filter(Boolean);
     console.log(`[Backend] Pool addresses configured: ${poolAddresses.length}`);
     poolAddresses.forEach((addr, i) => console.log(`  Pool ${i + 1}: ${addr}`));
+    // Initialize shielded pool if configured
+    const shieldedPoolAddress = process.env.SHIELDED_POOL_ADDRESS;
+    if (shieldedPoolAddress) {
+        console.log(`[ShieldedPool] Initializing: ${shieldedPoolAddress}`);
+        initializeShieldedPool(shieldedPoolAddress, config.merkleTreeDepth).then(async (pool) => {
+            try {
+                await syncShieldedPool(pool, publicClient);
+                console.log(`[ShieldedPool] Synced successfully!`);
+                watchShieldedPool(pool, publicClient);
+            }
+            catch (err) {
+                console.error(`[ShieldedPool] Failed to sync:`, err.message);
+            }
+        }).catch((err) => {
+            console.error(`[ShieldedPool] Failed to initialize:`, err.message);
+        });
+    }
+    else {
+        console.log('[ShieldedPool] Not configured. Set SHIELDED_POOL_ADDRESS env var after deployment.');
+    }
     if (poolAddresses.length === 0) {
-        console.log('[Backend] No pools configured yet.');
+        console.log('[Backend] No mixer pools configured yet.');
         console.log('[Backend] Deploy contracts and set POOL_100_USDC, POOL_1000_USDC env vars.');
     }
     else {

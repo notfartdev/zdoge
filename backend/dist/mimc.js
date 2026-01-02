@@ -1,4 +1,3 @@
-"use strict";
 /**
  * MiMC Sponge Hash for Node.js backend
  *
@@ -6,12 +5,7 @@
  * - The deployed HasherAdapter contract (which wraps circomlibjs bytecode)
  * - The Circom ZK circuits
  */
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.mimcHash = mimcHash;
-exports.getMimcHasher = getMimcHasher;
-exports.toBytes32 = toBytes32;
-exports.initMimc = initMimc;
-const circomlibjs_1 = require("circomlibjs");
+import { buildMimcSponge } from 'circomlibjs';
 let mimcSponge = null;
 let initPromise = null;
 /**
@@ -25,7 +19,7 @@ async function initMimc() {
         return;
     }
     initPromise = (async () => {
-        mimcSponge = await (0, circomlibjs_1.buildMimcSponge)();
+        mimcSponge = await buildMimcSponge();
         console.log('[MiMC] Initialized with circomlibjs');
     })();
     await initPromise;
@@ -37,7 +31,7 @@ async function initMimc() {
  * - For 2 inputs: Feistel(ins[0], 0, k) -> then Feistel(xL + ins[1], xR, k)
  * - Returns final xL as output
  */
-async function mimcHash(left, right) {
+export async function mimcHash(left, right) {
     await initMimc();
     const result = mimcSponge.multiHash([left, right]);
     return mimcSponge.F.toObject(result);
@@ -45,7 +39,7 @@ async function mimcHash(left, right) {
 /**
  * Get initialized MiMC hasher for Merkle tree
  */
-async function getMimcHasher() {
+export async function getMimcHasher() {
     await initMimc();
     return async (left, right) => {
         const result = mimcSponge.multiHash([left, right]);
@@ -55,6 +49,10 @@ async function getMimcHasher() {
 /**
  * Convert bigint to bytes32 hex string
  */
-function toBytes32(value) {
+export function toBytes32(value) {
     return '0x' + value.toString(16).padStart(64, '0');
 }
+/**
+ * Initialize and warm up the hasher
+ */
+export { initMimc };

@@ -1,4 +1,4 @@
-"use strict";
+// @ts-nocheck
 /**
  * Dogenado Relayer Service
  *
@@ -7,30 +7,24 @@
  * - Never learns user secrets (proofs are opaque)
  * - Validates proofs before submission
  */
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.app = void 0;
-const viem_1 = require("viem");
-const accounts_1 = require("viem/accounts");
-const express_1 = __importDefault(require("express"));
-const cors_1 = __importDefault(require("cors"));
-const config_js_1 = require("../config.js");
+import { createPublicClient, createWalletClient, http, } from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
+import express from 'express';
+import cors from 'cors';
+import { config, MixerPoolABI, dogeosTestnet } from '../config.js';
 // Express app
-const app = (0, express_1.default)();
-exports.app = app;
-app.use((0, cors_1.default)());
-app.use(express_1.default.json());
+const app = express();
+app.use(cors());
+app.use(express.json());
 const withdrawalRequests = new Map();
 // Rate limiting
 const rateLimits = new Map();
 const RATE_LIMIT_WINDOW = 60000; // 1 minute
 const MAX_REQUESTS_PER_WINDOW = 5;
 // Create clients
-const publicClient = (0, viem_1.createPublicClient)({
-    chain: config_js_1.dogeosTestnet,
-    transport: (0, viem_1.http)(config_js_1.config.rpcUrl),
+const publicClient = createPublicClient({
+    chain: dogeosTestnet,
+    transport: http(config.rpcUrl),
 });
 let walletClient = null;
 let relayerAddress = null;
@@ -38,17 +32,17 @@ let relayerAddress = null;
  * Initialize relayer wallet
  */
 function initializeWallet() {
-    if (!config_js_1.config.relayer.privateKey) {
+    if (!config.relayer.privateKey) {
         console.error('[Relayer] No private key configured');
         return false;
     }
     try {
-        const account = (0, accounts_1.privateKeyToAccount)(config_js_1.config.relayer.privateKey);
+        const account = privateKeyToAccount(config.relayer.privateKey);
         relayerAddress = account.address;
-        walletClient = (0, viem_1.createWalletClient)({
+        walletClient = createWalletClient({
             account,
-            chain: config_js_1.dogeosTestnet,
-            transport: (0, viem_1.http)(config_js_1.config.rpcUrl),
+            chain: dogeosTestnet,
+            transport: http(config.rpcUrl),
         });
         console.log(`[Relayer] Wallet initialized: ${relayerAddress}`);
         return true;
@@ -81,15 +75,15 @@ async function validateWithdrawal(poolAddress, proof, root, nullifierHash, recip
         // Check if pool exists
         const poolInfo = await publicClient.readContract({
             address: poolAddress,
-            abi: config_js_1.MixerPoolABI,
+            abi: MixerPoolABI,
             functionName: 'getPoolInfo',
         });
         const denomination = poolInfo[1];
         // Check fee bounds
-        if (fee < config_js_1.config.relayer.minFee) {
+        if (fee < config.relayer.minFee) {
             return { valid: false, error: 'Fee too low' };
         }
-        if (fee > config_js_1.config.relayer.maxFee) {
+        if (fee > config.relayer.maxFee) {
             return { valid: false, error: 'Fee too high' };
         }
         if (fee > denomination) {
@@ -98,7 +92,7 @@ async function validateWithdrawal(poolAddress, proof, root, nullifierHash, recip
         // Check if root is valid
         const isKnownRoot = await publicClient.readContract({
             address: poolAddress,
-            abi: config_js_1.MixerPoolABI,
+            abi: MixerPoolABI,
             functionName: 'isKnownRoot',
             args: [root],
         });
@@ -108,7 +102,7 @@ async function validateWithdrawal(poolAddress, proof, root, nullifierHash, recip
         // Check if nullifier is already spent
         const isSpent = await publicClient.readContract({
             address: poolAddress,
-            abi: config_js_1.MixerPoolABI,
+            abi: MixerPoolABI,
             functionName: 'isSpent',
             args: [nullifierHash],
         });
@@ -119,7 +113,7 @@ async function validateWithdrawal(poolAddress, proof, root, nullifierHash, recip
         try {
             await publicClient.simulateContract({
                 address: poolAddress,
-                abi: config_js_1.MixerPoolABI,
+                abi: MixerPoolABI,
                 functionName: 'withdraw',
                 args: [
                     proof.map(p => p),
@@ -149,8 +143,9 @@ async function submitWithdrawal(poolAddress, proof, root, nullifierHash, recipie
         throw new Error('Relayer wallet not initialized');
     }
     const txHash = await walletClient.writeContract({
+        chain: dogeosTestnet,
         address: poolAddress,
-        abi: config_js_1.MixerPoolABI,
+        abi: MixerPoolABI,
         functionName: 'withdraw',
         args: [
             proof,
@@ -255,8 +250,8 @@ app.get('/relayer/info', async (req, res) => {
     res.json({
         address: relayerAddress,
         balance: balance.toString(),
-        minFee: config_js_1.config.relayer.minFee.toString(),
-        maxFee: config_js_1.config.relayer.maxFee.toString(),
+        minFee: config.relayer.minFee.toString(),
+        maxFee: config.relayer.maxFee.toString(),
         rateLimitWindow: RATE_LIMIT_WINDOW,
         maxRequestsPerWindow: MAX_REQUESTS_PER_WINDOW,
     });
@@ -275,7 +270,7 @@ app.get('/health', (req, res) => {
 // ============ Main ============
 async function main() {
     console.log('[Relayer] Starting Dogenado Relayer...');
-    console.log(`[Relayer] RPC: ${config_js_1.config.rpcUrl}`);
+    console.log(`[Relayer] RPC: ${config.rpcUrl}`);
     // Initialize wallet
     const walletInitialized = initializeWallet();
     if (!walletInitialized) {
@@ -290,9 +285,10 @@ async function main() {
         }
     }
     // Start HTTP server
-    const port = config_js_1.config.server.port + 1; // Relayer on port 3002
-    app.listen(port, config_js_1.config.server.host, () => {
-        console.log(`[Relayer] HTTP server listening on http://${config_js_1.config.server.host}:${port}`);
+    const port = config.server.port + 1; // Relayer on port 3002
+    app.listen(port, config.server.host, () => {
+        console.log(`[Relayer] HTTP server listening on http://${config.server.host}:${port}`);
     });
 }
 main().catch(console.error);
+export { app };

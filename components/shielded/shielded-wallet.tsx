@@ -1,0 +1,252 @@
+"use client"
+
+import { useState, useEffect } from "react"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { 
+  Shield, 
+  Send, 
+  Download, 
+  Copy, 
+  Check, 
+  Eye, 
+  EyeOff,
+  Wallet,
+  RefreshCw,
+  Key,
+  AlertCircle
+} from "lucide-react"
+import { useToast } from "@/hooks/use-toast"
+import {
+  initializeShieldedWallet,
+  getWalletState,
+  getShieldedBalance,
+  getNotes,
+  backupWallet,
+  type ShieldedWalletState,
+} from "@/lib/shielded/shielded-service"
+import { shortenAddress } from "@/lib/shielded/shielded-address"
+import { formatWeiToAmount } from "@/lib/shielded/shielded-note"
+import { ShieldInterface } from "./shield-interface"
+import { TransferInterface } from "./transfer-interface"
+import { UnshieldInterface } from "./unshield-interface"
+import { SwapInterface } from "./swap-interface"
+import { ShieldedNotesList } from "./shielded-notes-list"
+
+export function ShieldedWallet() {
+  const { toast } = useToast()
+  const [isInitialized, setIsInitialized] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+  const [walletState, setWalletState] = useState<ShieldedWalletState | null>(null)
+  const [showAddress, setShowAddress] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const [activeTab, setActiveTab] = useState("shield")
+  
+  // Initialize wallet on mount
+  useEffect(() => {
+    async function init() {
+      try {
+        await initializeShieldedWallet()
+        setWalletState(getWalletState())
+        setIsInitialized(true)
+      } catch (error) {
+        console.error("Failed to initialize shielded wallet:", error)
+        toast({
+          title: "Initialization Failed",
+          description: "Could not initialize shielded wallet",
+          variant: "destructive",
+        })
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    init()
+  }, [])
+  
+  // Refresh wallet state
+  const refreshState = () => {
+    setWalletState(getWalletState())
+  }
+  
+  // Copy address to clipboard
+  const copyAddress = async () => {
+    if (!walletState?.identity) return
+    
+    await navigator.clipboard.writeText(walletState.identity.addressString)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+    
+    toast({
+      title: "Address Copied",
+      description: "Shielded address copied to clipboard",
+    })
+  }
+  
+  // Backup wallet
+  const handleBackup = () => {
+    const key = backupWallet()
+    if (!key) return
+    
+    // Create download
+    const blob = new Blob([key], { type: "text/plain" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = "dogenado-shielded-backup.txt"
+    a.click()
+    URL.revokeObjectURL(url)
+    
+    toast({
+      title: "Backup Downloaded",
+      description: "Keep this file safe! It's the only way to recover your shielded funds.",
+      variant: "default",
+    })
+  }
+  
+  if (isLoading) {
+    return (
+      <Card className="w-full">
+        <CardContent className="flex items-center justify-center py-12">
+          <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
+        </CardContent>
+      </Card>
+    )
+  }
+  
+  const balance = walletState ? getShieldedBalance() : 0n
+  const notes = walletState ? getNotes() : []
+  
+  return (
+    <div className="space-y-6">
+      {/* Wallet Header */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-full bg-primary/10">
+                <Shield className="h-6 w-6 text-primary" />
+              </div>
+              <div>
+                <CardTitle>Shielded Wallet</CardTitle>
+                <CardDescription>Private DOGE transactions</CardDescription>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={handleBackup}>
+                <Key className="h-4 w-4 mr-2" />
+                Backup
+              </Button>
+              <Button variant="outline" size="sm" onClick={refreshState}>
+                <RefreshCw className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Balance */}
+          <div className="p-4 rounded-lg bg-muted/50">
+            <div className="text-sm text-muted-foreground mb-1">Shielded Balance</div>
+            <div className="text-3xl font-bold">
+              {formatWeiToAmount(balance).toFixed(4)} DOGE
+            </div>
+            <div className="text-sm text-muted-foreground mt-1">
+              {notes.length} note{notes.length !== 1 ? "s" : ""}
+            </div>
+          </div>
+          
+          {/* Shielded Address */}
+          <div className="p-4 rounded-lg border">
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-sm font-medium">Your Shielded Address</div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowAddress(!showAddress)}
+                >
+                  {showAddress ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </Button>
+                <Button variant="ghost" size="sm" onClick={copyAddress}>
+                  {copied ? (
+                    <Check className="h-4 w-4 text-green-500" />
+                  ) : (
+                    <Copy className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+            </div>
+            <code className="text-xs break-all">
+              {showAddress
+                ? walletState?.identity?.addressString
+                : shortenAddress(walletState?.identity?.addressString || "", 8)}
+            </code>
+            <p className="text-xs text-muted-foreground mt-2">
+              Share this address to receive shielded DOGE
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+      
+      {/* Operations */}
+      <Card>
+        <CardContent className="pt-6">
+          <Tabs value={activeTab} onValueChange={setActiveTab}>
+            <TabsList className="grid w-full grid-cols-4">
+              <TabsTrigger value="shield" className="flex items-center gap-2">
+                <Download className="h-4 w-4" />
+                Shield
+              </TabsTrigger>
+              <TabsTrigger value="swap" className="flex items-center gap-2">
+                <RefreshCw className="h-4 w-4" />
+                Swap
+              </TabsTrigger>
+              <TabsTrigger value="transfer" className="flex items-center gap-2">
+                <Send className="h-4 w-4" />
+                Send
+              </TabsTrigger>
+              <TabsTrigger value="unshield" className="flex items-center gap-2">
+                <Wallet className="h-4 w-4" />
+                Unshield
+              </TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="shield" className="mt-6">
+              <ShieldInterface onSuccess={refreshState} />
+            </TabsContent>
+            
+            <TabsContent value="swap" className="mt-6">
+              <SwapInterface 
+                notes={notes}
+                onSuccess={refreshState}
+              />
+            </TabsContent>
+            
+            <TabsContent value="transfer" className="mt-6">
+              <TransferInterface 
+                notes={notes} 
+                onSuccess={refreshState}
+              />
+            </TabsContent>
+            
+            <TabsContent value="unshield" className="mt-6">
+              <UnshieldInterface 
+                notes={notes}
+                onSuccess={refreshState}
+              />
+            </TabsContent>
+          </Tabs>
+        </CardContent>
+      </Card>
+      
+      {/* Notes List */}
+      <ShieldedNotesList notes={notes} onRefresh={refreshState} />
+    </div>
+  )
+}
+

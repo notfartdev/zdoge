@@ -10,13 +10,13 @@ import "./interfaces/IVerifier.sol";
  *      passes a flattened uint256[8] array. This adapter unpacks and converts.
  */
 
-// Import the generated verifier
+// Import the generated verifier (with dynamic array)
 interface IGroth16Verifier {
     function verifyProof(
         uint[2] calldata _pA,
         uint[2][2] calldata _pB,
         uint[2] calldata _pC,
-        uint[6] calldata _pubSignals
+        uint[] calldata _pubSignals
     ) external view returns (bool);
 }
 
@@ -28,38 +28,28 @@ contract VerifierAdapter is IVerifier {
     }
 
     /**
-     * @notice Verify a Groth16 proof
-     * @param proof Flattened proof [a.x, a.y, b.x[0], b.x[1], b.y[0], b.y[1], c.x, c.y]
-     * @param input Public inputs [root, nullifierHash, recipient, relayer, fee, denomination]
+     * @notice Verify a Groth16 proof (snarkjs format)
+     * @param _pA Proof point A
+     * @param _pB Proof point B
+     * @param _pC Proof point C
+     * @param _pubSignals Public inputs to the circuit
      * @return True if the proof is valid
      */
     function verifyProof(
-        uint256[8] calldata proof,
-        uint256[6] calldata input
+        uint256[2] memory _pA,
+        uint256[2][2] memory _pB,
+        uint256[2] memory _pC,
+        uint256[] memory _pubSignals
     ) external view override returns (bool) {
-        // Unpack the flattened proof array
-        // proof[0:2] = pA (G1 point)
-        // proof[2:6] = pB (G2 point - note: nested array order is [x1, x0], [y1, y0])
-        // proof[6:8] = pC (G1 point)
-        
-        uint[2] memory pA = [proof[0], proof[1]];
-        
-        // For BN254 G2 points, the order is [x1, x0], [y1, y0]
-        // snarkjs expects: [[x0, x1], [y0, y1]]
+        // Convert memory to calldata-compatible format
+        uint[2] memory pA = [_pA[0], _pA[1]];
         uint[2][2] memory pB = [
-            [proof[2], proof[3]],
-            [proof[4], proof[5]]
+            [_pB[0][0], _pB[0][1]],
+            [_pB[1][0], _pB[1][1]]
         ];
-        
-        uint[2] memory pC = [proof[6], proof[7]];
+        uint[2] memory pC = [_pC[0], _pC[1]];
 
-        // Convert input to uint[6]
-        uint[6] memory pubSignals;
-        for (uint i = 0; i < 6; i++) {
-            pubSignals[i] = input[i];
-        }
-
-        return groth16Verifier.verifyProof(pA, pB, pC, pubSignals);
+        return groth16Verifier.verifyProof(pA, pB, pC, _pubSignals);
     }
 }
 

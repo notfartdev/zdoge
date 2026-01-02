@@ -35,7 +35,7 @@ contract MixerPoolV2 is MerkleTreeWithHistory, ReentrancyGuard {
     IERC20 public immutable token;
 
     /// @notice The ZK proof verifier contract
-    IVerifier public immutable verifier;
+    IVerifierLegacy public immutable verifier;
 
     /// @notice Fixed denomination for this pool
     uint256 public immutable denomination;
@@ -122,7 +122,7 @@ contract MixerPoolV2 is MerkleTreeWithHistory, ReentrancyGuard {
     ) MerkleTreeWithHistory(_hasher) {
         if (_denomination == 0) revert InvalidDenomination();
         
-        verifier = IVerifier(_verifier);
+        verifier = IVerifierLegacy(_verifier);
         token = IERC20(_token);
         denomination = _denomination;
     }

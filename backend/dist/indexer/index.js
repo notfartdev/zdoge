@@ -1,4 +1,3 @@
-"use strict";
 /**
  * Dogenado Indexer Service
  *
@@ -8,27 +7,20 @@
  * - Root history
  * - Nullifier tracking
  */
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.pools = exports.app = void 0;
-const viem_1 = require("viem");
-const express_1 = __importDefault(require("express"));
-const cors_1 = __importDefault(require("cors"));
-const config_js_1 = require("../config.js");
-const MerkleTree_js_1 = require("../merkle/MerkleTree.js");
+import { createPublicClient, http, parseAbiItem } from 'viem';
+import express from 'express';
+import cors from 'cors';
+import { config, MixerPoolABI, dogeosTestnet } from '../config.js';
+import { MerkleTree } from '../merkle/MerkleTree.js';
 const pools = new Map();
-exports.pools = pools;
 // Express app
-const app = (0, express_1.default)();
-exports.app = app;
-app.use((0, cors_1.default)());
-app.use(express_1.default.json());
+const app = express();
+app.use(cors());
+app.use(express.json());
 // Create viem client
-const publicClient = (0, viem_1.createPublicClient)({
-    chain: config_js_1.dogeosTestnet,
-    transport: (0, viem_1.http)(config_js_1.config.rpcUrl),
+const publicClient = createPublicClient({
+    chain: dogeosTestnet,
+    transport: http(config.rpcUrl),
 });
 // WebSocket client for real-time events
 let wsClient = null;
@@ -38,7 +30,7 @@ let wsClient = null;
 function initializePool(address) {
     const state = {
         address,
-        tree: new MerkleTree_js_1.MerkleTree(config_js_1.config.merkleTreeDepth),
+        tree: new MerkleTree(config.merkleTreeDepth),
         deposits: new Map(),
         nullifiers: new Set(),
         rootHistory: [],
@@ -94,7 +86,7 @@ async function syncPool(poolAddress) {
         // Get deposit events
         const depositLogs = await publicClient.getLogs({
             address: poolAddress,
-            event: (0, viem_1.parseAbiItem)('event Deposit(bytes32 indexed commitment, uint256 indexed leafIndex, uint256 timestamp)'),
+            event: parseAbiItem('event Deposit(bytes32 indexed commitment, uint256 indexed leafIndex, uint256 timestamp)'),
             fromBlock: 0n,
             toBlock: 'latest',
         });
@@ -107,7 +99,7 @@ async function syncPool(poolAddress) {
         // Get withdrawal events
         const withdrawalLogs = await publicClient.getLogs({
             address: poolAddress,
-            event: (0, viem_1.parseAbiItem)('event Withdrawal(address indexed recipient, bytes32 indexed nullifierHash, address indexed relayer, uint256 fee)'),
+            event: parseAbiItem('event Withdrawal(address indexed recipient, bytes32 indexed nullifierHash, address indexed relayer, uint256 fee)'),
             fromBlock: 0n,
             toBlock: 'latest',
         });
@@ -130,7 +122,7 @@ async function watchPool(poolAddress) {
     // Watch Deposit events
     publicClient.watchContractEvent({
         address: poolAddress,
-        abi: config_js_1.MixerPoolABI,
+        abi: MixerPoolABI,
         eventName: 'Deposit',
         onLogs: (logs) => {
             for (const log of logs) {
@@ -144,7 +136,7 @@ async function watchPool(poolAddress) {
     // Watch Withdrawal events
     publicClient.watchContractEvent({
         address: poolAddress,
-        abi: config_js_1.MixerPoolABI,
+        abi: MixerPoolABI,
         eventName: 'Withdrawal',
         onLogs: (logs) => {
             for (const log of logs) {
@@ -201,7 +193,7 @@ app.get('/pool/:address/root/history', (req, res) => {
  * GET /pool/:address/path/:leafIndex
  * Get Merkle path for a deposit
  */
-app.get('/pool/:address/path/:leafIndex', (req, res) => {
+app.get('/pool/:address/path/:leafIndex', async (req, res) => {
     const pool = pools.get(req.params.address.toLowerCase());
     if (!pool) {
         return res.status(404).json({ error: 'Pool not found' });
@@ -211,9 +203,9 @@ app.get('/pool/:address/path/:leafIndex', (req, res) => {
         return res.status(400).json({ error: 'Invalid leaf index' });
     }
     try {
-        const path = pool.tree.getPath(leafIndex);
+        const path = await pool.tree.getPath(leafIndex);
         res.json({
-            pathElements: path.pathElements.map(e => '0x' + e.toString(16).padStart(64, '0')),
+            pathElements: path.pathElements.map((e) => '0x' + e.toString(16).padStart(64, '0')),
             pathIndices: path.pathIndices,
             root: '0x' + path.root.toString(16).padStart(64, '0'),
         });
@@ -259,9 +251,9 @@ app.get('/health', (req, res) => {
 // ============ Main ============
 async function main() {
     console.log('[Indexer] Starting Dogenado Indexer...');
-    console.log(`[Indexer] RPC: ${config_js_1.config.rpcUrl}`);
+    console.log(`[Indexer] RPC: ${config.rpcUrl}`);
     // Initialize pools from config
-    const poolAddresses = Object.values(config_js_1.config.contracts.pools).filter(Boolean);
+    const poolAddresses = Object.values(config.contracts.pools).filter(Boolean);
     if (poolAddresses.length === 0) {
         console.log('[Indexer] No pools configured. Waiting for configuration...');
     }
@@ -273,8 +265,9 @@ async function main() {
         }
     }
     // Start HTTP server
-    app.listen(config_js_1.config.server.port, config_js_1.config.server.host, () => {
-        console.log(`[Indexer] HTTP server listening on http://${config_js_1.config.server.host}:${config_js_1.config.server.port}`);
+    app.listen(config.server.port, config.server.host, () => {
+        console.log(`[Indexer] HTTP server listening on http://${config.server.host}:${config.server.port}`);
     });
 }
 main().catch(console.error);
+export { app, pools };

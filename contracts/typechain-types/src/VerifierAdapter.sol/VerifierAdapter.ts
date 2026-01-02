@@ -31,7 +31,12 @@ export interface VerifierAdapterInterface extends Interface {
   ): string;
   encodeFunctionData(
     functionFragment: "verifyProof",
-    values: [BigNumberish[], BigNumberish[]]
+    values: [
+      [BigNumberish, BigNumberish],
+      [[BigNumberish, BigNumberish], [BigNumberish, BigNumberish]],
+      [BigNumberish, BigNumberish],
+      BigNumberish[]
+    ]
   ): string;
 
   decodeFunctionResult(
@@ -90,7 +95,12 @@ export interface VerifierAdapter extends BaseContract {
   groth16Verifier: TypedContractMethod<[], [string], "view">;
 
   verifyProof: TypedContractMethod<
-    [proof: BigNumberish[], input: BigNumberish[]],
+    [
+      _pA: [BigNumberish, BigNumberish],
+      _pB: [[BigNumberish, BigNumberish], [BigNumberish, BigNumberish]],
+      _pC: [BigNumberish, BigNumberish],
+      _pubSignals: BigNumberish[]
+    ],
     [boolean],
     "view"
   >;
@@ -105,7 +115,12 @@ export interface VerifierAdapter extends BaseContract {
   getFunction(
     nameOrSignature: "verifyProof"
   ): TypedContractMethod<
-    [proof: BigNumberish[], input: BigNumberish[]],
+    [
+      _pA: [BigNumberish, BigNumberish],
+      _pB: [[BigNumberish, BigNumberish], [BigNumberish, BigNumberish]],
+      _pC: [BigNumberish, BigNumberish],
+      _pubSignals: BigNumberish[]
+    ],
     [boolean],
     "view"
   >;

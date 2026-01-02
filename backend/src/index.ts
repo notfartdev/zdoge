@@ -42,6 +42,13 @@ import {
 } from './utils/rpc-fallback.js';
 import { getGasPrice, getEIP1559GasPrice } from './utils/gas-manager.js';
 import { initStorage } from './database/storage.js';
+import { shieldedRouter } from './shielded/shielded-routes.js';
+import { 
+  initializeShieldedPool, 
+  syncShieldedPool, 
+  watchShieldedPool,
+  getShieldedPool,
+} from './shielded/shielded-indexer.js';
 
 console.log(`
 ╔═══════════════════════════════════════════════════════════════╗
@@ -1183,6 +1190,10 @@ app.get('/api/network', apiLimiter, (req, res) => {
   });
 });
 
+// ============ Shielded Pool Routes ============
+// Mount shielded pool API routes
+app.use('/api/shielded', apiLimiter, shieldedRouter);
+
 // ============ Main ============
 
 async function main() {
@@ -1208,6 +1219,13 @@ async function main() {
     console.log('  GET  /api/pool/:addr/nullifier/:hash - Check nullifier');
     console.log('  POST /api/pool/:addr/sync - Force sync');
     console.log('  POST /api/relay         - Submit withdrawal (relayer)');
+    console.log('');
+    console.log('[Shielded Pool Endpoints]');
+    console.log('  GET  /api/shielded/pool/:addr      - Shielded pool info');
+    console.log('  GET  /api/shielded/pool/:addr/root - Merkle root');
+    console.log('  GET  /api/shielded/pool/:addr/path/:idx - Merkle path');
+    console.log('  GET  /api/shielded/pool/:addr/memos - Transfer memos (discovery)');
+    console.log('  POST /api/shielded/discover - Discover notes');
   });
 
   // Initialize pools in background (non-blocking)
@@ -1216,8 +1234,27 @@ async function main() {
   console.log(`[Backend] Pool addresses configured: ${poolAddresses.length}`);
   poolAddresses.forEach((addr, i) => console.log(`  Pool ${i + 1}: ${addr}`));
   
+  // Initialize shielded pool if configured
+  const shieldedPoolAddress = process.env.SHIELDED_POOL_ADDRESS;
+  if (shieldedPoolAddress) {
+    console.log(`[ShieldedPool] Initializing: ${shieldedPoolAddress}`);
+    initializeShieldedPool(shieldedPoolAddress, config.merkleTreeDepth).then(async (pool) => {
+      try {
+        await syncShieldedPool(pool, publicClient);
+        console.log(`[ShieldedPool] Synced successfully!`);
+        watchShieldedPool(pool, publicClient);
+      } catch (err: any) {
+        console.error(`[ShieldedPool] Failed to sync:`, err.message);
+      }
+    }).catch((err: any) => {
+      console.error(`[ShieldedPool] Failed to initialize:`, err.message);
+    });
+  } else {
+    console.log('[ShieldedPool] Not configured. Set SHIELDED_POOL_ADDRESS env var after deployment.');
+  }
+
   if (poolAddresses.length === 0) {
-    console.log('[Backend] No pools configured yet.');
+    console.log('[Backend] No mixer pools configured yet.');
     console.log('[Backend] Deploy contracts and set POOL_100_USDC, POOL_1000_USDC env vars.');
   } else {
     // Initialize and sync pools asynchronously

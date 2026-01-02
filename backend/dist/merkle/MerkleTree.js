@@ -1,13 +1,10 @@
-"use strict";
 /**
  * Incremental MerkleTree implementation for the indexer
  *
  * Uses on-chain hasher for exact compatibility with deployed contracts.
  */
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.MerkleTree = void 0;
-const mimc_js_1 = require("../mimc.js");
-class MerkleTree {
+import { getMimcHasher } from '../mimc.js';
+export class MerkleTree {
     depth;
     leaves;
     zeroValues;
@@ -28,7 +25,7 @@ class MerkleTree {
         if (this.initialized)
             return;
         // Get MiMC hasher (uses on-chain contract)
-        this.hashFn = await (0, mimc_js_1.getMimcHasher)();
+        this.hashFn = await getMimcHasher();
         // Pre-compute zero values for each level using on-chain hasher
         this.zeroValues = await this.computeZeroValues();
         // Initialize filled subtrees to zero values
@@ -177,4 +174,3 @@ class MerkleTree {
         return this.leaves.findIndex(l => l === leaf);
     }
 }
-exports.MerkleTree = MerkleTree;

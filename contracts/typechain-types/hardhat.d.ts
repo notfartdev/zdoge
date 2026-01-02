@@ -82,9 +82,29 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.IHasher__factory>;
     getContractFactory(
+      name: "IShieldVerifier",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.IShieldVerifier__factory>;
+    getContractFactory(
+      name: "ISwapVerifier",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.ISwapVerifier__factory>;
+    getContractFactory(
+      name: "ITransferVerifier",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.ITransferVerifier__factory>;
+    getContractFactory(
+      name: "IUnshieldVerifier",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.IUnshieldVerifier__factory>;
+    getContractFactory(
       name: "IVerifier",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.IVerifier__factory>;
+    getContractFactory(
+      name: "IVerifierLegacy",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.IVerifierLegacy__factory>;
     getContractFactory(
       name: "MerkleTreeWithHistory",
       signerOrOptions?: ethers.Signer | FactoryOptions
@@ -98,14 +118,6 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.MixerPool__factory>;
     getContractFactory(
-      name: "IHasher",
-      signerOrOptions?: ethers.Signer | FactoryOptions
-    ): Promise<Contracts.IHasher__factory>;
-    getContractFactory(
-      name: "IVerifier",
-      signerOrOptions?: ethers.Signer | FactoryOptions
-    ): Promise<Contracts.IVerifier__factory>;
-    getContractFactory(
       name: "MixerPoolNative",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.MixerPoolNative__factory>;
@@ -117,6 +129,34 @@ declare module "hardhat/types/runtime" {
       name: "MockERC20",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.MockERC20__factory>;
+    getContractFactory(
+      name: "MockVerifier",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.MockVerifier__factory>;
+    getContractFactory(
+      name: "ShieldedPool",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.ShieldedPool__factory>;
+    getContractFactory(
+      name: "ShieldedPoolMultiToken",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.ShieldedPoolMultiToken__factory>;
+    getContractFactory(
+      name: "ShieldVerifier",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.ShieldVerifier__factory>;
+    getContractFactory(
+      name: "SwapVerifier",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.SwapVerifier__factory>;
+    getContractFactory(
+      name: "TransferVerifier",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.TransferVerifier__factory>;
+    getContractFactory(
+      name: "UnshieldVerifier",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.UnshieldVerifier__factory>;
     getContractFactory(
       name: "Groth16Verifier",
       signerOrOptions?: ethers.Signer | FactoryOptions
@@ -216,10 +256,35 @@ declare module "hardhat/types/runtime" {
       signer?: ethers.Signer
     ): Promise<Contracts.IHasher>;
     getContractAt(
+      name: "IShieldVerifier",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.IShieldVerifier>;
+    getContractAt(
+      name: "ISwapVerifier",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.ISwapVerifier>;
+    getContractAt(
+      name: "ITransferVerifier",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.ITransferVerifier>;
+    getContractAt(
+      name: "IUnshieldVerifier",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.IUnshieldVerifier>;
+    getContractAt(
       name: "IVerifier",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
     ): Promise<Contracts.IVerifier>;
+    getContractAt(
+      name: "IVerifierLegacy",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.IVerifierLegacy>;
     getContractAt(
       name: "MerkleTreeWithHistory",
       address: string | ethers.Addressable,
@@ -236,16 +301,6 @@ declare module "hardhat/types/runtime" {
       signer?: ethers.Signer
     ): Promise<Contracts.MixerPool>;
     getContractAt(
-      name: "IHasher",
-      address: string | ethers.Addressable,
-      signer?: ethers.Signer
-    ): Promise<Contracts.IHasher>;
-    getContractAt(
-      name: "IVerifier",
-      address: string | ethers.Addressable,
-      signer?: ethers.Signer
-    ): Promise<Contracts.IVerifier>;
-    getContractAt(
       name: "MixerPoolNative",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
@@ -260,6 +315,41 @@ declare module "hardhat/types/runtime" {
       address: string | ethers.Addressable,
       signer?: ethers.Signer
     ): Promise<Contracts.MockERC20>;
+    getContractAt(
+      name: "MockVerifier",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.MockVerifier>;
+    getContractAt(
+      name: "ShieldedPool",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.ShieldedPool>;
+    getContractAt(
+      name: "ShieldedPoolMultiToken",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.ShieldedPoolMultiToken>;
+    getContractAt(
+      name: "ShieldVerifier",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.ShieldVerifier>;
+    getContractAt(
+      name: "SwapVerifier",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.SwapVerifier>;
+    getContractAt(
+      name: "TransferVerifier",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.TransferVerifier>;
+    getContractAt(
+      name: "UnshieldVerifier",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.UnshieldVerifier>;
     getContractAt(
       name: "Groth16Verifier",
       address: string | ethers.Addressable,
@@ -345,9 +435,29 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IHasher>;
     deployContract(
+      name: "IShieldVerifier",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IShieldVerifier>;
+    deployContract(
+      name: "ISwapVerifier",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.ISwapVerifier>;
+    deployContract(
+      name: "ITransferVerifier",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.ITransferVerifier>;
+    deployContract(
+      name: "IUnshieldVerifier",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IUnshieldVerifier>;
+    deployContract(
       name: "IVerifier",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IVerifier>;
+    deployContract(
+      name: "IVerifierLegacy",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IVerifierLegacy>;
     deployContract(
       name: "MerkleTreeWithHistory",
       signerOrOptions?: ethers.Signer | DeployContractOptions
@@ -361,14 +471,6 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.MixerPool>;
     deployContract(
-      name: "IHasher",
-      signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.IHasher>;
-    deployContract(
-      name: "IVerifier",
-      signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.IVerifier>;
-    deployContract(
       name: "MixerPoolNative",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.MixerPoolNative>;
@@ -380,6 +482,34 @@ declare module "hardhat/types/runtime" {
       name: "MockERC20",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.MockERC20>;
+    deployContract(
+      name: "MockVerifier",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.MockVerifier>;
+    deployContract(
+      name: "ShieldedPool",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.ShieldedPool>;
+    deployContract(
+      name: "ShieldedPoolMultiToken",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.ShieldedPoolMultiToken>;
+    deployContract(
+      name: "ShieldVerifier",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.ShieldVerifier>;
+    deployContract(
+      name: "SwapVerifier",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.SwapVerifier>;
+    deployContract(
+      name: "TransferVerifier",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.TransferVerifier>;
+    deployContract(
+      name: "UnshieldVerifier",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.UnshieldVerifier>;
     deployContract(
       name: "Groth16Verifier",
       signerOrOptions?: ethers.Signer | DeployContractOptions
@@ -479,10 +609,35 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IHasher>;
     deployContract(
+      name: "IShieldVerifier",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IShieldVerifier>;
+    deployContract(
+      name: "ISwapVerifier",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.ISwapVerifier>;
+    deployContract(
+      name: "ITransferVerifier",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.ITransferVerifier>;
+    deployContract(
+      name: "IUnshieldVerifier",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IUnshieldVerifier>;
+    deployContract(
       name: "IVerifier",
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IVerifier>;
+    deployContract(
+      name: "IVerifierLegacy",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IVerifierLegacy>;
     deployContract(
       name: "MerkleTreeWithHistory",
       args: any[],
@@ -499,16 +654,6 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.MixerPool>;
     deployContract(
-      name: "IHasher",
-      args: any[],
-      signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.IHasher>;
-    deployContract(
-      name: "IVerifier",
-      args: any[],
-      signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.IVerifier>;
-    deployContract(
       name: "MixerPoolNative",
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
@@ -523,6 +668,41 @@ declare module "hardhat/types/runtime" {
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.MockERC20>;
+    deployContract(
+      name: "MockVerifier",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.MockVerifier>;
+    deployContract(
+      name: "ShieldedPool",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.ShieldedPool>;
+    deployContract(
+      name: "ShieldedPoolMultiToken",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.ShieldedPoolMultiToken>;
+    deployContract(
+      name: "ShieldVerifier",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.ShieldVerifier>;
+    deployContract(
+      name: "SwapVerifier",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.SwapVerifier>;
+    deployContract(
+      name: "TransferVerifier",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.TransferVerifier>;
+    deployContract(
+      name: "UnshieldVerifier",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.UnshieldVerifier>;
     deployContract(
       name: "Groth16Verifier",
       args: any[],

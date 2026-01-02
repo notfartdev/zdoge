@@ -20,7 +20,7 @@ contract MixerPoolNative is MerkleTreeWithHistory, ReentrancyGuard {
     
     // ============ Immutable State ============
     
-    IVerifier public immutable verifier;
+    IVerifierLegacy public immutable verifier;
     uint256 public immutable denomination;
     
     // ============ State Variables ============
@@ -71,7 +71,7 @@ contract MixerPoolNative is MerkleTreeWithHistory, ReentrancyGuard {
     ) MerkleTreeWithHistory(_hasher) {
         if (_denomination == 0) revert InvalidDenomination();
         
-        verifier = IVerifier(_verifier);
+        verifier = IVerifierLegacy(_verifier);
         denomination = _denomination;
     }
     

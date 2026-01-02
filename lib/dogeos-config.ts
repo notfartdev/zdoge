@@ -293,6 +293,87 @@ export const contracts = {
   dogeRouter: '0x0A26D94E458EA685dAb82445914519DE6D26EB57' as `0x${string}`,
 };
 
+// Shielded Pool (Zcash-style private transfers + swaps)
+// Deployed to DogeOS Testnet on Jan 2, 2026
+export const shieldedPool = {
+  // Main pool contract - handles shield/transfer/unshield/swap
+  address: '0x6d237c2ed7036bf2F2006BcA6D3cA98E6E45b5f6' as `0x${string}`,
+  
+  // Real ZK verifier contracts (production-ready)
+  shieldVerifier: '0xE3F18043e009c62eeC122a959f1CF6fcdc2dcda1' as `0x${string}`,
+  transferVerifier: '0xaa70a787C6049d01a988a395E181048Cc897DAd7' as `0x${string}`,
+  unshieldVerifier: '0x6916B65368685F8961dAd5338a966c5F13C9EAF6' as `0x${string}`,
+  swapVerifier: '0x0C88063F0F28b8f5560Da2A688866BA856D00734' as `0x${string}`,
+  
+  // Circuit files for frontend proof generation
+  circuitFiles: {
+    shield: {
+      wasm: '/circuits/shielded/build/shield_js/shield.wasm',
+      zkey: '/circuits/shielded/build/shield_final.zkey',
+      vkey: '/circuits/shielded/build/shield_vkey.json',
+    },
+    transfer: {
+      wasm: '/circuits/shielded/build/transfer_js/transfer.wasm',
+      zkey: '/circuits/shielded/build/transfer_final.zkey',
+      vkey: '/circuits/shielded/build/transfer_vkey.json',
+    },
+    unshield: {
+      wasm: '/circuits/shielded/build/unshield_js/unshield.wasm',
+      zkey: '/circuits/shielded/build/unshield_final.zkey',
+      vkey: '/circuits/shielded/build/unshield_vkey.json',
+    },
+    swap: {
+      wasm: '/circuits/shielded/build/swap_js/swap.wasm',
+      zkey: '/circuits/shielded/build/swap_final.zkey',
+      vkey: '/circuits/shielded/build/swap_vkey.json',
+    },
+  },
+  
+  // Merkle tree configuration
+  merkleTreeLevels: 20,
+  
+  // All supported tokens for shielded pool
+  supportedTokens: {
+    DOGE: {
+      address: '0x0000000000000000000000000000000000000000' as `0x${string}`,
+      symbol: 'DOGE',
+      decimals: 18,
+      isNative: true,
+    },
+    USDC: {
+      address: '0xD19d2Ffb1c284668b7AFe72cddae1BAF3Bc03925' as `0x${string}`,
+      symbol: 'USDC',
+      decimals: 18,
+    },
+    USDT: {
+      address: '0xC81800b77D91391Ef03d7868cB81204E753093a9' as `0x${string}`,
+      symbol: 'USDT',
+      decimals: 18,
+    },
+    USD1: {
+      address: '0x25D5E5375e01Ed39Dc856bDCA5040417fD45eA3F' as `0x${string}`,
+      symbol: 'USD1',
+      decimals: 18,
+    },
+    WETH: {
+      address: '0x1a6094Ac3ca3Fc9F1B4777941a5f4AAc16A72000' as `0x${string}`,
+      symbol: 'WETH',
+      decimals: 18,
+    },
+    LBTC: {
+      address: '0x29789F5A3e4c3113e7165c33A7E3bc592CF6fE0E' as `0x${string}`,
+      symbol: 'LBTC',
+      decimals: 18,
+    },
+  },
+  
+  // Price oracle (for real-time swap rates)
+  priceOracle: {
+    source: 'coingecko',
+    cacheDuration: 30000, // 30 seconds
+  },
+};
+
 // Backend API URLs (indexer + relayer on same server)
 export const api = {
   indexer: process.env.NEXT_PUBLIC_INDEXER_URL || 'http://localhost:3001',
@@ -574,6 +655,118 @@ export const DogeRouterABI = [
       { name: 'pool', type: 'address', indexed: true },
       { name: 'recipient', type: 'address', indexed: true },
       { name: 'amount', type: 'uint256', indexed: false },
+    ],
+  },
+] as const;
+
+// ShieldedPool ABI (for Zcash-style shielded transactions)
+export const ShieldedPoolABI = [
+  // Shield (t→z): Deposit public DOGE into shielded note
+  {
+    type: 'function',
+    name: 'shield',
+    inputs: [{ name: '_commitment', type: 'bytes32' }],
+    outputs: [],
+    stateMutability: 'payable',
+  },
+  // Transfer (z→z): Send shielded DOGE to another shielded address
+  {
+    type: 'function',
+    name: 'transfer',
+    inputs: [
+      { name: '_proof', type: 'uint256[8]' },
+      { name: '_root', type: 'bytes32' },
+      { name: '_nullifierHash', type: 'bytes32' },
+      { name: '_outputCommitment1', type: 'bytes32' },
+      { name: '_outputCommitment2', type: 'bytes32' },
+      { name: '_relayer', type: 'address' },
+      { name: '_fee', type: 'uint256' },
+      { name: '_encryptedMemo1', type: 'bytes' },
+      { name: '_encryptedMemo2', type: 'bytes' },
+    ],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  // Unshield (z→t): Withdraw shielded DOGE to public address
+  {
+    type: 'function',
+    name: 'unshield',
+    inputs: [
+      { name: '_proof', type: 'uint256[8]' },
+      { name: '_root', type: 'bytes32' },
+      { name: '_nullifierHash', type: 'bytes32' },
+      { name: '_recipient', type: 'address' },
+      { name: '_amount', type: 'uint256' },
+      { name: '_relayer', type: 'address' },
+      { name: '_fee', type: 'uint256' },
+    ],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  // View functions
+  {
+    type: 'function',
+    name: 'getLastRoot',
+    inputs: [],
+    outputs: [{ name: '', type: 'bytes32' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'isKnownRoot',
+    inputs: [{ name: '_root', type: 'bytes32' }],
+    outputs: [{ name: '', type: 'bool' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'isSpentNullifier',
+    inputs: [{ name: '_nullifierHash', type: 'bytes32' }],
+    outputs: [{ name: '', type: 'bool' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'totalShieldedBalance',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint256' }],
+    stateMutability: 'view',
+  },
+  // Events
+  {
+    type: 'event',
+    name: 'Shield',
+    inputs: [
+      { name: 'commitment', type: 'bytes32', indexed: true },
+      { name: 'leafIndex', type: 'uint256', indexed: true },
+      { name: 'amount', type: 'uint256', indexed: false },
+      { name: 'timestamp', type: 'uint256', indexed: false },
+    ],
+  },
+  {
+    type: 'event',
+    name: 'Transfer',
+    inputs: [
+      { name: 'nullifierHash', type: 'bytes32', indexed: true },
+      { name: 'outputCommitment1', type: 'bytes32', indexed: false },
+      { name: 'outputCommitment2', type: 'bytes32', indexed: false },
+      { name: 'leafIndex1', type: 'uint256', indexed: true },
+      { name: 'leafIndex2', type: 'uint256', indexed: true },
+      { name: 'encryptedMemo1', type: 'bytes', indexed: false },
+      { name: 'encryptedMemo2', type: 'bytes', indexed: false },
+      { name: 'timestamp', type: 'uint256', indexed: false },
+    ],
+  },
+  {
+    type: 'event',
+    name: 'Unshield',
+    inputs: [
+      { name: 'nullifierHash', type: 'bytes32', indexed: true },
+      { name: 'recipient', type: 'address', indexed: true },
+      { name: 'amount', type: 'uint256', indexed: false },
+      { name: 'relayer', type: 'address', indexed: true },
+      { name: 'fee', type: 'uint256', indexed: false },
+      { name: 'timestamp', type: 'uint256', indexed: false },
     ],
   },
 ] as const;
