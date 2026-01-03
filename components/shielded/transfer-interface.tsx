@@ -519,6 +519,21 @@ export function TransferInterface({ notes, onSuccess }: TransferInterfaceProps) 
             </AlertDescription>
           </Alert>
           
+          {errorMessage?.includes('ownership mismatch') && (
+            <Alert className="border-yellow-500 bg-yellow-500/10">
+              <AlertCircle className="h-4 w-4 text-yellow-500" />
+              <AlertDescription className="text-yellow-200">
+                <strong>How to fix:</strong>
+                <ol className="list-decimal list-inside mt-2 space-y-1 text-xs">
+                  <li>Scroll down to "Shielded Notes"</li>
+                  <li>Click the × button to clear notes</li>
+                  <li>Shield new DOGE (creates notes with correct identity)</li>
+                  <li>Try transfer again</li>
+                </ol>
+              </AlertDescription>
+            </Alert>
+          )}
+          
           <Button className="w-full" onClick={reset}>
             Try Again
           </Button>
