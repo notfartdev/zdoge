@@ -12,5 +12,5 @@ services:
       - key: DOGEOS_RPC_URL
         value: https://rpc.testnet.dogeos.com
       - key: SHIELDED_POOL_ADDRESS
-        value: 0x6d237c2ed7036bf2F2006BcA6D3cA98E6E45b5f6
+        value: 0xc5F64faee07A6EFE235C12378101D62e370c0cD5
 
