@@ -32,16 +32,17 @@ const MIN_RELAYER_FEE = BigInt(0.001 * 1e18); // Minimum 0.001 DOGE
 // Initialize relayer wallet
 let relayerWallet: ReturnType<typeof createWalletClient> | null = null;
 let relayerAddress: Address | null = null;
+let relayerAccount: ReturnType<typeof privateKeyToAccount> | null = null;
 
 if (process.env.RELAYER_PRIVATE_KEY) {
   try {
-    const account = privateKeyToAccount(`0x${process.env.RELAYER_PRIVATE_KEY.replace('0x', '')}`);
+    relayerAccount = privateKeyToAccount(`0x${process.env.RELAYER_PRIVATE_KEY.replace('0x', '')}`);
     relayerWallet = createWalletClient({
-      account,
+      account: relayerAccount,
       chain: dogeosTestnet,
       transport: http(config.rpcUrl),
     });
-    relayerAddress = account.address;
+    relayerAddress = relayerAccount.address;
     console.log(`[ShieldedRelayer] Initialized: ${relayerAddress}`);
   } catch (error) {
     console.error('[ShieldedRelayer] Failed to initialize:', error);
@@ -347,6 +348,8 @@ shieldedRouter.post('/relay/unshield', async (req: Request, res: Response) => {
     
     // Submit transaction
     const txHash = await relayerWallet.writeContract({
+      chain: dogeosTestnet,
+      account: relayerAccount!,
       address: poolAddress as Address,
       abi: ShieldedPoolABI,
       functionName: 'unshieldNative',
@@ -356,7 +359,7 @@ shieldedRouter.post('/relay/unshield', async (req: Request, res: Response) => {
         nullifierHash as `0x${string}`,
         recipient as Address,
         amountBigInt,
-        relayerAddress,
+        relayerAddress!,
         fee,
       ],
     });
