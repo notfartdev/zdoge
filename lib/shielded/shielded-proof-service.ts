@@ -353,7 +353,10 @@ export async function fetchMerklePath(
   poolAddress: string,
   leafIndex: number
 ): Promise<{ pathElements: bigint[]; pathIndices: number[]; root: bigint }> {
-  // Try indexer first
+  // TEMPORARY: Skip indexer due to backend bug, go straight to client-side
+  console.log('[Merkle] Skipping indexer, building client-side Merkle tree...');
+  
+  /* Try indexer first
   try {
     const response = await fetch(
       `${INDEXER_URL}/api/pool/${poolAddress}/path/${leafIndex}`,
@@ -371,6 +374,7 @@ export async function fetchMerklePath(
   } catch (error) {
     console.log('Indexer not available, building Merkle tree client-side...');
   }
+  */
   
   // Fallback: Build Merkle tree client-side from blockchain events
   console.log(`Fetching commitments from chain for pool ${poolAddress}...`);
