@@ -631,6 +631,32 @@ export async function generateTransferProof(
     `${CIRCUITS_PATH}/transfer_final.zkey`
   );
   
+  // DEBUG: Log public signals from circuit vs what we computed
+  console.log('[Transfer] Circuit publicSignals:');
+  console.log('  [0] root:', publicSignals[0]);
+  console.log('  [1] nullifierHash:', publicSignals[1]);
+  console.log('  [2] outputCommitment1:', publicSignals[2]);
+  console.log('  [3] outputCommitment2:', publicSignals[3]);
+  console.log('  [4] relayer:', publicSignals[4]);
+  console.log('  [5] fee:', publicSignals[5]);
+  console.log('[Transfer] Our computed values:');
+  console.log('  root:', root.toString());
+  console.log('  nullifierHash:', nullifierHash.toString());
+  console.log('  outputCommitment1:', output1Commitment.toString());
+  console.log('  outputCommitment2:', output2Commitment.toString());
+  
+  // Verify they match!
+  if (publicSignals[2] !== output1Commitment.toString()) {
+    console.error('[Transfer] ❌ outputCommitment1 MISMATCH!');
+    console.error('  Circuit:', publicSignals[2]);
+    console.error('  Ours:', output1Commitment.toString());
+  }
+  if (publicSignals[3] !== output2Commitment.toString()) {
+    console.error('[Transfer] ❌ outputCommitment2 MISMATCH!');
+    console.error('  Circuit:', publicSignals[3]);
+    console.error('  Ours:', output2Commitment.toString());
+  }
+  
   // Create output note objects
   const outputNote1: ShieldedNote = {
     amount: transferAmount,
