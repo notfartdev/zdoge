@@ -526,30 +526,34 @@ shieldedRouter.post('/relay/transfer', async (req: Request, res: Response) => {
     }
     
     // Verify root is known on-chain BEFORE submitting
-    const isKnownRootABI = [{
-      type: 'function',
-      name: 'isKnownRoot',
-      inputs: [{ name: 'root', type: 'bytes32' }],
-      outputs: [{ name: '', type: 'bool' }],
-      stateMutability: 'view',
-    }] as const;
-    
-    const isRootKnown = await publicClient.readContract({
-      address: poolAddress as Address,
-      abi: isKnownRootABI,
-      functionName: 'isKnownRoot',
-      args: [root as `0x${string}`],
-    });
-    
-    console.log(`[ShieldedRelayer] Root known on-chain: ${isRootKnown}`);
-    
-    if (!isRootKnown) {
-      console.error('[ShieldedRelayer] ❌ Root NOT known on-chain!');
-      return res.status(400).json({
-        error: 'Invalid root',
-        message: 'The Merkle root does not exist on-chain. Tree may be out of sync.',
-        providedRoot: root,
+    try {
+      const isKnownRootResult = await publicClient.readContract({
+        address: poolAddress as Address,
+        abi: [{
+          type: 'function',
+          name: 'isKnownRoot',
+          inputs: [{ name: 'root', type: 'bytes32' }],
+          outputs: [{ name: '', type: 'bool' }],
+          stateMutability: 'view',
+        }],
+        functionName: 'isKnownRoot',
+        args: [root as `0x${string}`],
       });
+      
+      const isRootKnown = isKnownRootResult as boolean;
+      console.log(`[ShieldedRelayer] Root known on-chain: ${isRootKnown}`);
+      
+      if (!isRootKnown) {
+        console.error('[ShieldedRelayer] ❌ Root NOT known on-chain!');
+        return res.status(400).json({
+          error: 'Invalid root',
+          message: 'The Merkle root does not exist on-chain. Tree may be out of sync.',
+          providedRoot: root,
+        });
+      }
+    } catch (rootCheckError: any) {
+      console.warn('[ShieldedRelayer] Could not verify root:', rootCheckError.message);
+      // Continue anyway - let the contract decide
     }
     
     // Convert proof strings to bigints
