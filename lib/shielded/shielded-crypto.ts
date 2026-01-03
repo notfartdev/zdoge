@@ -23,7 +23,7 @@ let initPromise: Promise<void> | null = null;
 /**
  * Initialize MiMC from circomlibjs
  */
-async function initMimc(): Promise<void> {
+export async function initMimc(): Promise<void> {
   if (mimcSponge) return;
   if (initPromise) {
     await initPromise;
@@ -33,7 +33,7 @@ async function initMimc(): Promise<void> {
   initPromise = (async () => {
     const circomlibjs = await import('circomlibjs');
     mimcSponge = await circomlibjs.buildMimcSponge();
-    console.log('[Shielded] MiMC initialized');
+    console.log('[Shielded] MiMC initialized from circomlibjs');
   })();
   
   await initPromise;
@@ -41,7 +41,10 @@ async function initMimc(): Promise<void> {
 
 /**
  * MiMC Hash with 2 inputs
- * Compatible with MiMCSponge(2, 220, 1) in circomlib
+ * Uses circomlibjs multiHash which is compatible with MiMCSponge(2, 220, 1) in circomlib
+ * 
+ * IMPORTANT: The deployed contract MUST use the same MiMC implementation (circomlibjs bytecode)
+ * via HasherAdapter for this to work correctly.
  */
 export async function mimcHash2(left: bigint, right: bigint): Promise<bigint> {
   await initMimc();

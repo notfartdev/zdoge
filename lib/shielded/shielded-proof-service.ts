@@ -316,6 +316,37 @@ async function fetchCommitmentsFromChain(poolAddress: string): Promise<{ commitm
 }
 
 /**
+ * Fetch the contract's actual current root
+ */
+async function fetchContractRoot(poolAddress: string): Promise<bigint> {
+  console.log(`[Merkle] Fetching contract root from ${poolAddress}...`);
+  
+  // Call getLatestRoot() - function selector: 0xb8b7a433
+  const response = await fetch(RPC_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'eth_call',
+      params: [{
+        to: poolAddress,
+        data: '0xb8b7a433', // getLatestRoot()
+      }, 'latest'],
+    }),
+  });
+  
+  const data = await response.json();
+  if (data.error) {
+    throw new Error(`Failed to get contract root: ${data.error.message}`);
+  }
+  
+  const root = BigInt(data.result);
+  console.log(`[Merkle] Contract root: ${root.toString(16).slice(0, 20)}...`);
+  return root;
+}
+
+/**
  * Fetch Merkle path - tries indexer first, falls back to client-side
  */
 export async function fetchMerklePath(
@@ -369,7 +400,27 @@ export async function fetchMerklePath(
   }
   
   console.log(`Building Merkle tree with ${commitments.length} leaves, zeroValue=${zeroValue.toString().slice(0,20)}...`);
-  return await buildMerkleTreeAndGetPath(commitments, leafIndex);
+  const result = await buildMerkleTreeAndGetPath(commitments, leafIndex);
+  
+  // Log computed root for debugging
+  console.log(`[Merkle] Computed root: ${result.root.toString(16).slice(0, 20)}...`);
+  
+  // Verify against contract root if possible
+  try {
+    const contractRoot = await fetchContractRoot(poolAddress);
+    console.log(`[Merkle] Contract root: ${contractRoot.toString(16).slice(0, 20)}...`);
+    
+    if (contractRoot !== result.root) {
+      console.error(`[Merkle] ROOT MISMATCH! This will cause proof verification to fail.`);
+      console.error(`[Merkle] Make sure the deployed Hasher uses circomlibjs-compatible MiMC!`);
+    } else {
+      console.log(`[Merkle] ✓ Roots match!`);
+    }
+  } catch (e) {
+    console.warn(`[Merkle] Could not verify against contract root:`, e);
+  }
+  
+  return result;
 }
 
 /**
