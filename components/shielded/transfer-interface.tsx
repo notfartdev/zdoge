@@ -200,8 +200,14 @@ export function TransferInterface({ notes, onSuccess }: TransferInterfaceProps) 
       
       setTxHash(data.txHash)
       
-      // Complete transfer (remove input note, add change note)
-      completeTransfer(actualNoteIndex, result.changeNote, data.leafIndex2 || 0)
+      // Complete transfer (remove input note, add recipient note if self, add change note)
+      completeTransfer(
+        actualNoteIndex, 
+        result.changeNote, 
+        data.leafIndex2 || 0,
+        result.recipientNote,  // Will auto-add if sent to self
+        data.leafIndex1 || 0
+      )
       
       setStatus("success")
       

@@ -369,20 +369,34 @@ export async function prepareTransfer(
 /**
  * Complete transfer after transaction confirmed
  * - Removes spent note
+ * - Adds recipient note (if sent to self)
  * - Adds change note (if any)
  */
 export function completeTransfer(
   spentNoteIndex: number,
   changeNote: ShieldedNote,
-  changeLeafIndex: number
+  changeLeafIndex: number,
+  recipientNote?: ShieldedNote,
+  recipientLeafIndex?: number
 ): void {
   // Remove spent note
   walletState.notes.splice(spentNoteIndex, 1);
+  
+  // Add recipient note if it belongs to us (sent to self)
+  if (recipientNote && recipientLeafIndex !== undefined && walletState.identity) {
+    // Check if recipient note belongs to current user
+    if (recipientNote.ownerPubkey === walletState.identity.shieldedAddress) {
+      recipientNote.leafIndex = recipientLeafIndex;
+      walletState.notes.push(recipientNote);
+      console.log('[Transfer] Added recipient note (sent to self):', recipientLeafIndex);
+    }
+  }
   
   // Add change note if it has value
   if (changeNote.amount > 0n) {
     changeNote.leafIndex = changeLeafIndex;
     walletState.notes.push(changeNote);
+    console.log('[Transfer] Added change note:', changeLeafIndex);
   }
   
   saveNotesToStorage(walletState.notes);
