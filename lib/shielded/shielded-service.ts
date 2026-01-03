@@ -191,20 +191,17 @@ async function deriveIdentityFromSignature(signature: string): Promise<ShieldedI
   const hash2 = keccak256(toBytes(hash1 + ':viewing'));
   const viewingKey = BigInt(hash2) % FIELD_SIZE;
   
-  // Generate public keys (simplified - in production use proper curve operations)
-  const spendingPubKey = spendingKey; // Simplified: G * spendingKey
-  const viewingPubKey = viewingKey;   // Simplified: G * viewingKey
+  // Generate public key (shielded address) from spending key
+  // In simplified form: shieldedAddress = spendingKey (in production, use G * spendingKey on curve)
+  const shieldedAddress = spendingKey;
   
   // Create shielded address string
-  const addressString = `dogenado:z${spendingPubKey.toString(16).padStart(64, '0')}`;
+  const addressString = `dogenado:z${shieldedAddress.toString(16).padStart(64, '0')}`;
   
   return {
     spendingKey,
     viewingKey,
-    shieldedAddress: {
-      spendingPubKey,
-      viewingPubKey,
-    },
+    shieldedAddress,  // This is a bigint, not an object!
     addressString,
   };
 }
