@@ -30,6 +30,8 @@ import {
   backupWallet,
   syncNotesWithChain,
   clearNotes,
+  initializeStealthKeys,
+  getStealthReceiveAddress,
   type ShieldedWalletState,
 } from "@/lib/shielded/shielded-service"
 import { shieldedPool } from "@/lib/dogeos-config"
@@ -52,6 +54,7 @@ export function ShieldedWallet() {
   const [copied, setCopied] = useState(false)
   const [activeTab, setActiveTab] = useState("shield")
   const [publicBalance, setPublicBalance] = useState<string>("0")
+  const [stealthAddress, setStealthAddress] = useState<string | null>(null)
   
   // Ensure client-side only rendering to prevent hydration mismatch
   useEffect(() => {
@@ -101,6 +104,14 @@ export function ShieldedWallet() {
       setIsLoading(true)
       try {
         await initializeShieldedWallet()
+        
+        // Initialize stealth keys for one-time receive addresses
+        if (wallet?.address) {
+          await initializeStealthKeys(wallet.address)
+          const addr = getStealthReceiveAddress()
+          setStealthAddress(addr)
+        }
+        
         setWalletState(getWalletState())
         setIsInitialized(true)
       } catch (error) {
@@ -115,7 +126,7 @@ export function ShieldedWallet() {
       }
     }
     init()
-  }, [mounted, wallet?.isConnected])
+  }, [mounted, wallet?.isConnected, wallet?.address])
   
   // Refresh wallet state
   const refreshState = () => {
@@ -124,15 +135,16 @@ export function ShieldedWallet() {
   
   // Copy address to clipboard
   const copyAddress = async () => {
-    if (!walletState?.identity) return
+    const addressToCopy = stealthAddress || walletState?.identity?.addressString
+    if (!addressToCopy) return
     
-    await navigator.clipboard.writeText(walletState.identity.addressString)
+    await navigator.clipboard.writeText(addressToCopy)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
     
     toast({
-      title: "Address Copied",
-      description: "Shielded address copied to clipboard",
+      title: "Stealth Address Copied",
+      description: "Share this to receive private payments",
     })
   }
   
@@ -330,10 +342,14 @@ export function ShieldedWallet() {
             </div>
           </div>
           
-          {/* Shielded Address */}
-          <div className="p-4 rounded-lg border">
+          {/* Stealth Receive Address */}
+          <div className="p-4 rounded-lg border bg-gradient-to-r from-primary/5 to-transparent">
             <div className="flex items-center justify-between mb-2">
-              <div className="text-sm font-medium">Your Shielded Address</div>
+              <div className="text-sm font-medium flex items-center gap-2">
+                <Lock className="h-4 w-4 text-primary" />
+                Stealth Receive Address
+                <Badge variant="secondary" className="text-xs">One-Time</Badge>
+              </div>
               <div className="flex items-center gap-2">
                 <Button
                   variant="ghost"
@@ -357,11 +373,11 @@ export function ShieldedWallet() {
             </div>
             <code className="text-xs break-all">
               {showAddress
-                ? walletState?.identity?.addressString
-                : shortenAddress(walletState?.identity?.addressString || "", 8)}
+                ? (stealthAddress || walletState?.identity?.addressString)
+                : shortenAddress(stealthAddress || walletState?.identity?.addressString || "", 12)}
             </code>
             <p className="text-xs text-muted-foreground mt-2">
-              Share this address to receive shielded DOGE
+              🔒 Senders derive one-time addresses from this — no link to your wallet
             </p>
           </div>
         </CardContent>

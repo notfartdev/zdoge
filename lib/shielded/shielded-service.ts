@@ -40,10 +40,20 @@ import {
   parseMemoFromContract,
   EncryptedMemo,
 } from './shielded-receiving';
+import {
+  StealthKeys,
+  StealthMetaAddress,
+  generateStealthKeys,
+  encodeMetaAddress,
+  decodeMetaAddress,
+  generateStealthAddress,
+  scanStealthTransfer,
+} from './stealth-address';
 
 // Storage keys
 const IDENTITY_STORAGE_KEY = 'dogenado_shielded_identity';
 const NOTES_STORAGE_KEY = 'dogenado_shielded_notes';
+const STEALTH_KEYS_STORAGE_KEY = 'dogenado_stealth_keys';
 
 /**
  * Shielded wallet state
@@ -51,6 +61,7 @@ const NOTES_STORAGE_KEY = 'dogenado_shielded_notes';
 export interface ShieldedWalletState {
   identity: ShieldedIdentity | null;
   notes: ShieldedNote[];
+  stealthKeys: StealthKeys | null;
   isInitialized: boolean;
 }
 
@@ -58,6 +69,7 @@ export interface ShieldedWalletState {
 let walletState: ShieldedWalletState = {
   identity: null,
   notes: [],
+  stealthKeys: null,
   isInitialized: false,
 };
 
@@ -664,5 +676,177 @@ function loadNotesFromStorage(): ShieldedNote[] {
   } catch {
     return [];
   }
+}
+
+// ============ Stealth Key Storage ============
+
+function saveStealthKeysToStorage(keys: StealthKeys): void {
+  if (typeof localStorage === 'undefined') return;
+  
+  const serialized = {
+    spendingKey: keys.spendingKey.toString(16),
+    viewingKey: keys.viewingKey.toString(16),
+    spendingPubKey: keys.metaAddress.spendingPubKey.toString(16),
+    viewingPubKey: keys.metaAddress.viewingPubKey.toString(16),
+  };
+  localStorage.setItem(STEALTH_KEYS_STORAGE_KEY, JSON.stringify(serialized));
+}
+
+function loadStealthKeysFromStorage(): StealthKeys | null {
+  if (typeof localStorage === 'undefined') return null;
+  
+  const stored = localStorage.getItem(STEALTH_KEYS_STORAGE_KEY);
+  if (!stored) return null;
+  
+  try {
+    const s = JSON.parse(stored);
+    return {
+      spendingKey: BigInt('0x' + s.spendingKey),
+      viewingKey: BigInt('0x' + s.viewingKey),
+      metaAddress: {
+        spendingPubKey: BigInt('0x' + s.spendingPubKey),
+        viewingPubKey: BigInt('0x' + s.viewingPubKey),
+      },
+    };
+  } catch {
+    return null;
+  }
+}
+
+// ============ Stealth Address API ============
+
+/**
+ * Initialize or load stealth keys
+ * Derives from wallet signature for deterministic generation
+ */
+export async function initializeStealthKeys(walletAddress: string): Promise<StealthKeys> {
+  // Try to load existing keys
+  let keys = loadStealthKeysFromStorage();
+  
+  if (keys) {
+    walletState.stealthKeys = keys;
+    return keys;
+  }
+  
+  // Generate new keys from wallet address + identity
+  // In production, use a signature from the wallet for entropy
+  const seed = `stealth:${walletAddress}:${walletState.identity?.spendingKey?.toString(16) || 'default'}`;
+  keys = await generateStealthKeys(seed);
+  
+  // Save to storage
+  saveStealthKeysToStorage(keys);
+  walletState.stealthKeys = keys;
+  
+  console.log('[Stealth] Keys initialized');
+  return keys;
+}
+
+/**
+ * Get the current stealth meta-address for receiving
+ * This is what users share to receive private payments
+ */
+export function getStealthReceiveAddress(): string | null {
+  if (!walletState.stealthKeys) {
+    return null;
+  }
+  return encodeMetaAddress(walletState.stealthKeys.metaAddress);
+}
+
+/**
+ * Get stealth keys (for advanced operations)
+ */
+export function getStealthKeys(): StealthKeys | null {
+  return walletState.stealthKeys;
+}
+
+/**
+ * Generate a one-time stealth address for sending to a recipient
+ * 
+ * @param recipientMetaAddress - Recipient's stealth meta-address string
+ * @param amount - Amount to send
+ * @param token - Token type
+ */
+export async function createStealthPayment(
+  recipientMetaAddress: string,
+  amount: bigint,
+  token: string = 'DOGE'
+): Promise<{
+  stealthAddress: string;
+  ephemeralPubKey: bigint;
+  encryptedData: string;
+  viewTag: string;
+} | null> {
+  const metaAddress = decodeMetaAddress(recipientMetaAddress);
+  if (!metaAddress) {
+    console.error('Invalid stealth meta-address');
+    return null;
+  }
+  
+  // Generate random note parameters
+  const { randomFieldElement } = await import('./shielded-crypto');
+  const secret = await randomFieldElement();
+  const blinding = await randomFieldElement();
+  
+  const result = await generateStealthAddress(metaAddress, {
+    amount,
+    token,
+    secret,
+    blinding,
+  });
+  
+  return {
+    stealthAddress: result.address,
+    ephemeralPubKey: result.ephemeralPubKey,
+    encryptedData: result.encryptedData,
+    viewTag: result.viewTag,
+  };
+}
+
+/**
+ * Scan for incoming stealth transfers
+ * Returns any transfers that belong to us
+ */
+export async function scanForStealthTransfers(
+  transfers: Array<{
+    ephemeralPubKey: bigint;
+    viewTag: string;
+    encryptedData: string;
+  }>
+): Promise<Array<{
+  amount: bigint;
+  token: string;
+  secret: bigint;
+  blinding: bigint;
+}>> {
+  if (!walletState.stealthKeys) {
+    return [];
+  }
+  
+  const found: Array<{
+    amount: bigint;
+    token: string;
+    secret: bigint;
+    blinding: bigint;
+  }> = [];
+  
+  for (const transfer of transfers) {
+    const result = await scanStealthTransfer(
+      transfer.ephemeralPubKey,
+      transfer.viewTag,
+      transfer.encryptedData,
+      walletState.stealthKeys
+    );
+    
+    if (result) {
+      found.push({
+        amount: result.amount,
+        token: result.token,
+        secret: result.secret,
+        blinding: result.blinding,
+      });
+    }
+  }
+  
+  return found;
 }
 

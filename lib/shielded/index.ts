@@ -36,3 +36,6 @@ export * from './shielded-service';
 // Swap functionality
 export * from './shielded-swap-service';
 
+// Stealth addresses (one-time receive addresses)
+export * from './stealth-address';
+
