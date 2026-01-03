@@ -326,10 +326,44 @@ export function TransferInterface({ notes, onSuccess }: TransferInterfaceProps) 
                   className="h-auto p-0 text-xs"
                   onClick={() => {
                     const note = spendableNotes[parseInt(selectedNoteIndex)]
-                    setAmount(formatWeiToAmount(note.amount).toFixed(4))
+                    // Calculate max sendable amount accounting for fee
+                    // max + fee(max) = note.amount
+                    // max * (1 + feePercent) = note.amount
+                    // max = note.amount / (1 + feePercent)
+                    let maxSendable: bigint
+                    if (relayerInfo) {
+                      const feeMultiplier = 1 + relayerInfo.feePercent / 100
+                      maxSendable = BigInt(Math.floor(Number(note.amount) / feeMultiplier))
+                      // Also ensure fee >= minFee
+                      const minFee = BigInt(Math.floor(parseFloat(relayerInfo.minFee) * 1e18))
+                      if (note.amount > minFee) {
+                        const maxWithMinFee = note.amount - minFee
+                        if (maxWithMinFee < maxSendable) {
+                          maxSendable = maxWithMinFee
+                        }
+                      }
+                    } else {
+                      maxSendable = note.amount
+                    }
+                    setAmount(formatWeiToAmount(maxSendable).toFixed(4))
                   }}
                 >
-                  Max: {formatWeiToAmount(spendableNotes[parseInt(selectedNoteIndex)].amount).toFixed(4)}
+                  Max: {(() => {
+                    const note = spendableNotes[parseInt(selectedNoteIndex)]
+                    if (relayerInfo) {
+                      const feeMultiplier = 1 + relayerInfo.feePercent / 100
+                      let maxSendable = BigInt(Math.floor(Number(note.amount) / feeMultiplier))
+                      const minFee = BigInt(Math.floor(parseFloat(relayerInfo.minFee) * 1e18))
+                      if (note.amount > minFee) {
+                        const maxWithMinFee = note.amount - minFee
+                        if (maxWithMinFee < maxSendable) {
+                          maxSendable = maxWithMinFee
+                        }
+                      }
+                      return formatWeiToAmount(maxSendable).toFixed(4)
+                    }
+                    return formatWeiToAmount(note.amount).toFixed(4)
+                  })()}
                 </Button>
               )}
             </div>
@@ -350,6 +384,8 @@ export function TransferInterface({ notes, onSuccess }: TransferInterfaceProps) 
                 const selectedNote = spendableNotes[parseInt(selectedNoteIndex)]
                 const tokenSymbol = selectedNote?.token || 'DOGE'
                 const { fee, received } = calculateFee(amountWei)
+                const totalNeeded = amountWei + fee
+                const hasInsufficientFunds = totalNeeded > selectedNote.amount
                 return (
                   <>
                     <div className="flex justify-between text-sm">
@@ -360,6 +396,18 @@ export function TransferInterface({ notes, onSuccess }: TransferInterfaceProps) 
                       <span className="text-muted-foreground">Relayer fee:</span>
                       <span className="text-orange-500">-{formatWeiToAmount(fee).toFixed(4)} {tokenSymbol}</span>
                     </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Total from note:</span>
+                      <span className={hasInsufficientFunds ? "text-red-500" : ""}>
+                        {formatWeiToAmount(totalNeeded).toFixed(4)} {tokenSymbol}
+                      </span>
+                    </div>
+                    {hasInsufficientFunds && (
+                      <div className="text-xs text-red-500 flex items-center gap-1 mt-1">
+                        <AlertCircle className="h-3 w-3" />
+                        Exceeds note balance ({formatWeiToAmount(selectedNote.amount).toFixed(4)} {tokenSymbol}). Reduce amount.
+                      </div>
+                    )}
                     <div className="flex justify-between text-sm font-medium border-t pt-1 mt-1">
                       <span>Recipient receives:</span>
                       <span className="text-green-500">{formatWeiToAmount(received).toFixed(4)} {tokenSymbol}</span>
@@ -377,7 +425,14 @@ export function TransferInterface({ notes, onSuccess }: TransferInterfaceProps) 
           <Button 
             className="w-full" 
             onClick={handleTransfer}
-            disabled={!relayerInfo?.available}
+            disabled={!relayerInfo?.available || (() => {
+              if (!selectedNoteIndex || !amount) return false
+              const amountWei = BigInt(Math.floor(parseFloat(amount || "0") * 1e18))
+              const selectedNote = spendableNotes[parseInt(selectedNoteIndex)]
+              if (!selectedNote) return false
+              const { fee } = calculateFee(amountWei)
+              return amountWei + fee > selectedNote.amount
+            })()}
           >
             <Send className="h-4 w-4 mr-2" />
             Send Privately
