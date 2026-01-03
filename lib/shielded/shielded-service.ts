@@ -109,7 +109,7 @@ export async function initializeShieldedWallet(
   const keys = getStorageKeys();
   
   // Try to load existing identity for this wallet
-  const storedIdentity = loadIdentityFromStorage();
+  const storedIdentity = await loadIdentityFromStorage();
   
   if (storedIdentity) {
     walletState.identity = storedIdentity;
@@ -728,7 +728,7 @@ function saveIdentityToStorage(identity: ShieldedIdentity): void {
   localStorage.setItem(keys.identity, JSON.stringify(serialized));
 }
 
-function loadIdentityFromStorage(): ShieldedIdentity | null {
+async function loadIdentityFromStorage(): Promise<ShieldedIdentity | null> {
   if (typeof localStorage === 'undefined') return null;
   
   const keys = getStorageKeys();
@@ -739,17 +739,37 @@ function loadIdentityFromStorage(): ShieldedIdentity | null {
     const serialized = JSON.parse(stored);
     const identity = deserializeIdentity(serialized);
     
-    // Migrate old address format to new zdoge: prefix
-    if (identity && identity.addressString && !identity.addressString.startsWith('zdoge:')) {
-      const hex = identity.shieldedAddress.toString(16).padStart(64, '0');
-      identity.addressString = `zdoge:${hex}`;
-      // Save the updated identity
+    if (!identity) return null;
+    
+    // CRITICAL: Re-derive shieldedAddress using MiMC to match circuit
+    // Old code used shieldedAddress = spendingKey, but circuit expects MiMC(spendingKey, 2)
+    const { mimcHash2, DOMAIN } = await import('./shielded-crypto');
+    const correctShieldedAddress = await mimcHash2(identity.spendingKey, DOMAIN.SHIELDED_ADDRESS);
+    
+    // Check if migration needed
+    if (identity.shieldedAddress !== correctShieldedAddress) {
+      console.log('[ShieldedWallet] Migrating shieldedAddress to correct MiMC derivation...');
+      console.log(`  Old: ${identity.shieldedAddress.toString(16).slice(0, 16)}...`);
+      console.log(`  New: ${correctShieldedAddress.toString(16).slice(0, 16)}...`);
+      
+      identity.shieldedAddress = correctShieldedAddress;
+      identity.addressString = `zdoge:${correctShieldedAddress.toString(16).padStart(64, '0')}`;
+      
+      // Save the corrected identity
+      saveIdentityToStorage(identity);
+      console.log('[ShieldedWallet] Migration complete. Old notes will NOT work - please re-shield.');
+    }
+    
+    // Migrate old address format to new zdoge: prefix (if not already done)
+    if (!identity.addressString.startsWith('zdoge:')) {
+      identity.addressString = `zdoge:${identity.shieldedAddress.toString(16).padStart(64, '0')}`;
       saveIdentityToStorage(identity);
       console.log('[ShieldedWallet] Migrated address to new zdoge: format');
     }
     
     return identity;
-  } catch {
+  } catch (error) {
+    console.error('[ShieldedWallet] Failed to load identity:', error);
     return null;
   }
 }
