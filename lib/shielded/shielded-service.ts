@@ -181,19 +181,17 @@ export async function initializeShieldedWallet(
  */
 async function deriveIdentityFromSignature(signature: string): Promise<ShieldedIdentity> {
   const { keccak256, toBytes } = await import('viem');
-  const { FIELD_SIZE } = await import('./shielded-crypto');
+  const { FIELD_SIZE, mimcHash2, DOMAIN } = await import('./shielded-crypto');
   
   // Hash the signature to get spending key
   const hash1 = keccak256(toBytes(signature));
   const spendingKey = BigInt(hash1) % FIELD_SIZE;
   
-  // Derive viewing key from spending key
-  const hash2 = keccak256(toBytes(hash1 + ':viewing'));
-  const viewingKey = BigInt(hash2) % FIELD_SIZE;
+  // Derive viewing key using MiMC (must match circuit!)
+  const viewingKey = await mimcHash2(spendingKey, DOMAIN.VIEWING_KEY);
   
-  // Generate public key (shielded address) from spending key
-  // In simplified form: shieldedAddress = spendingKey (in production, use G * spendingKey on curve)
-  const shieldedAddress = spendingKey;
+  // Derive shielded address using MiMC (must match circuit's DeriveAddress!)
+  const shieldedAddress = await mimcHash2(spendingKey, DOMAIN.SHIELDED_ADDRESS);
   
   // Create shielded address string with zdoge: prefix
   const addressString = `zdoge:${shieldedAddress.toString(16).padStart(64, '0')}`;
@@ -201,7 +199,7 @@ async function deriveIdentityFromSignature(signature: string): Promise<ShieldedI
   return {
     spendingKey,
     viewingKey,
-    shieldedAddress,  // This is a bigint, not an object!
+    shieldedAddress,
     addressString,
   };
 }
