@@ -76,16 +76,23 @@ const allowedOrigins = [
   'http://localhost:3001', // Development
 ];
 
+// Allow all Vercel preview URLs
+const isVercelPreview = (origin: string) => 
+  origin.includes('.vercel.app') || 
+  origin.includes('vercel.app');
+
 app.use(cors({
   origin: (origin, callback) => {
     // Allow requests with no origin (like mobile apps or curl)
     if (!origin) return callback(null, true);
     
-    if (allowedOrigins.includes(origin)) {
+    // Allow all listed origins and Vercel previews
+    if (allowedOrigins.includes(origin) || isVercelPreview(origin)) {
       callback(null, true);
     } else {
-      console.warn(`[CORS] Blocked request from: ${origin}`);
-      callback(null, true); // Still allow for now, just log
+      // Still allow but log for monitoring
+      console.log(`[CORS] Allowing unlisted origin: ${origin}`);
+      callback(null, true);
     }
   },
   credentials: true,
