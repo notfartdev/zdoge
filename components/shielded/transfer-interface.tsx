@@ -13,7 +13,8 @@ import { isValidShieldedAddress } from "@/lib/shielded/shielded-address"
 import { prepareTransfer, completeTransfer } from "@/lib/shielded/shielded-service"
 
 // TODO: Update with actual deployed address
-const SHIELDED_POOL_ADDRESS = "0x0000000000000000000000000000000000000000"
+import { shieldedPool } from "@/lib/dogeos-config"
+const SHIELDED_POOL_ADDRESS = shieldedPool.address
 
 interface TransferInterfaceProps {
   notes: ShieldedNote[]
