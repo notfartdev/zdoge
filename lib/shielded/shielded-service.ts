@@ -739,7 +739,18 @@ function loadIdentityFromStorage(): ShieldedIdentity | null {
   
   try {
     const serialized = JSON.parse(stored);
-    return deserializeIdentity(serialized);
+    const identity = deserializeIdentity(serialized);
+    
+    // Migrate old address format to new zdoge: prefix
+    if (identity && identity.addressString && !identity.addressString.startsWith('zdoge:')) {
+      const hex = identity.shieldedAddress.toString(16).padStart(64, '0');
+      identity.addressString = `zdoge:${hex}`;
+      // Save the updated identity
+      saveIdentityToStorage(identity);
+      console.log('[ShieldedWallet] Migrated address to new zdoge: format');
+    }
+    
+    return identity;
   } catch {
     return null;
   }
