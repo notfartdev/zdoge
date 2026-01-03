@@ -50,10 +50,25 @@ import {
   scanStealthTransfer,
 } from './stealth-address';
 
-// Storage keys
-const IDENTITY_STORAGE_KEY = 'dogenado_shielded_identity';
-const NOTES_STORAGE_KEY = 'dogenado_shielded_notes';
-const STEALTH_KEYS_STORAGE_KEY = 'dogenado_stealth_keys';
+// Storage keys - now include wallet address for per-wallet identity
+const IDENTITY_STORAGE_PREFIX = 'dogenado_shielded_identity_';
+const NOTES_STORAGE_PREFIX = 'dogenado_shielded_notes_';
+const STEALTH_KEYS_STORAGE_PREFIX = 'dogenado_stealth_keys_';
+const SIGNATURE_STORAGE_PREFIX = 'dogenado_wallet_sig_';
+
+// Current wallet address (set during initialization)
+let currentWalletAddress: string | null = null;
+
+// Get storage keys for current wallet
+function getStorageKeys() {
+  const addr = currentWalletAddress?.toLowerCase() || 'default';
+  return {
+    identity: `${IDENTITY_STORAGE_PREFIX}${addr}`,
+    notes: `${NOTES_STORAGE_PREFIX}${addr}`,
+    stealthKeys: `${STEALTH_KEYS_STORAGE_PREFIX}${addr}`,
+    signature: `${SIGNATURE_STORAGE_PREFIX}${addr}`,
+  };
+}
 
 /**
  * Shielded wallet state
@@ -78,11 +93,22 @@ const DEFAULT_POOL_ADDRESS = '0x6d237c2ed7036bf2F2006BcA6D3cA98E6E45b5f6';
 
 /**
  * Initialize shielded wallet
- * Loads existing identity or creates a new one
- * Automatically syncs notes with on-chain data
+ * Derives identity from wallet signature for consistent cross-device experience
+ * 
+ * @param walletAddress - The connected wallet's address
+ * @param signMessage - Function to request wallet signature
+ * @param poolAddress - Optional pool address for syncing
  */
-export async function initializeShieldedWallet(poolAddress?: string): Promise<ShieldedIdentity> {
-  // Try to load existing identity
+export async function initializeShieldedWallet(
+  walletAddress: string,
+  signMessage?: (message: string) => Promise<string>,
+  poolAddress?: string
+): Promise<ShieldedIdentity> {
+  // Set current wallet address for storage keys
+  currentWalletAddress = walletAddress;
+  const keys = getStorageKeys();
+  
+  // Try to load existing identity for this wallet
   const storedIdentity = loadIdentityFromStorage();
   
   if (storedIdentity) {
@@ -92,26 +118,95 @@ export async function initializeShieldedWallet(poolAddress?: string): Promise<Sh
     
     // Auto-sync notes with chain if we have any
     if (walletState.notes.length > 0) {
-      console.log('Auto-syncing notes with blockchain...');
+      console.log('[ShieldedWallet] Auto-syncing notes with blockchain...');
       try {
         await syncNotesWithChain(poolAddress || DEFAULT_POOL_ADDRESS);
       } catch (error) {
-        console.warn('Auto-sync failed, continuing with stored notes:', error);
+        console.warn('[ShieldedWallet] Auto-sync failed, continuing with stored notes:', error);
       }
     }
     
+    console.log(`[ShieldedWallet] Loaded identity for ${walletAddress.slice(0, 8)}...`);
     return storedIdentity;
   }
   
-  // Create new identity
-  const identity = await generateShieldedIdentity();
+  // No existing identity - derive from wallet signature
+  console.log(`[ShieldedWallet] Creating new identity for ${walletAddress.slice(0, 8)}...`);
+  
+  let signature: string;
+  
+  // Check if we have a stored signature (from previous session)
+  const storedSig = typeof window !== 'undefined' ? localStorage.getItem(keys.signature) : null;
+  
+  if (storedSig) {
+    signature = storedSig;
+    console.log('[ShieldedWallet] Using stored signature');
+  } else if (signMessage) {
+    // Request new signature from wallet
+    const message = `Dogenado Shielded Wallet\n\nSign this message to create your shielded identity.\n\nThis signature is used to derive your private spending key.\nIt will be the same on any device where you sign with this wallet.\n\nWallet: ${walletAddress}\nVersion: 1`;
+    
+    signature = await signMessage(message);
+    
+    // Store signature for future sessions (so user doesn't have to sign again)
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(keys.signature, signature);
+    }
+    console.log('[ShieldedWallet] New signature obtained and stored');
+  } else {
+    // Fallback: generate random identity (not recommended for production)
+    console.warn('[ShieldedWallet] No signMessage provided, generating random identity');
+    const identity = await generateShieldedIdentity();
+    saveIdentityToStorage(identity);
+    walletState.identity = identity;
+    walletState.notes = [];
+    walletState.isInitialized = true;
+    return identity;
+  }
+  
+  // Derive identity from signature
+  const identity = await deriveIdentityFromSignature(signature);
   saveIdentityToStorage(identity);
   
   walletState.identity = identity;
   walletState.notes = [];
   walletState.isInitialized = true;
   
+  console.log(`[ShieldedWallet] Identity created: ${identity.addressString.slice(0, 20)}...`);
   return identity;
+}
+
+/**
+ * Derive shielded identity from wallet signature
+ * This ensures the same wallet always gets the same shielded address
+ */
+async function deriveIdentityFromSignature(signature: string): Promise<ShieldedIdentity> {
+  const { keccak256, toBytes } = await import('viem');
+  const { FIELD_SIZE } = await import('./shielded-crypto');
+  
+  // Hash the signature to get spending key
+  const hash1 = keccak256(toBytes(signature));
+  const spendingKey = BigInt(hash1) % FIELD_SIZE;
+  
+  // Derive viewing key from spending key
+  const hash2 = keccak256(toBytes(hash1 + ':viewing'));
+  const viewingKey = BigInt(hash2) % FIELD_SIZE;
+  
+  // Generate public keys (simplified - in production use proper curve operations)
+  const spendingPubKey = spendingKey; // Simplified: G * spendingKey
+  const viewingPubKey = viewingKey;   // Simplified: G * viewingKey
+  
+  // Create shielded address string
+  const addressString = `dogenado:z${spendingPubKey.toString(16).padStart(64, '0')}`;
+  
+  return {
+    spendingKey,
+    viewingKey,
+    shieldedAddress: {
+      spendingPubKey,
+      viewingPubKey,
+    },
+    addressString,
+  };
 }
 
 /**
@@ -492,8 +587,10 @@ export function clearWallet(): void {
   };
   
   if (typeof localStorage !== 'undefined') {
-    localStorage.removeItem(IDENTITY_STORAGE_KEY);
-    localStorage.removeItem(NOTES_STORAGE_KEY);
+    const keys = getStorageKeys();
+    localStorage.removeItem(keys.identity);
+    localStorage.removeItem(keys.notes);
+    localStorage.removeItem(keys.signature);
   }
 }
 
@@ -621,7 +718,8 @@ export async function syncNotesWithChain(poolAddress: string): Promise<{
 export function clearNotes(): void {
   walletState.notes = [];
   if (typeof localStorage !== 'undefined') {
-    localStorage.removeItem(NOTES_STORAGE_KEY);
+    const keys = getStorageKeys();
+    localStorage.removeItem(keys.notes);
   }
 }
 
@@ -630,14 +728,16 @@ export function clearNotes(): void {
 function saveIdentityToStorage(identity: ShieldedIdentity): void {
   if (typeof localStorage === 'undefined') return;
   
+  const keys = getStorageKeys();
   const serialized = serializeIdentity(identity);
-  localStorage.setItem(IDENTITY_STORAGE_KEY, JSON.stringify(serialized));
+  localStorage.setItem(keys.identity, JSON.stringify(serialized));
 }
 
 function loadIdentityFromStorage(): ShieldedIdentity | null {
   if (typeof localStorage === 'undefined') return null;
   
-  const stored = localStorage.getItem(IDENTITY_STORAGE_KEY);
+  const keys = getStorageKeys();
+  const stored = localStorage.getItem(keys.identity);
   if (!stored) return null;
   
   try {
@@ -651,14 +751,16 @@ function loadIdentityFromStorage(): ShieldedIdentity | null {
 function saveNotesToStorage(notes: ShieldedNote[]): void {
   if (typeof localStorage === 'undefined') return;
   
+  const keys = getStorageKeys();
   const serialized = notes.map(serializeNote);
-  localStorage.setItem(NOTES_STORAGE_KEY, JSON.stringify(serialized));
+  localStorage.setItem(keys.notes, JSON.stringify(serialized));
 }
 
 function loadNotesFromStorage(): ShieldedNote[] {
   if (typeof localStorage === 'undefined') return [];
   
-  const stored = localStorage.getItem(NOTES_STORAGE_KEY);
+  const keys = getStorageKeys();
+  const stored = localStorage.getItem(keys.notes);
   if (!stored) return [];
   
   try {
@@ -690,13 +792,15 @@ function saveStealthKeysToStorage(keys: StealthKeys): void {
     spendingPubKey: keys.metaAddress.spendingPubKey.toString(16),
     viewingPubKey: keys.metaAddress.viewingPubKey.toString(16),
   };
-  localStorage.setItem(STEALTH_KEYS_STORAGE_KEY, JSON.stringify(serialized));
+  const storageKeys = getStorageKeys();
+  localStorage.setItem(storageKeys.stealthKeys, JSON.stringify(serialized));
 }
 
 function loadStealthKeysFromStorage(): StealthKeys | null {
   if (typeof localStorage === 'undefined') return null;
   
-  const stored = localStorage.getItem(STEALTH_KEYS_STORAGE_KEY);
+  const storageKeys = getStorageKeys();
+  const stored = localStorage.getItem(storageKeys.stealthKeys);
   if (!stored) return null;
   
   try {

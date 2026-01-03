@@ -94,7 +94,7 @@ export function ShieldedWallet() {
   
   // Initialize shielded wallet only when main wallet is connected
   useEffect(() => {
-    if (!mounted || !wallet?.isConnected) {
+    if (!mounted || !wallet?.isConnected || !wallet?.address) {
       setWalletState(null)
       setIsInitialized(false)
       return
@@ -103,24 +103,51 @@ export function ShieldedWallet() {
     async function init() {
       setIsLoading(true)
       try {
-        await initializeShieldedWallet()
+        // Sign function to derive shielded identity from wallet
+        const signMessage = async (message: string): Promise<string> => {
+          const provider = (window as any).ethereum
+          if (!provider) throw new Error("No wallet provider")
+          
+          // Request signature from wallet
+          const signature = await provider.request({
+            method: "personal_sign",
+            params: [message, wallet.address],
+          })
+          return signature
+        }
+        
+        // Initialize with wallet address and sign function
+        await initializeShieldedWallet(wallet.address, signMessage)
         
         // Initialize stealth keys for one-time receive addresses
-        if (wallet?.address) {
-          await initializeStealthKeys(wallet.address)
-          const addr = getStealthReceiveAddress()
-          setStealthAddress(addr)
-        }
+        await initializeStealthKeys(wallet.address)
+        const addr = getStealthReceiveAddress()
+        setStealthAddress(addr)
         
         setWalletState(getWalletState())
         setIsInitialized(true)
-      } catch (error) {
-        console.error("Failed to initialize shielded wallet:", error)
+        
         toast({
-          title: "Initialization Failed",
-          description: "Could not initialize shielded wallet",
-          variant: "destructive",
+          title: "Shielded Wallet Ready",
+          description: "Your shielded identity is linked to your wallet",
         })
+      } catch (error: any) {
+        console.error("Failed to initialize shielded wallet:", error)
+        
+        // Check if user rejected signature
+        if (error.code === 4001 || error.message?.includes('rejected')) {
+          toast({
+            title: "Signature Required",
+            description: "Please sign the message to access your shielded wallet",
+            variant: "destructive",
+          })
+        } else {
+          toast({
+            title: "Initialization Failed",
+            description: error.message || "Could not initialize shielded wallet",
+            variant: "destructive",
+          })
+        }
       } finally {
         setIsLoading(false)
       }
