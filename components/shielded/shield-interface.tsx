@@ -349,7 +349,7 @@ export function ShieldInterface({ onSuccess, publicBalance = "0" }: ShieldInterf
           <Button 
             variant="outline" 
             className="w-full" 
-            onClick={resetState}
+            onClick={reset}
           >
             Cancel and try again
           </Button>
