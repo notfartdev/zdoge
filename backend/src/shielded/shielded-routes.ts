@@ -6,11 +6,12 @@
  * - Get Merkle paths for proofs
  * - Get transfer memos for note discovery
  * - Check nullifier status
- * - Relay shielded transactions
+ * - Relay shielded transactions (AUTOMATIC - user never pays gas)
  */
 
 import { Router, type Request, type Response } from 'express';
-import { type Address } from 'viem';
+import { type Address, createPublicClient, createWalletClient, http } from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
 import {
   getShieldedPool,
   getShieldedMerklePath,
@@ -18,8 +19,60 @@ import {
   getShieldedPoolStats,
   isNullifierSpent,
 } from './shielded-indexer.js';
+import { config, dogeosTestnet } from '../config.js';
 
 export const shieldedRouter = Router();
+
+// ============ Relayer Configuration ============
+
+// Relayer fee: 0.5% of withdrawal amount (configurable)
+const RELAYER_FEE_PERCENT = 0.5;
+const MIN_RELAYER_FEE = BigInt(0.001 * 1e18); // Minimum 0.001 DOGE
+
+// Initialize relayer wallet
+let relayerWallet: ReturnType<typeof createWalletClient> | null = null;
+let relayerAddress: Address | null = null;
+
+if (process.env.RELAYER_PRIVATE_KEY) {
+  try {
+    const account = privateKeyToAccount(`0x${process.env.RELAYER_PRIVATE_KEY.replace('0x', '')}`);
+    relayerWallet = createWalletClient({
+      account,
+      chain: dogeosTestnet,
+      transport: http(config.rpcUrl),
+    });
+    relayerAddress = account.address;
+    console.log(`[ShieldedRelayer] Initialized: ${relayerAddress}`);
+  } catch (error) {
+    console.error('[ShieldedRelayer] Failed to initialize:', error);
+  }
+} else {
+  console.warn('[ShieldedRelayer] RELAYER_PRIVATE_KEY not set - relay disabled');
+}
+
+const publicClient = createPublicClient({
+  chain: dogeosTestnet,
+  transport: http(config.rpcUrl),
+});
+
+// ShieldedPoolMultiToken ABI for unshieldNative
+const ShieldedPoolABI = [
+  {
+    type: 'function',
+    name: 'unshieldNative',
+    inputs: [
+      { name: '_proof', type: 'uint256[8]' },
+      { name: '_root', type: 'bytes32' },
+      { name: '_nullifierHash', type: 'bytes32' },
+      { name: '_recipient', type: 'address' },
+      { name: '_amount', type: 'uint256' },
+      { name: '_relayer', type: 'address' },
+      { name: '_fee', type: 'uint256' },
+    ],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+] as const;
 
 /**
  * GET /api/shielded/pool/:address
@@ -186,6 +239,189 @@ shieldedRouter.get('/stats', async (req: Request, res: Response) => {
       swap: 'Exchange shielded tokens privately',
     },
   });
+});
+
+// ============ RELAYER ENDPOINTS ============
+
+/**
+ * GET /api/shielded/relay/info
+ * Get relayer information (address, fee, availability)
+ */
+shieldedRouter.get('/relay/info', async (req: Request, res: Response) => {
+  let relayerBalance = '0';
+  let isAvailable = false;
+  
+  if (relayerAddress) {
+    try {
+      const balance = await publicClient.getBalance({ address: relayerAddress });
+      relayerBalance = (Number(balance) / 1e18).toFixed(4);
+      isAvailable = balance >= BigInt(0.01 * 1e18); // Need at least 0.01 DOGE for gas
+    } catch (error) {
+      console.error('[ShieldedRelayer] Failed to get balance:', error);
+    }
+  }
+  
+  res.json({
+    available: isAvailable,
+    address: relayerAddress || null,
+    balance: relayerBalance,
+    feePercent: RELAYER_FEE_PERCENT,
+    minFee: (Number(MIN_RELAYER_FEE) / 1e18).toString(),
+    supportedTokens: ['DOGE'], // Native DOGE for now
+  });
+});
+
+/**
+ * POST /api/shielded/relay/unshield
+ * Relay an unshield transaction (USER PAYS NO GAS)
+ * 
+ * Body:
+ * - poolAddress: ShieldedPool contract address
+ * - proof: uint256[8] ZK proof
+ * - root: bytes32 Merkle root
+ * - nullifierHash: bytes32 nullifier
+ * - recipient: address to receive funds
+ * - amount: total amount being withdrawn (fee will be deducted)
+ */
+shieldedRouter.post('/relay/unshield', async (req: Request, res: Response) => {
+  if (!relayerWallet || !relayerAddress) {
+    return res.status(503).json({ 
+      error: 'Relayer not available',
+      message: 'Relayer wallet not configured. Please try again later.',
+    });
+  }
+  
+  const { poolAddress, proof, root, nullifierHash, recipient, amount } = req.body;
+  
+  // Validate inputs
+  if (!poolAddress || !proof || !root || !nullifierHash || !recipient || !amount) {
+    return res.status(400).json({ 
+      error: 'Missing parameters',
+      required: ['poolAddress', 'proof', 'root', 'nullifierHash', 'recipient', 'amount'],
+    });
+  }
+  
+  if (!Array.isArray(proof) || proof.length !== 8) {
+    return res.status(400).json({ error: 'Proof must be array of 8 elements' });
+  }
+  
+  const amountBigInt = BigInt(amount);
+  
+  // Calculate fee
+  const feePercent = BigInt(Math.floor(RELAYER_FEE_PERCENT * 100)); // 0.5% = 50 basis points
+  let fee = (amountBigInt * feePercent) / 10000n;
+  if (fee < MIN_RELAYER_FEE) {
+    fee = MIN_RELAYER_FEE;
+  }
+  
+  // Ensure fee doesn't exceed amount
+  if (fee >= amountBigInt) {
+    return res.status(400).json({ 
+      error: 'Amount too small',
+      message: `Minimum withdrawal is ${(Number(MIN_RELAYER_FEE) / 1e18 * 2).toFixed(4)} DOGE`,
+    });
+  }
+  
+  const amountAfterFee = amountBigInt - fee;
+  
+  console.log(`[ShieldedRelayer] Processing unshield:`);
+  console.log(`  Pool: ${poolAddress}`);
+  console.log(`  Recipient: ${recipient}`);
+  console.log(`  Amount: ${Number(amountBigInt) / 1e18} DOGE`);
+  console.log(`  Fee: ${Number(fee) / 1e18} DOGE (${RELAYER_FEE_PERCENT}%)`);
+  console.log(`  After fee: ${Number(amountAfterFee) / 1e18} DOGE`);
+  
+  try {
+    // Check relayer balance
+    const relayerBalance = await publicClient.getBalance({ address: relayerAddress });
+    if (relayerBalance < BigInt(0.01 * 1e18)) {
+      console.error('[ShieldedRelayer] Insufficient gas balance');
+      return res.status(503).json({ 
+        error: 'Relayer temporarily unavailable',
+        message: 'Relayer needs more gas. Please try again later.',
+      });
+    }
+    
+    // Convert proof strings to bigints
+    const proofBigInts = proof.map((p: string) => BigInt(p)) as [bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint];
+    
+    // Submit transaction
+    const txHash = await relayerWallet.writeContract({
+      address: poolAddress as Address,
+      abi: ShieldedPoolABI,
+      functionName: 'unshieldNative',
+      args: [
+        proofBigInts,
+        root as `0x${string}`,
+        nullifierHash as `0x${string}`,
+        recipient as Address,
+        amountBigInt,
+        relayerAddress,
+        fee,
+      ],
+    });
+    
+    console.log(`[ShieldedRelayer] TX submitted: ${txHash}`);
+    
+    // Wait for confirmation
+    const receipt = await publicClient.waitForTransactionReceipt({ 
+      hash: txHash,
+      confirmations: 1,
+    });
+    
+    if (receipt.status === 'reverted') {
+      console.error('[ShieldedRelayer] TX reverted');
+      return res.status(500).json({ 
+        error: 'Transaction reverted',
+        message: 'The unshield transaction was rejected by the contract. Proof may be invalid.',
+      });
+    }
+    
+    console.log(`[ShieldedRelayer] TX confirmed in block ${receipt.blockNumber}`);
+    
+    res.json({
+      success: true,
+      txHash,
+      blockNumber: Number(receipt.blockNumber),
+      recipient,
+      amountReceived: amountAfterFee.toString(),
+      fee: fee.toString(),
+      relayer: relayerAddress,
+    });
+    
+  } catch (error: any) {
+    console.error('[ShieldedRelayer] Error:', error.message);
+    
+    // Parse common errors
+    const errorMsg = error.message || String(error);
+    
+    if (errorMsg.includes('InvalidProof')) {
+      return res.status(400).json({ error: 'Invalid proof', message: 'ZK proof verification failed' });
+    }
+    if (errorMsg.includes('UnknownRoot') || errorMsg.includes('InvalidMerkleRoot')) {
+      return res.status(400).json({ error: 'Invalid root', message: 'Merkle root not recognized' });
+    }
+    if (errorMsg.includes('NullifierAlreadySpent') || errorMsg.includes('already spent')) {
+      return res.status(400).json({ error: 'Already spent', message: 'This note has already been withdrawn' });
+    }
+    if (errorMsg.includes('insufficient funds')) {
+      return res.status(503).json({ error: 'Relayer out of gas', message: 'Please try again later' });
+    }
+    
+    res.status(500).json({ 
+      error: 'Transaction failed',
+      message: errorMsg.slice(0, 200),
+    });
+  }
+});
+
+/**
+ * POST /api/shielded/relay/transfer
+ * Relay a private transfer (z→z) - for future use
+ */
+shieldedRouter.post('/relay/transfer', async (req: Request, res: Response) => {
+  // TODO: Implement private transfer relay
+  res.status(501).json({ error: 'Not implemented yet' });
 });
 
 

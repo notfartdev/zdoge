@@ -1,27 +1,30 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Loader2, LogOut, AlertCircle, Check } from "lucide-react"
+import { Loader2, LogOut, AlertCircle, Check, Zap, Shield } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { ShieldedNote, formatWeiToAmount } from "@/lib/shielded/shielded-note"
 import { prepareUnshield, completeUnshield, getNotes } from "@/lib/shielded/shielded-service"
 import { useWallet } from "@/lib/wallet-context"
 import { shieldedPool } from "@/lib/dogeos-config"
-import { createPublicClient, http, encodeFunctionData, parseAbi } from "viem"
-import { dogeosTestnet } from "@/lib/dogeos-config"
 
 // Use deployed contract address
 const SHIELDED_POOL_ADDRESS = shieldedPool.address
 
-const publicClient = createPublicClient({
-  chain: dogeosTestnet,
-  transport: http(),
-})
+// Relayer API (backend)
+const RELAYER_URL = process.env.NEXT_PUBLIC_INDEXER_URL || 'https://dogenadocash.onrender.com'
+
+interface RelayerInfo {
+  available: boolean
+  address: string | null
+  feePercent: number
+  minFee: string
+}
 
 interface UnshieldInterfaceProps {
   notes: ShieldedNote[]
@@ -34,11 +37,30 @@ export function UnshieldInterface({ notes, onSuccess }: UnshieldInterfaceProps) 
   
   const [selectedNoteIndex, setSelectedNoteIndex] = useState<string>("")
   const [recipientAddress, setRecipientAddress] = useState("")
-  const [status, setStatus] = useState<"idle" | "proving" | "confirming" | "success" | "error">("idle")
+  const [status, setStatus] = useState<"idle" | "proving" | "relaying" | "success" | "error">("idle")
   const [txHash, setTxHash] = useState<string | null>(null)
   const [withdrawnAmount, setWithdrawnAmount] = useState<string | null>(null)
+  const [fee, setFee] = useState<string | null>(null)
+  const [relayerInfo, setRelayerInfo] = useState<RelayerInfo | null>(null)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
   
   const spendableNotes = notes.filter(n => n.leafIndex !== undefined && n.amount > 0n)
+  
+  // Fetch relayer info on mount
+  useEffect(() => {
+    async function fetchRelayerInfo() {
+      try {
+        const response = await fetch(`${RELAYER_URL}/api/shielded/relay/info`)
+        if (response.ok) {
+          const data = await response.json()
+          setRelayerInfo(data)
+        }
+      } catch (error) {
+        console.warn('Could not fetch relayer info:', error)
+      }
+    }
+    fetchRelayerInfo()
+  }, [])
   
   // Auto-fill recipient with connected wallet address
   const fillConnectedAddress = () => {
@@ -47,7 +69,21 @@ export function UnshieldInterface({ notes, onSuccess }: UnshieldInterfaceProps) 
     }
   }
   
+  // Calculate fee for display
+  const calculateFee = (amount: bigint): { fee: bigint; received: bigint } => {
+    if (!relayerInfo) return { fee: 0n, received: amount }
+    
+    const feePercent = BigInt(Math.floor(relayerInfo.feePercent * 100))
+    let fee = (amount * feePercent) / 10000n
+    const minFee = BigInt(Math.floor(parseFloat(relayerInfo.minFee) * 1e18))
+    if (fee < minFee) fee = minFee
+    
+    return { fee, received: amount - fee }
+  }
+  
   const handleUnshield = async () => {
+    setErrorMessage(null)
+    
     // Validate note selection
     const uiNoteIndex = parseInt(selectedNoteIndex)
     if (isNaN(uiNoteIndex) || !spendableNotes[uiNoteIndex]) {
@@ -63,7 +99,7 @@ export function UnshieldInterface({ notes, onSuccess }: UnshieldInterfaceProps) 
     if (!recipientAddress || !recipientAddress.startsWith("0x") || recipientAddress.length !== 42) {
       toast({
         title: "Invalid Address",
-        description: "Please enter a valid Ethereum address",
+        description: "Please enter a valid wallet address",
         variant: "destructive",
       })
       return
@@ -84,7 +120,7 @@ export function UnshieldInterface({ notes, onSuccess }: UnshieldInterfaceProps) 
     // Get fresh notes from service (in case sync updated them)
     const freshNotes = getNotes()
     
-    // Find the note by commitment (unique identifier), NOT by leafIndex (which might be stale in props)
+    // Find the note by commitment (unique identifier)
     const actualNoteIndex = freshNotes.findIndex(n => 
       n.commitment === selectedNoteFromProps.commitment
     )
@@ -92,7 +128,7 @@ export function UnshieldInterface({ notes, onSuccess }: UnshieldInterfaceProps) 
     if (actualNoteIndex === -1) {
       toast({
         title: "Note Not Found",
-        description: "Could not find the selected note. Try refreshing the page.",
+        description: "Could not find the selected note. Try refreshing.",
         variant: "destructive",
       })
       return
@@ -101,72 +137,62 @@ export function UnshieldInterface({ notes, onSuccess }: UnshieldInterfaceProps) 
     // Use the fresh note with updated leafIndex
     const selectedNote = freshNotes[actualNoteIndex]
     
-    console.log(`Unshielding note: commitment=${selectedNote.commitment.toString(16).slice(0,16)}..., leafIndex=${selectedNote.leafIndex}`)
+    console.log(`[Unshield] Note: commitment=${selectedNote.commitment.toString(16).slice(0,16)}..., leafIndex=${selectedNote.leafIndex}`)
     
     try {
       setStatus("proving")
       
-      // Generate proof using the actual note index in the wallet
+      // Generate proof locally
       const result = await prepareUnshield(
         recipientAddress,
         actualNoteIndex,
         SHIELDED_POOL_ADDRESS
       )
       
-      setStatus("confirming")
+      console.log('[Unshield] Proof generated, sending to relayer...')
+      setStatus("relaying")
       
-      // Send transaction
-      const provider = (window as any).ethereum
-      if (!provider) throw new Error("No wallet provider")
-      
-      // Encode unshield call with proper function data
-      const callData = encodeUnshieldCall(
-        result.proof.proof,
-        result.root,
-        result.nullifierHash,
-        recipientAddress,
-        result.amount
-      )
-      
-      const accounts = await provider.request({ method: "eth_accounts" })
-      
-      const hash = await provider.request({
-        method: "eth_sendTransaction",
-        params: [{
-          from: accounts[0],
-          to: SHIELDED_POOL_ADDRESS,
-          data: callData,
-        }],
+      // Send to relayer (USER NEVER SIGNS, NEVER PAYS GAS!)
+      const response = await fetch(`${RELAYER_URL}/api/shielded/relay/unshield`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          poolAddress: SHIELDED_POOL_ADDRESS,
+          proof: result.proof.proof, // string[] of 8 elements
+          root: result.root,
+          nullifierHash: result.nullifierHash,
+          recipient: recipientAddress,
+          amount: result.amount.toString(),
+        }),
       })
       
-      setTxHash(hash)
-      setWithdrawnAmount(formatWeiToAmount(result.amount).toFixed(4))
+      const data = await response.json()
       
-      // Wait for actual confirmation
-      const receipt = await publicClient.waitForTransactionReceipt({
-        hash: hash as `0x${string}`,
-        confirmations: 1,
-      })
-      
-      if (receipt.status === 'success') {
-        // Complete unshield (remove note from local state)
-        completeUnshield(actualNoteIndex)
-        
-        setStatus("success")
-        
-        toast({
-          title: "Unshield Successful!",
-          description: `${formatWeiToAmount(result.amount).toFixed(4)} DOGE sent to your wallet`,
-        })
-        
-        onSuccess?.()
-      } else {
-        throw new Error("Transaction reverted")
+      if (!response.ok) {
+        throw new Error(data.message || data.error || 'Relayer failed')
       }
+      
+      // Success!
+      setTxHash(data.txHash)
+      setWithdrawnAmount((Number(data.amountReceived) / 1e18).toFixed(4))
+      setFee((Number(data.fee) / 1e18).toFixed(4))
+      
+      // Complete unshield (remove note from local state)
+      completeUnshield(actualNoteIndex)
+      
+      setStatus("success")
+      
+      toast({
+        title: "Unshield Successful!",
+        description: `Received ${(Number(data.amountReceived) / 1e18).toFixed(4)} DOGE (0% gas paid by you!)`,
+      })
+      
+      onSuccess?.()
       
     } catch (error: any) {
       console.error("Unshield error:", error)
       setStatus("error")
+      setErrorMessage(error.message || "Transaction failed")
       toast({
         title: "Unshield Failed",
         description: error.message || "Transaction failed",
@@ -181,6 +207,8 @@ export function UnshieldInterface({ notes, onSuccess }: UnshieldInterfaceProps) 
     setStatus("idle")
     setTxHash(null)
     setWithdrawnAmount(null)
+    setFee(null)
+    setErrorMessage(null)
   }
   
   if (spendableNotes.length === 0) {
@@ -197,11 +225,34 @@ export function UnshieldInterface({ notes, onSuccess }: UnshieldInterfaceProps) 
   return (
     <div className="space-y-4">
       <div>
-        <h3 className="text-lg font-medium">Unshield DOGE</h3>
+        <h3 className="text-lg font-medium flex items-center gap-2">
+          Unshield DOGE
+          <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full flex items-center gap-1">
+            <Zap className="h-3 w-3" /> Gas-Free
+          </span>
+        </h3>
         <p className="text-sm text-muted-foreground">
-          Withdraw shielded funds to a public address
+          Withdraw to any address. The relayer pays gas — you pay nothing.
         </p>
       </div>
+      
+      {/* Relayer Status Banner */}
+      {relayerInfo && (
+        <div className="p-3 rounded-lg bg-muted/30 border border-muted text-sm">
+          <div className="flex items-center gap-2">
+            <Shield className="h-4 w-4 text-primary" />
+            <span className="font-medium">Privacy-Preserving Relayer</span>
+            {relayerInfo.available ? (
+              <span className="text-xs bg-green-500/20 text-green-500 px-2 py-0.5 rounded-full">Active</span>
+            ) : (
+              <span className="text-xs bg-red-500/20 text-red-500 px-2 py-0.5 rounded-full">Offline</span>
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground mt-1">
+            Fee: {relayerInfo.feePercent}% (min {relayerInfo.minFee} DOGE) • Your wallet never signs
+          </p>
+        </div>
+      )}
       
       {status === "idle" && (
         <div className="space-y-4">
@@ -241,21 +292,49 @@ export function UnshieldInterface({ notes, onSuccess }: UnshieldInterfaceProps) 
             />
           </div>
           
-          {selectedNoteIndex && (
-            <div className="p-3 rounded-lg bg-muted/50">
-              <p className="text-sm">
-                You will receive:{" "}
-                <span className="font-medium">
-                  {formatWeiToAmount(spendableNotes[parseInt(selectedNoteIndex)]?.amount || 0n).toFixed(4)} DOGE
-                </span>
-              </p>
+          {selectedNoteIndex && relayerInfo && (
+            <div className="p-3 rounded-lg bg-muted/50 space-y-1">
+              {(() => {
+                const amount = spendableNotes[parseInt(selectedNoteIndex)]?.amount || 0n
+                const { fee, received } = calculateFee(amount)
+                return (
+                  <>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Note amount:</span>
+                      <span>{formatWeiToAmount(amount).toFixed(4)} DOGE</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Relayer fee:</span>
+                      <span className="text-orange-500">-{formatWeiToAmount(fee).toFixed(4)} DOGE</span>
+                    </div>
+                    <div className="flex justify-between text-sm font-medium border-t pt-1 mt-1">
+                      <span>You receive:</span>
+                      <span className="text-green-500">{formatWeiToAmount(received).toFixed(4)} DOGE</span>
+                    </div>
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>Gas you pay:</span>
+                      <span className="text-primary">0 DOGE ✓</span>
+                    </div>
+                  </>
+                )
+              })()}
             </div>
           )}
           
-          <Button className="w-full" onClick={handleUnshield}>
+          <Button 
+            className="w-full" 
+            onClick={handleUnshield}
+            disabled={!relayerInfo?.available}
+          >
             <LogOut className="h-4 w-4 mr-2" />
-            Unshield to Wallet
+            Unshield via Relayer
           </Button>
+          
+          {!relayerInfo?.available && (
+            <p className="text-xs text-center text-muted-foreground">
+              Relayer is currently offline. Please try again later.
+            </p>
+          )}
         </div>
       )}
       
@@ -267,10 +346,11 @@ export function UnshieldInterface({ notes, onSuccess }: UnshieldInterfaceProps) 
         </div>
       )}
       
-      {status === "confirming" && (
+      {status === "relaying" && (
         <div className="flex flex-col items-center py-8 space-y-4">
           <Loader2 className="h-8 w-8 animate-spin" />
-          <p className="text-muted-foreground">Waiting for confirmation...</p>
+          <p className="text-muted-foreground">Relayer submitting transaction...</p>
+          <p className="text-xs text-muted-foreground">You don't need to sign anything</p>
         </div>
       )}
       
@@ -279,7 +359,8 @@ export function UnshieldInterface({ notes, onSuccess }: UnshieldInterfaceProps) 
           <Alert>
             <Check className="h-4 w-4 text-green-500" />
             <AlertDescription>
-              Successfully unshielded {withdrawnAmount} DOGE to your wallet!
+              Successfully unshielded {withdrawnAmount} DOGE!
+              {fee && <span className="text-muted-foreground"> (Fee: {fee} DOGE)</span>}
             </AlertDescription>
           </Alert>
           
@@ -297,6 +378,13 @@ export function UnshieldInterface({ notes, onSuccess }: UnshieldInterfaceProps) 
             </div>
           )}
           
+          <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/20 text-sm">
+            <p className="font-medium text-green-500">🎉 Zero Gas Paid</p>
+            <p className="text-muted-foreground text-xs">
+              Your wallet address never appeared in the transaction — maximum privacy!
+            </p>
+          </div>
+          
           <Button className="w-full" onClick={reset}>
             Unshield More
           </Button>
@@ -308,7 +396,7 @@ export function UnshieldInterface({ notes, onSuccess }: UnshieldInterfaceProps) 
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
-              Unshield failed. Your funds are safe and still shielded.
+              {errorMessage || "Unshield failed. Your funds are safe and still shielded."}
             </AlertDescription>
           </Alert>
           
@@ -320,65 +408,3 @@ export function UnshieldInterface({ notes, onSuccess }: UnshieldInterfaceProps) 
     </div>
   )
 }
-
-// Helper to encode unshieldNative function call
-// Function: unshieldNative(uint256[8] calldata _proof, bytes32 _root, bytes32 _nullifierHash, address payable _recipient, uint256 _amount, address _relayer, uint256 _fee)
-function encodeUnshieldCall(
-  proof: string[],
-  root: `0x${string}`,
-  nullifierHash: `0x${string}`,
-  recipient: string,
-  amount: bigint
-): string {
-  // Function selector for unshieldNative(uint256[8],bytes32,bytes32,address,uint256,address,uint256)
-  // keccak256("unshieldNative(uint256[8],bytes32,bytes32,address,uint256,address,uint256)").slice(0, 10)
-  // Verified: 0xf2b87ac2
-  const selector = "f2b87ac2"
-  
-  // Proof values are DECIMAL strings from snarkjs - convert to hex properly
-  // Each is a uint256 (32 bytes = 64 hex chars)
-  const proofHex = proof.map(p => {
-    // p is a decimal string like "12345678901234567890"
-    // Convert to BigInt then to hex
-    const value = BigInt(p)
-    return value.toString(16).padStart(64, '0')
-  }).join('')
-  
-  // Ensure we have exactly 8 proof elements
-  if (proof.length !== 8) {
-    console.error(`Expected 8 proof elements, got ${proof.length}`)
-  }
-  
-  const rootHex = root.slice(2).padStart(64, '0')
-  const nullifierHex = nullifierHash.slice(2).padStart(64, '0')
-  const recipientHex = recipient.slice(2).toLowerCase().padStart(64, '0')
-  const amountHex = amount.toString(16).padStart(64, '0')
-  const relayerHex = "0".repeat(64) // zero address
-  const feeHex = "0".repeat(64) // zero fee
-  
-  // All parameters are static - no offsets needed
-  // Order: proof[8], root, nullifierHash, recipient, amount, relayer, fee
-  const calldata = selector + 
-    proofHex +        // 8 * 32 = 256 bytes
-    rootHex +         // 32 bytes
-    nullifierHex +    // 32 bytes
-    recipientHex +    // 32 bytes
-    amountHex +       // 32 bytes
-    relayerHex +      // 32 bytes
-    feeHex            // 32 bytes
-  
-  console.log('Unshield calldata:', {
-    selector,
-    proofLength: proof.length,
-    proof0: proof[0].slice(0, 20) + '... -> 0x' + BigInt(proof[0]).toString(16).slice(0, 16) + '...',
-    root: rootHex.slice(0, 16) + '...',
-    nullifier: nullifierHex.slice(0, 16) + '...',
-    recipient: recipientHex.slice(0, 16) + '...',
-    amount: amount.toString(),
-    totalLength: calldata.length
-  })
-  
-  return '0x' + calldata
-}
-
-
