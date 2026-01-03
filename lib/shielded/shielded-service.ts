@@ -333,8 +333,8 @@ export async function prepareTransfer(
     throw new Error('Note has no leaf index');
   }
   
-  // Generate proof
-  const { proof, outputNote1, outputNote2, nullifierHash } = await generateTransferProof(
+  // Generate proof (returns root that was used in proof)
+  const { proof, outputNote1, outputNote2, nullifierHash, root } = await generateTransferProof(
     noteToSpend,
     walletState.identity,
     recipientPubkey,
@@ -344,8 +344,8 @@ export async function prepareTransfer(
     feeWei
   );
   
-  // Fetch root for return
-  const { root } = await fetchMerklePath(poolAddress, noteToSpend.leafIndex);
+  // Root is now returned from generateTransferProof (same as used in proof)
+  console.log('[Transfer] Using root from proof generation:', root.toString(16).slice(0, 20) + '...');
   
   // Encrypt note details for recipient (enables auto-discovery)
   const encryptedMemo1 = await encryptNoteForRecipient(outputNote1, recipientPubkey);

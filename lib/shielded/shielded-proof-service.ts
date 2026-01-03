@@ -321,7 +321,7 @@ async function fetchCommitmentsFromChain(poolAddress: string): Promise<{ commitm
 async function fetchContractRoot(poolAddress: string): Promise<bigint> {
   console.log(`[Merkle] Fetching contract root from ${poolAddress}...`);
   
-  // Call getLatestRoot() - function selector: 0xb8b7a433
+  // Call getLatestRoot() - function selector: 0x5445b007
   const response = await fetch(RPC_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -331,7 +331,7 @@ async function fetchContractRoot(poolAddress: string): Promise<bigint> {
       method: 'eth_call',
       params: [{
         to: poolAddress,
-        data: '0xb8b7a433', // getLatestRoot()
+        data: '0x5445b007', // getLatestRoot()
       }, 'latest'],
     }),
   });
@@ -532,6 +532,7 @@ export async function generateTransferProof(
   outputNote1: ShieldedNote;  // Recipient's note
   outputNote2: ShieldedNote;  // Change note
   nullifierHash: bigint;
+  root: bigint;  // The Merkle root used in proof
 }> {
   const snarks = await loadSnarkJS();
   
@@ -659,6 +660,7 @@ export async function generateTransferProof(
     outputNote1,
     outputNote2,
     nullifierHash,
+    root,  // Return the root used in proof generation
   };
 }
 
