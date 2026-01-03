@@ -562,10 +562,11 @@ shieldedRouter.post('/relay/transfer', async (req: Request, res: Response) => {
     let leafIndex2: number | null = null;
     
     for (const log of receipt.logs) {
-      if (log.address.toLowerCase() === poolAddress.toLowerCase() && log.topics.length >= 4) {
+      const logWithTopics = log as typeof log & { topics?: readonly `0x${string}`[] };
+      if (log.address.toLowerCase() === poolAddress.toLowerCase() && logWithTopics.topics && logWithTopics.topics.length >= 4) {
         // Transfer event has indexed nullifierHash, leafIndex1, leafIndex2
-        leafIndex1 = parseInt(log.topics[2] || '0', 16);
-        leafIndex2 = parseInt(log.topics[3] || '0', 16);
+        leafIndex1 = parseInt(logWithTopics.topics[2] || '0', 16);
+        leafIndex2 = parseInt(logWithTopics.topics[3] || '0', 16);
         break;
       }
     }
