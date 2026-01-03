@@ -158,13 +158,13 @@ export function TransferInterface({ notes, onSuccess }: TransferInterfaceProps) 
       console.log('[Transfer] Amount:', amountNum, selectedNote.token || 'DOGE')
       console.log('[Transfer] Relayer fee:', relayerFeeDoge)
       
-      // Generate proof with fee (relayer address is handled by backend)
+      // Generate proof with fee (MUST use actual relayer address in proof!)
       const result = await prepareTransfer(
         recipientAddress,
         amountNum,
         SHIELDED_POOL_ADDRESS,
         actualNoteIndex,
-        undefined, // relayerAddress - backend will fill this
+        relayerInfo?.address || '0x0000000000000000000000000000000000000000',
         relayerFeeDoge
       )
       
