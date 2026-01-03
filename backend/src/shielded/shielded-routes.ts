@@ -58,6 +58,7 @@ const publicClient = createPublicClient({
 
 // ShieldedPoolMultiToken ABI for relayer functions
 const ShieldedPoolABI = [
+  // Functions
   {
     type: 'function',
     name: 'unshieldNative',
@@ -90,6 +91,17 @@ const ShieldedPoolABI = [
     outputs: [],
     stateMutability: 'nonpayable',
   },
+  // Custom Errors
+  { type: 'error', name: 'InvalidProof', inputs: [] },
+  { type: 'error', name: 'NullifierAlreadySpent', inputs: [] },
+  { type: 'error', name: 'InvalidAmount', inputs: [] },
+  { type: 'error', name: 'InvalidRecipient', inputs: [] },
+  { type: 'error', name: 'TransferFailed', inputs: [] },
+  { type: 'error', name: 'CommitmentAlreadyExists', inputs: [] },
+  { type: 'error', name: 'InsufficientPoolBalance', inputs: [] },
+  { type: 'error', name: 'UnsupportedToken', inputs: [] },
+  { type: 'error', name: 'Unauthorized', inputs: [] },
+  { type: 'error', name: 'InvalidSwapRate', inputs: [] },
 ] as const;
 
 /**
