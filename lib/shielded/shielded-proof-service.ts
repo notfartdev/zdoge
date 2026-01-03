@@ -615,6 +615,14 @@ export async function generateUnshieldProof(
   nullifierHash: bigint;
   root: bigint;
 }> {
+  console.log('=== UNSHIELD PROOF GENERATION ===');
+  console.log('Pool:', poolAddress);
+  console.log('Note leafIndex:', note.leafIndex);
+  console.log('Note amount:', note.amount.toString());
+  console.log('Note commitment:', '0x' + note.commitment.toString(16));
+  console.log('Withdraw amount:', withdrawAmount.toString());
+  console.log('Recipient:', recipientAddress);
+  
   const snarks = await loadSnarkJS();
   
   if (note.leafIndex === undefined) {
@@ -627,10 +635,13 @@ export async function generateUnshieldProof(
   }
   
   // Fetch Merkle path
+  console.log('Fetching Merkle path...');
   const { pathElements, pathIndices, root } = await fetchMerklePath(
     poolAddress,
     note.leafIndex
   );
+  console.log('✓ Merkle root:', '0x' + root.toString(16));
+  console.log('✓ Path depth:', pathElements.length);
   
   // Compute nullifier
   const nullifier = await computeNullifier(
@@ -662,11 +673,22 @@ export async function generateUnshieldProof(
   };
   
   // Generate proof
+  console.log('Generating ZK proof...');
+  console.log('Circuit inputs:', {
+    root: circuitInput.root.slice(0, 20) + '...',
+    nullifierHash: circuitInput.nullifierHash.slice(0, 20) + '...',
+    recipient: circuitInput.recipient,
+    amount: circuitInput.amount,
+  });
+  
   const { proof, publicSignals } = await snarks.groth16.fullProve(
     circuitInput,
     `${CIRCUITS_PATH}/unshield.wasm`,
     `${CIRCUITS_PATH}/unshield_final.zkey`
   );
+  
+  console.log('✓ Proof generated successfully');
+  console.log('Public signals:', publicSignals.map((s: string) => s.slice(0, 20) + '...'));
   
   return {
     proof: {
