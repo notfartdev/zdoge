@@ -226,13 +226,13 @@ export function UnshieldInterface({ notes, onSuccess }: UnshieldInterfaceProps) 
     <div className="space-y-4">
       <div>
         <h3 className="text-lg font-medium flex items-center gap-2">
-          Unshield DOGE
+          Send to Public Address
           <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full flex items-center gap-1">
             <Zap className="h-3 w-3" /> Gas-Free
           </span>
         </h3>
         <p className="text-sm text-muted-foreground">
-          Withdraw to any address. The relayer pays gas — you pay nothing.
+          Send shielded DOGE to <strong>any</strong> public wallet. You never sign or pay gas.
         </p>
       </div>
       

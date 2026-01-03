@@ -35,13 +35,30 @@ const DepositEventABI = parseAbiItem('event Deposit(bytes32 indexed commitment, 
 
 interface ShieldInterfaceProps {
   onSuccess?: () => void
+  publicBalance?: string // User's current public DOGE balance
 }
 
-export function ShieldInterface({ onSuccess }: ShieldInterfaceProps) {
+export function ShieldInterface({ onSuccess, publicBalance = "0" }: ShieldInterfaceProps) {
   const { wallet } = useWallet()
   const { toast } = useToast()
   
   const [amount, setAmount] = useState("")
+  
+  // Quick action: Shield all public balance
+  const handleShieldAll = () => {
+    const balance = parseFloat(publicBalance)
+    if (balance <= 0.01) {
+      toast({
+        title: "Insufficient Balance",
+        description: "You need at least 0.01 DOGE to shield",
+        variant: "destructive",
+      })
+      return
+    }
+    // Leave a small amount for gas (0.001 DOGE)
+    const shieldAmount = Math.max(0, balance - 0.001)
+    setAmount(shieldAmount.toFixed(4))
+  }
   const [status, setStatus] = useState<"idle" | "preparing" | "confirming" | "success" | "error">("idle")
   const [noteBackup, setNoteBackup] = useState<string | null>(null)
   const [showNote, setShowNote] = useState(false)
@@ -249,7 +266,17 @@ export function ShieldInterface({ onSuccess }: ShieldInterfaceProps) {
       {status === "idle" && (
         <div className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="amount">Amount (DOGE)</Label>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="amount">Amount (DOGE)</Label>
+              <Button
+                variant="link"
+                size="sm"
+                className="h-auto p-0 text-xs"
+                onClick={handleShieldAll}
+              >
+                Shield All ({publicBalance} DOGE)
+              </Button>
+            </div>
             <Input
               id="amount"
               type="number"
@@ -258,6 +285,14 @@ export function ShieldInterface({ onSuccess }: ShieldInterfaceProps) {
               onChange={(e) => setAmount(e.target.value)}
             />
           </div>
+          
+          {parseFloat(publicBalance) > 0 && (
+            <div className="p-3 rounded-lg bg-primary/5 border border-primary/20">
+              <p className="text-sm text-muted-foreground">
+                💡 <strong>Auto-Shield:</strong> Click "Shield All" to protect your entire public balance
+              </p>
+            </div>
+          )}
           
           <Button 
             className="w-full" 

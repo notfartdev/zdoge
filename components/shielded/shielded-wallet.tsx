@@ -401,13 +401,13 @@ export function ShieldedWallet() {
                 Send
               </TabsTrigger>
               <TabsTrigger value="unshield" className="flex items-center gap-2">
-                <LogOut className="h-4 w-4" />
-                Unshield
+                <Wallet className="h-4 w-4" />
+                To Public
               </TabsTrigger>
             </TabsList>
             
             <TabsContent value="shield" className="mt-6">
-              <ShieldInterface onSuccess={refreshState} />
+              <ShieldInterface onSuccess={refreshState} publicBalance={publicBalance} />
             </TabsContent>
             
             <TabsContent value="swap" className="mt-6">
