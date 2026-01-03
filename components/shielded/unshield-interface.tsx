@@ -335,11 +335,13 @@ function encodeUnshieldCall(
   // Verified: 0xf2b87ac2
   const selector = "f2b87ac2"
   
-  // Proof format from snarkjs: [a[0], a[1], b[0][0], b[0][1], b[1][0], b[1][1], c[0], c[1]]
-  // Each is a uint256 (32 bytes)
+  // Proof values are DECIMAL strings from snarkjs - convert to hex properly
+  // Each is a uint256 (32 bytes = 64 hex chars)
   const proofHex = proof.map(p => {
-    const hex = p.startsWith('0x') ? p.slice(2) : p
-    return hex.padStart(64, '0')
+    // p is a decimal string like "12345678901234567890"
+    // Convert to BigInt then to hex
+    const value = BigInt(p)
+    return value.toString(16).padStart(64, '0')
   }).join('')
   
   // Ensure we have exactly 8 proof elements
@@ -368,6 +370,7 @@ function encodeUnshieldCall(
   console.log('Unshield calldata:', {
     selector,
     proofLength: proof.length,
+    proof0: proof[0].slice(0, 20) + '... -> 0x' + BigInt(proof[0]).toString(16).slice(0, 16) + '...',
     root: rootHex.slice(0, 16) + '...',
     nullifier: nullifierHex.slice(0, 16) + '...',
     recipient: recipientHex.slice(0, 16) + '...',
