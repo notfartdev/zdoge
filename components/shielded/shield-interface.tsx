@@ -99,8 +99,13 @@ export function ShieldInterface({ onSuccess, publicBalance = "0" }: ShieldInterf
       isSubmittingRef.current = true
       setStatus("preparing")
       
+      console.log("[Shield] Preparing shield for amount:", amountNum)
+      
       // Prepare the shield (create note)
       const { note, commitment, amountWei } = await prepareShield(amountNum)
+      
+      console.log("[Shield] Note prepared, commitment:", commitment.slice(0, 20) + "...")
+      console.log("[Shield] Amount in wei:", amountWei.toString())
       
       // Store note temporarily (NOT shown to user yet)
       setPendingNote(note)
@@ -109,17 +114,31 @@ export function ShieldInterface({ onSuccess, publicBalance = "0" }: ShieldInterf
       
       // Send transaction
       const provider = (window as any).ethereum
-      if (!provider) throw new Error("No wallet provider")
+      if (!provider) {
+        console.error("[Shield] No wallet provider found!")
+        throw new Error("No wallet provider - please install MetaMask")
+      }
       
+      console.log("[Shield] Sending transaction to:", SHIELDED_POOL_ADDRESS)
+      console.log("[Shield] From:", wallet.address)
+      console.log("[Shield] Value:", `0x${amountWei.toString(16)}`)
+      
+      const txRequest = {
+        from: wallet.address,
+        to: SHIELDED_POOL_ADDRESS,
+        value: `0x${amountWei.toString(16)}`,
+        data: `0x${encodeShieldNative(commitment)}`,
+      }
+      
+      console.log("[Shield] TX Request:", JSON.stringify(txRequest, null, 2))
+      
+      // This should trigger MetaMask popup
       const hash = await provider.request({
         method: "eth_sendTransaction",
-        params: [{
-          from: wallet.address,
-          to: SHIELDED_POOL_ADDRESS,
-          value: `0x${amountWei.toString(16)}`,
-          data: `0x${encodeShieldNative(commitment)}`,
-        }],
+        params: [txRequest],
       })
+      
+      console.log("[Shield] Transaction submitted! Hash:", hash)
       
       setTxHash(hash)
       
@@ -320,7 +339,20 @@ export function ShieldInterface({ onSuccess, publicBalance = "0" }: ShieldInterf
             <p className="text-xs text-muted-foreground">
               Your note will appear after the transaction is confirmed
             </p>
+            <div className="p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/30 mt-4">
+              <p className="text-xs text-yellow-600 dark:text-yellow-400">
+                💡 <strong>No popup?</strong> Check if MetaMask is open and has a pending transaction.
+                Click the MetaMask icon in your browser toolbar.
+              </p>
+            </div>
           </div>
+          <Button 
+            variant="outline" 
+            className="w-full" 
+            onClick={resetState}
+          >
+            Cancel and try again
+          </Button>
         </div>
       )}
       
