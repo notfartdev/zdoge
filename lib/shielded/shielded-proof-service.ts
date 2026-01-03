@@ -356,25 +356,27 @@ export async function fetchMerklePath(
   // TEMPORARY: Skip indexer due to backend bug, go straight to client-side
   console.log('[Merkle] Skipping indexer, building client-side Merkle tree...');
   
-  /* Try indexer first
+  // Try indexer first (note: shielded pools use /api/shielded/pool/...)
   try {
     const response = await fetch(
-      `${INDEXER_URL}/api/pool/${poolAddress}/path/${leafIndex}`,
-      { signal: AbortSignal.timeout(3000) } // 3 second timeout
+      `${INDEXER_URL}/api/shielded/pool/${poolAddress}/path/${leafIndex}`,
+      { signal: AbortSignal.timeout(5000) } // 5 second timeout
     );
     
     if (response.ok) {
       const data = await response.json();
+      console.log('[Merkle] Got path from indexer');
       return {
         pathElements: data.pathElements.map((e: string) => BigInt(e)),
         pathIndices: data.pathIndices,
         root: BigInt(data.root),
       };
+    } else {
+      console.log(`[Merkle] Indexer returned ${response.status}, falling back to client-side...`);
     }
   } catch (error) {
-    console.log('Indexer not available, building Merkle tree client-side...');
+    console.log('[Merkle] Indexer not available, building Merkle tree client-side...');
   }
-  */
   
   // Fallback: Build Merkle tree client-side from blockchain events
   console.log(`Fetching commitments from chain for pool ${poolAddress}...`);
