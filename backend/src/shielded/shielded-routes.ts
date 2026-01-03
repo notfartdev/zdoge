@@ -508,6 +508,7 @@ shieldedRouter.post('/relay/transfer', async (req: Request, res: Response) => {
   
   console.log(`[ShieldedRelayer] Processing transfer:`);
   console.log(`  Pool: ${poolAddress}`);
+  console.log(`  Root: ${root.slice(0, 18)}...`);
   console.log(`  Nullifier: ${nullifierHash.slice(0, 18)}...`);
   console.log(`  Output1: ${outputCommitment1.slice(0, 18)}...`);
   console.log(`  Output2: ${outputCommitment2.slice(0, 18)}...`);
@@ -521,6 +522,33 @@ shieldedRouter.post('/relay/transfer', async (req: Request, res: Response) => {
       return res.status(503).json({ 
         error: 'Relayer temporarily unavailable',
         message: 'Relayer needs more gas. Please try again later.',
+      });
+    }
+    
+    // Verify root is known on-chain BEFORE submitting
+    const isKnownRootABI = [{
+      type: 'function',
+      name: 'isKnownRoot',
+      inputs: [{ name: 'root', type: 'bytes32' }],
+      outputs: [{ name: '', type: 'bool' }],
+      stateMutability: 'view',
+    }] as const;
+    
+    const isRootKnown = await publicClient.readContract({
+      address: poolAddress as Address,
+      abi: isKnownRootABI,
+      functionName: 'isKnownRoot',
+      args: [root as `0x${string}`],
+    });
+    
+    console.log(`[ShieldedRelayer] Root known on-chain: ${isRootKnown}`);
+    
+    if (!isRootKnown) {
+      console.error('[ShieldedRelayer] ❌ Root NOT known on-chain!');
+      return res.status(400).json({
+        error: 'Invalid root',
+        message: 'The Merkle root does not exist on-chain. Tree may be out of sync.',
+        providedRoot: root,
       });
     }
     
