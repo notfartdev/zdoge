@@ -263,6 +263,23 @@ export function ShieldedWallet() {
   const balance = walletState ? getShieldedBalance() : 0n
   const notes = walletState ? getNotes() : []
   
+  // Calculate per-token shielded balances
+  const shieldedBalancesByToken: Record<string, bigint> = {}
+  for (const note of notes) {
+    const token = note.token || 'DOGE'
+    shieldedBalancesByToken[token] = (shieldedBalancesByToken[token] || 0n) + note.amount
+  }
+  
+  // Token icons for display
+  const TOKEN_ICONS: Record<string, string> = {
+    DOGE: '🐕',
+    USDC: '💵',
+    USDT: '💴',
+    USD1: '💰',
+    WETH: '⟠',
+    LBTC: '₿',
+  }
+  
   return (
     <div className="space-y-6">
       {/* Wallet Header */}
@@ -327,16 +344,30 @@ export function ShieldedWallet() {
               </div>
             </div>
             
-            {/* Shielded Balance */}
+            {/* Shielded Balance - Per Token */}
             <div className="p-4 rounded-lg bg-muted/50">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
                 <Lock className="h-3.5 w-3.5" />
                 Shielded Balance
               </div>
-              <div className="text-2xl font-bold">
-                {formatWeiToAmount(balance).toFixed(4)} DOGE
-              </div>
-              <div className="text-xs text-muted-foreground mt-1">
+              {Object.keys(shieldedBalancesByToken).length > 0 ? (
+                <div className="space-y-1">
+                  {Object.entries(shieldedBalancesByToken).map(([token, amount]) => (
+                    <div key={token} className="flex items-center justify-between">
+                      <span className="flex items-center gap-1">
+                        <span>{TOKEN_ICONS[token] || '🪙'}</span>
+                        <span className="text-sm">{token}</span>
+                      </span>
+                      <span className="font-bold">{formatWeiToAmount(amount).toFixed(4)}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-lg font-bold text-muted-foreground">
+                  0.0000
+                </div>
+              )}
+              <div className="text-xs text-muted-foreground mt-2 pt-2 border-t border-muted">
                 {notes.length} note{notes.length !== 1 ? "s" : ""} • Private
               </div>
             </div>

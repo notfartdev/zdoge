@@ -67,7 +67,7 @@ export function ShieldInterface({ onSuccess, publicBalance = "0", tokenBalances 
   const [txHash, setTxHash] = useState<string | null>(null)
   const [leafIndex, setLeafIndex] = useState<number | null>(null)
   const [pendingNote, setPendingNote] = useState<ShieldedNote | null>(null)
-  const [tokenBalance, setTokenBalance] = useState<string>("0")
+  const [allTokenBalances, setAllTokenBalances] = useState<Record<string, string>>({})
   
   // Prevent duplicate submissions
   const isSubmittingRef = useRef(false)
@@ -75,35 +75,44 @@ export function ShieldInterface({ onSuccess, publicBalance = "0", tokenBalances 
   // Get selected token info
   const selectedTokenInfo = SHIELDED_TOKENS.find(t => t.symbol === selectedToken)!
   
-  // Fetch token balance when token or wallet changes
+  // Current selected token balance
+  const tokenBalance = allTokenBalances[selectedToken] || "0"
+  
+  // Fetch ALL token balances when wallet changes
   useEffect(() => {
-    async function fetchBalance() {
+    async function fetchAllBalances() {
       if (!wallet?.address) {
-        setTokenBalance("0")
+        setAllTokenBalances({})
         return
       }
       
-      if (selectedTokenInfo.isNative) {
-        // Use public balance for native DOGE
-        setTokenBalance(publicBalance)
-      } else {
-        // Fetch ERC20 balance
+      const balances: Record<string, string> = {}
+      
+      for (const token of SHIELDED_TOKENS) {
         try {
-          const balance = await publicClient.readContract({
-            address: selectedTokenInfo.address,
-            abi: ERC20ABI,
-            functionName: 'balanceOf',
-            args: [wallet.address as Address],
-          })
-          setTokenBalance((Number(balance) / 1e18).toFixed(4))
+          if (token.isNative) {
+            // Use public balance for native DOGE
+            balances[token.symbol] = publicBalance
+          } else {
+            // Fetch ERC20 balance
+            const balance = await publicClient.readContract({
+              address: token.address,
+              abi: ERC20ABI,
+              functionName: 'balanceOf',
+              args: [wallet.address as Address],
+            })
+            balances[token.symbol] = (Number(balance) / 1e18).toFixed(4)
+          }
         } catch (e) {
-          console.error("Error fetching token balance:", e)
-          setTokenBalance(tokenBalances[selectedToken] || "0")
+          console.error(`Error fetching ${token.symbol} balance:`, e)
+          balances[token.symbol] = "0"
         }
       }
+      
+      setAllTokenBalances(balances)
     }
-    fetchBalance()
-  }, [wallet?.address, selectedToken, publicBalance, selectedTokenInfo, tokenBalances])
+    fetchAllBalances()
+  }, [wallet?.address, publicBalance])
   
   // Quick action: Shield all balance
   const handleShieldAll = () => {
@@ -360,7 +369,7 @@ export function ShieldInterface({ onSuccess, publicBalance = "0", tokenBalances 
       
       {status === "idle" && (
         <div className="space-y-4">
-          {/* Token Selector */}
+          {/* Token Selector with Balances */}
           <div className="space-y-2">
             <Label>Select Token</Label>
             <Select value={selectedToken} onValueChange={(v) => setSelectedToken(v as ShieldedToken)}>
@@ -368,15 +377,23 @@ export function ShieldInterface({ onSuccess, publicBalance = "0", tokenBalances 
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {SHIELDED_TOKENS.map((token) => (
-                  <SelectItem key={token.symbol} value={token.symbol}>
-                    <div className="flex items-center gap-2">
-                      <span>{token.icon}</span>
-                      <span>{token.symbol}</span>
-                      <span className="text-muted-foreground text-xs">({token.name})</span>
-                    </div>
-                  </SelectItem>
-                ))}
+                {SHIELDED_TOKENS.map((token) => {
+                  const bal = allTokenBalances[token.symbol] || "0"
+                  const hasBalance = parseFloat(bal) > 0
+                  return (
+                    <SelectItem key={token.symbol} value={token.symbol}>
+                      <div className="flex items-center justify-between w-full gap-4">
+                        <div className="flex items-center gap-2">
+                          <span>{token.icon}</span>
+                          <span>{token.symbol}</span>
+                        </div>
+                        <span className={`text-xs ${hasBalance ? 'text-green-500' : 'text-muted-foreground'}`}>
+                          {bal}
+                        </span>
+                      </div>
+                    </SelectItem>
+                  )
+                })}
               </SelectContent>
             </Select>
           </div>
