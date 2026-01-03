@@ -342,8 +342,39 @@ async function fetchContractRoot(poolAddress: string): Promise<bigint> {
   }
   
   const root = BigInt(data.result);
-  console.log(`[Merkle] Contract root: ${root.toString(16).slice(0, 20)}...`);
   return root;
+}
+
+/**
+ * Check if a root is known (in contract's history)
+ */
+async function checkIfRootIsKnown(poolAddress: string, root: bigint): Promise<boolean> {
+  // Call isKnownRoot(bytes32) - function selector: 0x6d9833e3
+  const rootHex = '0x' + root.toString(16).padStart(64, '0');
+  const response = await fetch(RPC_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'eth_call',
+      params: [{
+        to: poolAddress,
+        data: '0x6d9833e3' + rootHex.slice(2), // isKnownRoot(bytes32)
+      }, 'latest'],
+    }),
+  });
+  
+  const data = await response.json();
+  if (data.error) {
+    console.warn(`[Merkle] Could not check if root is known:`, data.error);
+    return false;
+  }
+  
+  // Returns bool - 0x...01 = true, 0x...00 = false
+  const isKnown = BigInt(data.result) === 1n;
+  console.log(`[Merkle] Is root known on-chain: ${isKnown}`);
+  return isKnown;
 }
 
 /**
@@ -411,18 +442,30 @@ export async function fetchMerklePath(
   // Log computed root for debugging
   console.log(`[Merkle] Computed root: ${result.root.toString(16).slice(0, 20)}...`);
   
-  // Verify against contract root if possible
+  // Verify against contract root - CRITICAL for proof to work
   try {
     const contractRoot = await fetchContractRoot(poolAddress);
-    console.log(`[Merkle] Contract root: ${contractRoot.toString(16).slice(0, 20)}...`);
+    console.log(`[Merkle] Contract root: 0x${contractRoot.toString(16)}`);
+    console.log(`[Merkle] Computed root: 0x${result.root.toString(16)}`);
     
     if (contractRoot !== result.root) {
-      console.error(`[Merkle] ROOT MISMATCH! This will cause proof verification to fail.`);
-      console.error(`[Merkle] Make sure the deployed Hasher uses circomlibjs-compatible MiMC!`);
+      console.error(`[Merkle] ❌ ROOT MISMATCH!`);
+      console.error(`[Merkle] Contract: 0x${contractRoot.toString(16)}`);
+      console.error(`[Merkle] Computed: 0x${result.root.toString(16)}`);
+      console.error(`[Merkle] This means the MiMC hash implementation differs between client and contract.`);
+      
+      // Check if it's a known root (might be old)
+      const isKnown = await checkIfRootIsKnown(poolAddress, result.root);
+      if (!isKnown) {
+        throw new Error(`ROOT MISMATCH: Computed root does not exist on-chain. The MiMC implementation may differ.`);
+      }
     } else {
-      console.log(`[Merkle] ✓ Roots match!`);
+      console.log(`[Merkle] ✓ Roots match perfectly!`);
     }
-  } catch (e) {
+  } catch (e: any) {
+    if (e.message?.includes('ROOT MISMATCH')) {
+      throw e; // Re-throw root mismatch errors
+    }
     console.warn(`[Merkle] Could not verify against contract root:`, e);
   }
   
