@@ -21,8 +21,8 @@ import { useToast } from "@/hooks/use-toast"
 import { useWallet } from "@/lib/wallet-context"
 import { prepareShield, completeShield } from "@/lib/shielded/shielded-service"
 import { noteToShareableString, ShieldedNote } from "@/lib/shielded/shielded-note"
-import { shieldedPool, ERC20ABI, tokens } from "@/lib/dogeos-config"
-import { createPublicClient, http, parseAbiItem, type Address, encodeFunctionData } from "viem"
+import { shieldedPool, ERC20ABI, tokens, ShieldedPoolABI } from "@/lib/dogeos-config"
+import { createPublicClient, http, parseAbiItem, type Address, encodeFunctionData, toHex, keccak256, toBytes } from "viem"
 import { dogeosTestnet } from "@/lib/dogeos-config"
 
 // Use the deployed contract address
@@ -230,7 +230,7 @@ export function ShieldInterface({ onSuccess, publicBalance = "0", tokenBalances 
           from: wallet.address,
           to: SHIELDED_POOL_ADDRESS,
           value: '0x0',
-          data: encodeShieldToken(commitment, selectedTokenInfo.address, noteAmountWei),
+          data: encodeShieldTokenCall(selectedTokenInfo.address, noteAmountWei, commitment),
         }
       }
       
@@ -428,19 +428,28 @@ export function ShieldInterface({ onSuccess, publicBalance = "0", tokenBalances 
       )}
       
       {status === "approving" && (
-        <div className="flex flex-col items-center py-8 space-y-4">
-          <Loader2 className="h-8 w-8 animate-spin" />
-          <p className="text-muted-foreground">Approving {selectedToken}...</p>
-          <p className="text-xs text-muted-foreground">
-            Confirm the approval transaction in MetaMask
-          </p>
+        <div className="space-y-4">
+          <div className="flex flex-col items-center py-8 space-y-4">
+            <Loader2 className="h-8 w-8 animate-spin" />
+            <p className="text-muted-foreground">Step 1/2: Approving {selectedToken}...</p>
+            <p className="text-xs text-muted-foreground">
+              Confirm the approval transaction in MetaMask
+            </p>
+          </div>
+          <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/30">
+            <p className="text-xs text-blue-600 dark:text-blue-400">
+              ℹ️ <strong>Two-step process:</strong> ERC20 tokens require an approval first, then the shield transaction.
+            </p>
+          </div>
         </div>
       )}
       
       {status === "preparing" && (
         <div className="flex flex-col items-center py-8 space-y-4">
           <Loader2 className="h-8 w-8 animate-spin" />
-          <p className="text-muted-foreground">Preparing shield transaction...</p>
+          <p className="text-muted-foreground">
+            {selectedTokenInfo.isNative ? "Preparing shield..." : "Step 2/2: Preparing shield..."}
+          </p>
         </div>
       )}
       
@@ -448,7 +457,9 @@ export function ShieldInterface({ onSuccess, publicBalance = "0", tokenBalances 
         <div className="space-y-4">
           <div className="flex flex-col items-center py-8 space-y-4">
             <Loader2 className="h-8 w-8 animate-spin" />
-            <p className="text-muted-foreground">Waiting for transaction confirmation...</p>
+            <p className="text-muted-foreground">
+              {selectedTokenInfo.isNative ? "Waiting for confirmation..." : "Step 2/2: Shielding tokens..."}
+            </p>
             <p className="text-xs text-muted-foreground">
               Your note will appear after the transaction is confirmed
             </p>
@@ -553,13 +564,11 @@ function encodeShieldNative(commitment: `0x${string}`): string {
   return selector + commitmentHex
 }
 
-// Helper to encode shieldToken function call
-function encodeShieldToken(commitment: `0x${string}`, tokenAddress: `0x${string}`, amount: bigint): string {
-  // Function selector for shieldToken(bytes32, address, uint256)
-  // keccak256("shieldToken(bytes32,address,uint256)") = 0x1e5b8d6a (first 4 bytes)
-  const selector = "1e5b8d6a"
-  const commitmentHex = commitment.slice(2).padStart(64, "0")
-  const tokenHex = tokenAddress.slice(2).padStart(64, "0")
-  const amountHex = amount.toString(16).padStart(64, "0")
-  return selector + commitmentHex + tokenHex + amountHex
+// Helper to encode shieldToken function call using viem
+function encodeShieldTokenCall(tokenAddress: `0x${string}`, amount: bigint, commitment: `0x${string}`): `0x${string}` {
+  return encodeFunctionData({
+    abi: ShieldedPoolABI,
+    functionName: 'shieldToken',
+    args: [tokenAddress, amount, commitment],
+  })
 }

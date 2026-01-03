@@ -661,13 +661,25 @@ export const DogeRouterABI = [
 
 // ShieldedPool ABI (for Zcash-style shielded transactions)
 export const ShieldedPoolABI = [
-  // Shield (t→z): Deposit public DOGE into shielded note
+  // Shield native (t→z): Deposit public DOGE into shielded note
   {
     type: 'function',
-    name: 'shield',
+    name: 'shieldNative',
     inputs: [{ name: '_commitment', type: 'bytes32' }],
     outputs: [],
     stateMutability: 'payable',
+  },
+  // Shield ERC20 token (t→z): Deposit ERC20 token into shielded note
+  {
+    type: 'function',
+    name: 'shieldToken',
+    inputs: [
+      { name: '_token', type: 'address' },
+      { name: '_amount', type: 'uint256' },
+      { name: '_commitment', type: 'bytes32' },
+    ],
+    outputs: [],
+    stateMutability: 'nonpayable',
   },
   // Transfer (z→z): Send shielded DOGE to another shielded address
   {
