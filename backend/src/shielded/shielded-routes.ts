@@ -527,21 +527,20 @@ shieldedRouter.post('/relay/transfer', async (req: Request, res: Response) => {
     
     // Verify root is known on-chain BEFORE submitting
     try {
-      const isKnownRootResult = await publicClient.readContract({
-        address: poolAddress as Address,
-        abi: [{
-          type: 'function',
-          name: 'isKnownRoot',
-          inputs: [{ name: 'root', type: 'bytes32' }],
-          outputs: [{ name: '', type: 'bool' }],
-          stateMutability: 'view',
-        }],
-        functionName: 'isKnownRoot',
-        args: [root as `0x${string}`],
+      // isKnownRoot(bytes32) = 0x6d9833e3
+      const selector = '0x6d9833e3';
+      const rootPadded = (root as string).slice(2).padStart(64, '0');
+      const callData = `${selector}${rootPadded}` as `0x${string}`;
+      
+      const result = await publicClient.call({
+        to: poolAddress as Address,
+        data: callData,
       });
       
-      const isRootKnown = isKnownRootResult as boolean;
-      console.log(`[ShieldedRelayer] Root known on-chain: ${isRootKnown}`);
+      // Result is a bool encoded as bytes32 (last byte is 0x01 for true)
+      const isRootKnown = result.data && result.data !== '0x' && 
+        result.data.endsWith('1');
+      console.log(`[ShieldedRelayer] Root known on-chain: ${isRootKnown} (raw: ${result.data})`);
       
       if (!isRootKnown) {
         console.error('[ShieldedRelayer] ❌ Root NOT known on-chain!');
