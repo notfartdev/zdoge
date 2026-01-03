@@ -288,7 +288,7 @@ export function UnshieldInterface({ notes, onSuccess }: UnshieldInterfaceProps) 
               <SelectContent>
                 {spendableNotes.map((note, index) => (
                   <SelectItem key={index} value={index.toString()}>
-                    {formatWeiToAmount(note.amount).toFixed(4)} DOGE (Note #{note.leafIndex})
+                    {formatWeiToAmount(note.amount).toFixed(4)} {note.token || 'DOGE'} (Note #{note.leafIndex})
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -318,25 +318,27 @@ export function UnshieldInterface({ notes, onSuccess }: UnshieldInterfaceProps) 
           {selectedNoteIndex && relayerInfo && (
             <div className="p-3 rounded-lg bg-muted/50 space-y-1">
               {(() => {
-                const amount = spendableNotes[parseInt(selectedNoteIndex)]?.amount || 0n
+                const selectedNote = spendableNotes[parseInt(selectedNoteIndex)]
+                const amount = selectedNote?.amount || 0n
+                const tokenSymbol = selectedNote?.token || 'DOGE'
                 const { fee, received } = calculateFee(amount)
                 return (
                   <>
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Note amount:</span>
-                      <span>{formatWeiToAmount(amount).toFixed(4)} DOGE</span>
+                      <span>{formatWeiToAmount(amount).toFixed(4)} {tokenSymbol}</span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Relayer fee:</span>
-                      <span className="text-orange-500">-{formatWeiToAmount(fee).toFixed(4)} DOGE</span>
+                      <span className="text-orange-500">-{formatWeiToAmount(fee).toFixed(4)} {tokenSymbol}</span>
                     </div>
                     <div className="flex justify-between text-sm font-medium border-t pt-1 mt-1">
                       <span>You receive:</span>
-                      <span className="text-green-500">{formatWeiToAmount(received).toFixed(4)} DOGE</span>
+                      <span className="text-green-500">{formatWeiToAmount(received).toFixed(4)} {tokenSymbol}</span>
                     </div>
                     <div className="flex justify-between text-xs text-muted-foreground">
                       <span>Gas you pay:</span>
-                      <span className="text-primary">0 DOGE ✓</span>
+                      <span className="text-primary">0 ✓</span>
                     </div>
                   </>
                 )

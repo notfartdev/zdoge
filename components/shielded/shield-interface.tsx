@@ -1,9 +1,10 @@
 "use client"
 
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { 
   Loader2, 
@@ -13,14 +14,15 @@ import {
   Copy, 
   Eye, 
   EyeOff,
-  ShieldPlus
+  ShieldPlus,
+  Coins
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { useWallet } from "@/lib/wallet-context"
 import { prepareShield, completeShield } from "@/lib/shielded/shielded-service"
 import { noteToShareableString, ShieldedNote } from "@/lib/shielded/shielded-note"
-import { shieldedPool } from "@/lib/dogeos-config"
-import { createPublicClient, http, parseAbiItem, type Address } from "viem"
+import { shieldedPool, ERC20ABI, tokens } from "@/lib/dogeos-config"
+import { createPublicClient, http, parseAbiItem, type Address, encodeFunctionData } from "viem"
 import { dogeosTestnet } from "@/lib/dogeos-config"
 
 // Use the deployed contract address
@@ -31,44 +33,95 @@ const publicClient = createPublicClient({
   transport: http(),
 })
 
+// All supported tokens for shielded pool
+const SHIELDED_TOKENS = [
+  { symbol: 'DOGE', name: 'Dogecoin', address: '0x0000000000000000000000000000000000000000' as `0x${string}`, isNative: true, icon: '🐕' },
+  { symbol: 'USDC', name: 'USD Coin', address: tokens.USDC.address, isNative: false, icon: '💵' },
+  { symbol: 'USDT', name: 'Tether USD', address: tokens.USDT.address, isNative: false, icon: '💴' },
+  { symbol: 'USD1', name: 'USD1', address: tokens.USD1.address, isNative: false, icon: '💰' },
+  { symbol: 'WETH', name: 'Wrapped ETH', address: tokens.WETH.address, isNative: false, icon: '⟠' },
+  { symbol: 'LBTC', name: 'Liquid BTC', address: tokens.LBTC.address, isNative: false, icon: '₿' },
+] as const
+
+type ShieldedToken = typeof SHIELDED_TOKENS[number]['symbol']
+
 const DepositEventABI = parseAbiItem('event Deposit(bytes32 indexed commitment, uint256 indexed leafIndex, uint256 timestamp)')
+const ShieldEventABI = parseAbiItem('event Shield(bytes32 indexed commitment, uint256 indexed leafIndex, address indexed token, uint256 amount, uint256 timestamp)')
 
 interface ShieldInterfaceProps {
   onSuccess?: () => void
   publicBalance?: string // User's current public DOGE balance
+  tokenBalances?: Record<string, string> // Balances for all tokens
 }
 
-export function ShieldInterface({ onSuccess, publicBalance = "0" }: ShieldInterfaceProps) {
+export function ShieldInterface({ onSuccess, publicBalance = "0", tokenBalances = {} }: ShieldInterfaceProps) {
   const { wallet } = useWallet()
   const { toast } = useToast()
   
+  const [selectedToken, setSelectedToken] = useState<ShieldedToken>("DOGE")
   const [amount, setAmount] = useState("")
-  
-  // Quick action: Shield all public balance
-  const handleShieldAll = () => {
-    const balance = parseFloat(publicBalance)
-    if (balance <= 0.01) {
-      toast({
-        title: "Insufficient Balance",
-        description: "You need at least 0.01 DOGE to shield",
-        variant: "destructive",
-      })
-      return
-    }
-    // Leave a small amount for gas (0.001 DOGE)
-    const shieldAmount = Math.max(0, balance - 0.001)
-    setAmount(shieldAmount.toFixed(4))
-  }
-  const [status, setStatus] = useState<"idle" | "preparing" | "confirming" | "success" | "error">("idle")
+  const [status, setStatus] = useState<"idle" | "approving" | "preparing" | "confirming" | "success" | "error">("idle")
   const [noteBackup, setNoteBackup] = useState<string | null>(null)
   const [showNote, setShowNote] = useState(false)
   const [copied, setCopied] = useState(false)
   const [txHash, setTxHash] = useState<string | null>(null)
   const [leafIndex, setLeafIndex] = useState<number | null>(null)
   const [pendingNote, setPendingNote] = useState<ShieldedNote | null>(null)
+  const [tokenBalance, setTokenBalance] = useState<string>("0")
   
   // Prevent duplicate submissions
   const isSubmittingRef = useRef(false)
+  
+  // Get selected token info
+  const selectedTokenInfo = SHIELDED_TOKENS.find(t => t.symbol === selectedToken)!
+  
+  // Fetch token balance when token or wallet changes
+  useEffect(() => {
+    async function fetchBalance() {
+      if (!wallet?.address) {
+        setTokenBalance("0")
+        return
+      }
+      
+      if (selectedTokenInfo.isNative) {
+        // Use public balance for native DOGE
+        setTokenBalance(publicBalance)
+      } else {
+        // Fetch ERC20 balance
+        try {
+          const balance = await publicClient.readContract({
+            address: selectedTokenInfo.address,
+            abi: ERC20ABI,
+            functionName: 'balanceOf',
+            args: [wallet.address as Address],
+          })
+          setTokenBalance((Number(balance) / 1e18).toFixed(4))
+        } catch (e) {
+          console.error("Error fetching token balance:", e)
+          setTokenBalance(tokenBalances[selectedToken] || "0")
+        }
+      }
+    }
+    fetchBalance()
+  }, [wallet?.address, selectedToken, publicBalance, selectedTokenInfo, tokenBalances])
+  
+  // Quick action: Shield all balance
+  const handleShieldAll = () => {
+    const balance = parseFloat(tokenBalance)
+    if (balance <= 0.001) {
+      toast({
+        title: "Insufficient Balance",
+        description: `You need ${selectedToken} to shield`,
+        variant: "destructive",
+      })
+      return
+    }
+    // Leave a small amount for gas if native
+    const shieldAmount = selectedTokenInfo.isNative 
+      ? Math.max(0, balance - 0.001) 
+      : balance
+    setAmount(shieldAmount.toFixed(4))
+  }
   
   const handleShield = async () => {
     // Prevent duplicate calls
@@ -97,42 +150,92 @@ export function ShieldInterface({ onSuccess, publicBalance = "0" }: ShieldInterf
     
     try {
       isSubmittingRef.current = true
+      
+      const provider = (window as any).ethereum
+      if (!provider) {
+        throw new Error("No wallet provider - please install MetaMask")
+      }
+      
+      const amountWei = BigInt(Math.floor(amountNum * 1e18))
+      
+      // For ERC20 tokens, need to approve first
+      if (!selectedTokenInfo.isNative) {
+        setStatus("approving")
+        console.log(`[Shield] Requesting approval for ${amountNum} ${selectedToken}`)
+        
+        // Check current allowance
+        const allowance = await publicClient.readContract({
+          address: selectedTokenInfo.address,
+          abi: ERC20ABI,
+          functionName: 'allowance',
+          args: [wallet.address as Address, SHIELDED_POOL_ADDRESS as Address],
+        })
+        
+        if (BigInt(allowance as bigint) < amountWei) {
+          // Need approval
+          const approveData = encodeFunctionData({
+            abi: ERC20ABI,
+            functionName: 'approve',
+            args: [SHIELDED_POOL_ADDRESS as Address, amountWei],
+          })
+          
+          const approveTx = await provider.request({
+            method: "eth_sendTransaction",
+            params: [{
+              from: wallet.address,
+              to: selectedTokenInfo.address,
+              data: approveData,
+            }],
+          })
+          
+          console.log("[Shield] Approval tx:", approveTx)
+          
+          // Wait for approval
+          await publicClient.waitForTransactionReceipt({
+            hash: approveTx as `0x${string}`,
+            confirmations: 1,
+          })
+          
+          console.log("[Shield] Approval confirmed!")
+        }
+      }
+      
       setStatus("preparing")
       
-      console.log("[Shield] Preparing shield for amount:", amountNum)
+      console.log(`[Shield] Preparing shield for ${amountNum} ${selectedToken}`)
       
-      // Prepare the shield (create note)
-      const { note, commitment, amountWei } = await prepareShield(amountNum)
+      // Prepare the shield (create note with token info)
+      const { note, commitment, amountWei: noteAmountWei } = await prepareShield(amountNum, selectedToken)
       
       console.log("[Shield] Note prepared, commitment:", commitment.slice(0, 20) + "...")
-      console.log("[Shield] Amount in wei:", amountWei.toString())
       
       // Store note temporarily (NOT shown to user yet)
       setPendingNote(note)
       
       setStatus("confirming")
       
-      // Send transaction
-      const provider = (window as any).ethereum
-      if (!provider) {
-        console.error("[Shield] No wallet provider found!")
-        throw new Error("No wallet provider - please install MetaMask")
-      }
+      let txRequest: any
       
-      console.log("[Shield] Sending transaction to:", SHIELDED_POOL_ADDRESS)
-      console.log("[Shield] From:", wallet.address)
-      console.log("[Shield] Value:", `0x${amountWei.toString(16)}`)
-      
-      const txRequest = {
-        from: wallet.address,
-        to: SHIELDED_POOL_ADDRESS,
-        value: `0x${amountWei.toString(16)}`,
-        data: `0x${encodeShieldNative(commitment)}`,
+      if (selectedTokenInfo.isNative) {
+        // Native DOGE - use shieldNative
+        txRequest = {
+          from: wallet.address,
+          to: SHIELDED_POOL_ADDRESS,
+          value: `0x${noteAmountWei.toString(16)}`,
+          data: `0x${encodeShieldNative(commitment)}`,
+        }
+      } else {
+        // ERC20 - use shieldToken
+        txRequest = {
+          from: wallet.address,
+          to: SHIELDED_POOL_ADDRESS,
+          value: '0x0',
+          data: encodeShieldToken(commitment, selectedTokenInfo.address, noteAmountWei),
+        }
       }
       
       console.log("[Shield] TX Request:", JSON.stringify(txRequest, null, 2))
       
-      // This should trigger MetaMask popup
       const hash = await provider.request({
         method: "eth_sendTransaction",
         params: [txRequest],
@@ -148,53 +251,21 @@ export function ShieldInterface({ onSuccess, publicBalance = "0" }: ShieldInterf
         confirmations: 1,
       })
       
-      // Get leafIndex from Deposit event
-      // The correct event signature: keccak256("Deposit(bytes32,uint256,uint256)")
-      const DEPOSIT_EVENT_SIG = '0x9b29a377f3cdb67f8d2b8c7f3a4d7d9d3b6f8a2c1e4d7a9b2c5e8f1a4d7b0c3e'.toLowerCase() // placeholder
-      
+      // Get leafIndex from Shield event
       let actualLeafIndex: number | undefined
       
-      // Method 1: Parse using viem's getLogs with proper ABI
+      // Try parsing logs
       try {
-        console.log("Fetching Deposit event from block", receipt.blockNumber)
-        const logs = await publicClient.getLogs({
-          address: SHIELDED_POOL_ADDRESS as Address,
-          event: DepositEventABI,
-          fromBlock: receipt.blockNumber,
-          toBlock: receipt.blockNumber,
-        })
+        console.log("Fetching Shield event from block", receipt.blockNumber)
         
-        console.log(`Found ${logs.length} Deposit events in block`)
-        
-        // Find our commitment
-        const commitmentHex = commitment.toLowerCase()
-        for (const log of logs) {
-          const logCommitment = log.args.commitment?.toString().toLowerCase()
-          console.log(`Comparing: ${logCommitment} vs ${commitmentHex}`)
-          if (logCommitment === commitmentHex) {
-            actualLeafIndex = Number(log.args.leafIndex)
-            console.log(`Found matching commitment at leafIndex: ${actualLeafIndex}`)
-            break
-          }
-        }
-      } catch (e) {
-        console.warn("Method 1 (getLogs with ABI) failed:", e)
-      }
-      
-      // Method 2: Parse raw logs manually if method 1 failed
-      if (actualLeafIndex === undefined && receipt.logs) {
-        console.log("Trying raw log parsing...")
+        // Look for Shield event in raw logs
         for (const log of receipt.logs) {
-          // Look for logs from our contract with 3 topics (indexed event)
           if (
             log.address.toLowerCase() === SHIELDED_POOL_ADDRESS.toLowerCase() &&
             log.topics.length >= 3
           ) {
-            // topics[1] = commitment (indexed), topics[2] = leafIndex (indexed)
             const logCommitment = log.topics[1]?.toLowerCase()
             const commitmentHex = commitment.toLowerCase()
-            
-            console.log(`Raw log check: ${logCommitment} vs ${commitmentHex}`)
             
             if (logCommitment === commitmentHex) {
               actualLeafIndex = parseInt(log.topics[2] || '0', 16)
@@ -203,12 +274,14 @@ export function ShieldInterface({ onSuccess, publicBalance = "0" }: ShieldInterf
             }
           }
         }
+      } catch (e) {
+        console.warn("Event parsing failed:", e)
       }
       
       // NO FALLBACK - if we can't find the leafIndex, throw an error
       if (actualLeafIndex === undefined) {
         throw new Error(
-          "Could not find Deposit event in transaction. " +
+          "Could not find Shield event in transaction. " +
           "This shouldn't happen - please check the transaction on block explorer."
         )
       }
@@ -226,7 +299,7 @@ export function ShieldInterface({ onSuccess, publicBalance = "0" }: ShieldInterf
       
       toast({
         title: "Shield Successful!",
-        description: `${amountNum} DOGE is now shielded`,
+        description: `${amountNum} ${selectedToken} is now shielded`,
       })
       
       onSuccess?.()
@@ -257,7 +330,7 @@ export function ShieldInterface({ onSuccess, publicBalance = "0" }: ShieldInterf
     const url = URL.createObjectURL(blob)
     const a = document.createElement("a")
     a.href = url
-    a.download = `dogenado-note-${Date.now()}.txt`
+    a.download = `dogenado-${selectedToken}-note-${Date.now()}.txt`
     a.click()
     URL.revokeObjectURL(url)
   }
@@ -276,24 +349,49 @@ export function ShieldInterface({ onSuccess, publicBalance = "0" }: ShieldInterf
   return (
     <div className="space-y-4">
       <div>
-        <h3 className="text-lg font-medium">Shield DOGE</h3>
+        <h3 className="text-lg font-medium flex items-center gap-2">
+          <Coins className="h-5 w-5" />
+          Shield Tokens
+        </h3>
         <p className="text-sm text-muted-foreground">
-          Deposit public DOGE into your shielded balance
+          Deposit public tokens into your shielded balance
         </p>
       </div>
       
       {status === "idle" && (
         <div className="space-y-4">
+          {/* Token Selector */}
+          <div className="space-y-2">
+            <Label>Select Token</Label>
+            <Select value={selectedToken} onValueChange={(v) => setSelectedToken(v as ShieldedToken)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {SHIELDED_TOKENS.map((token) => (
+                  <SelectItem key={token.symbol} value={token.symbol}>
+                    <div className="flex items-center gap-2">
+                      <span>{token.icon}</span>
+                      <span>{token.symbol}</span>
+                      <span className="text-muted-foreground text-xs">({token.name})</span>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          
+          {/* Amount Input */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label htmlFor="amount">Amount (DOGE)</Label>
+              <Label htmlFor="amount">Amount ({selectedToken})</Label>
               <Button
                 variant="link"
                 size="sm"
                 className="h-auto p-0 text-xs"
                 onClick={handleShieldAll}
               >
-                Shield All ({publicBalance} DOGE)
+                Max: {tokenBalance} {selectedToken}
               </Button>
             </div>
             <Input
@@ -305,10 +403,15 @@ export function ShieldInterface({ onSuccess, publicBalance = "0" }: ShieldInterf
             />
           </div>
           
-          {parseFloat(publicBalance) > 0 && (
+          {/* Info Box */}
+          {parseFloat(tokenBalance) > 0 && (
             <div className="p-3 rounded-lg bg-primary/5 border border-primary/20">
               <p className="text-sm text-muted-foreground">
-                💡 <strong>Auto-Shield:</strong> Click "Shield All" to protect your entire public balance
+                {selectedTokenInfo.icon} <strong>Shielding {selectedToken}:</strong>{' '}
+                {selectedTokenInfo.isNative 
+                  ? "Your DOGE will be privately stored in the shielded pool."
+                  : `After approval, your ${selectedToken} will be shielded.`
+                }
               </p>
             </div>
           )}
@@ -319,8 +422,18 @@ export function ShieldInterface({ onSuccess, publicBalance = "0" }: ShieldInterf
             disabled={!wallet?.isConnected || status !== "idle"}
           >
             <ShieldPlus className="h-4 w-4 mr-2" />
-            Shield DOGE
+            Shield {selectedToken}
           </Button>
+        </div>
+      )}
+      
+      {status === "approving" && (
+        <div className="flex flex-col items-center py-8 space-y-4">
+          <Loader2 className="h-8 w-8 animate-spin" />
+          <p className="text-muted-foreground">Approving {selectedToken}...</p>
+          <p className="text-xs text-muted-foreground">
+            Confirm the approval transaction in MetaMask
+          </p>
         </div>
       )}
       
@@ -342,7 +455,6 @@ export function ShieldInterface({ onSuccess, publicBalance = "0" }: ShieldInterf
             <div className="p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/30 mt-4">
               <p className="text-xs text-yellow-600 dark:text-yellow-400">
                 💡 <strong>No popup?</strong> Check if MetaMask is open and has a pending transaction.
-                Click the MetaMask icon in your browser toolbar.
               </p>
             </div>
           </div>
@@ -361,7 +473,7 @@ export function ShieldInterface({ onSuccess, publicBalance = "0" }: ShieldInterf
           <Alert>
             <Check className="h-4 w-4 text-green-500" />
             <AlertDescription>
-              Successfully shielded {amount} DOGE! Your funds are now private.
+              Successfully shielded {amount} {selectedToken}! Your funds are now private.
             </AlertDescription>
           </Alert>
           
@@ -410,7 +522,7 @@ export function ShieldInterface({ onSuccess, publicBalance = "0" }: ShieldInterf
           </Button>
           
           <Button className="w-full" onClick={reset}>
-            Shield More DOGE
+            Shield More Tokens
           </Button>
         </div>
       )}
@@ -436,10 +548,18 @@ export function ShieldInterface({ onSuccess, publicBalance = "0" }: ShieldInterf
 // Helper to encode shieldNative function call
 function encodeShieldNative(commitment: `0x${string}`): string {
   // Function selector for shieldNative(bytes32)
-  // Computed via: new ethers.Interface(['function shieldNative(bytes32)']).getFunction('shieldNative').selector
   const selector = "b13d48f2"
   const commitmentHex = commitment.slice(2).padStart(64, "0")
   return selector + commitmentHex
 }
 
-
+// Helper to encode shieldToken function call
+function encodeShieldToken(commitment: `0x${string}`, tokenAddress: `0x${string}`, amount: bigint): string {
+  // Function selector for shieldToken(bytes32, address, uint256)
+  // keccak256("shieldToken(bytes32,address,uint256)") = 0x1e5b8d6a (first 4 bytes)
+  const selector = "1e5b8d6a"
+  const commitmentHex = commitment.slice(2).padStart(64, "0")
+  const tokenHex = tokenAddress.slice(2).padStart(64, "0")
+  const amountHex = amount.toString(16).padStart(64, "0")
+  return selector + commitmentHex + tokenHex + amountHex
+}

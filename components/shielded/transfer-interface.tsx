@@ -1,20 +1,27 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Loader2, Send, AlertCircle, Check, Copy, Eye, EyeOff } from "lucide-react"
+import { Loader2, Send, AlertCircle, Check, Copy, Eye, EyeOff, Zap, Shield } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { ShieldedNote, formatWeiToAmount, noteToShareableString } from "@/lib/shielded/shielded-note"
 import { isValidShieldedAddress } from "@/lib/shielded/shielded-address"
-import { prepareTransfer, completeTransfer } from "@/lib/shielded/shielded-service"
-
-// TODO: Update with actual deployed address
+import { prepareTransfer, completeTransfer, getNotes } from "@/lib/shielded/shielded-service"
 import { shieldedPool } from "@/lib/dogeos-config"
+
 const SHIELDED_POOL_ADDRESS = shieldedPool.address
+const RELAYER_URL = process.env.NEXT_PUBLIC_INDEXER_URL || 'https://dogenadocash.onrender.com'
+
+interface RelayerInfo {
+  available: boolean
+  address: string | null
+  feePercent: number
+  minFee: string
+}
 
 interface TransferInterfaceProps {
   notes: ShieldedNote[]
@@ -27,20 +34,52 @@ export function TransferInterface({ notes, onSuccess }: TransferInterfaceProps) 
   const [recipientAddress, setRecipientAddress] = useState("")
   const [amount, setAmount] = useState("")
   const [selectedNoteIndex, setSelectedNoteIndex] = useState<string>("")
-  const [status, setStatus] = useState<"idle" | "proving" | "confirming" | "success" | "error">("idle")
+  const [status, setStatus] = useState<"idle" | "proving" | "relaying" | "success" | "error">("idle")
   const [recipientNote, setRecipientNote] = useState<string | null>(null)
   const [showNote, setShowNote] = useState(false)
   const [copied, setCopied] = useState(false)
   const [txHash, setTxHash] = useState<string | null>(null)
+  const [relayerInfo, setRelayerInfo] = useState<RelayerInfo | null>(null)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
   
   const spendableNotes = notes.filter(n => n.leafIndex !== undefined && n.amount > 0n)
   
+  // Fetch relayer info on mount
+  useEffect(() => {
+    async function fetchRelayerInfo() {
+      try {
+        const response = await fetch(`${RELAYER_URL}/api/shielded/relay/info`)
+        if (response.ok) {
+          const data = await response.json()
+          setRelayerInfo(data)
+        }
+      } catch (error) {
+        console.warn('Could not fetch relayer info:', error)
+      }
+    }
+    fetchRelayerInfo()
+  }, [])
+  
+  // Calculate fee
+  const calculateFee = (amount: bigint): { fee: bigint; received: bigint } => {
+    if (!relayerInfo) return { fee: 0n, received: amount }
+    
+    const feePercent = BigInt(Math.floor(relayerInfo.feePercent * 100))
+    let fee = (amount * feePercent) / 10000n
+    const minFee = BigInt(Math.floor(parseFloat(relayerInfo.minFee) * 1e18))
+    if (fee < minFee) fee = minFee
+    
+    return { fee, received: amount - fee }
+  }
+  
   const handleTransfer = async () => {
+    setErrorMessage(null)
+    
     // Validate recipient address
     if (!isValidShieldedAddress(recipientAddress)) {
       toast({
         title: "Invalid Address",
-        description: "Please enter a valid shielded address",
+        description: "Please enter a valid shielded address (starts with 'dogenado:z')",
         variant: "destructive",
       })
       return
@@ -58,8 +97,8 @@ export function TransferInterface({ notes, onSuccess }: TransferInterfaceProps) 
     }
     
     // Validate note selection
-    const noteIndex = parseInt(selectedNoteIndex)
-    if (isNaN(noteIndex) || !spendableNotes[noteIndex]) {
+    const uiNoteIndex = parseInt(selectedNoteIndex)
+    if (isNaN(uiNoteIndex) || !spendableNotes[uiNoteIndex]) {
       toast({
         title: "Select a Note",
         description: "Please select a note to spend",
@@ -68,7 +107,7 @@ export function TransferInterface({ notes, onSuccess }: TransferInterfaceProps) 
       return
     }
     
-    const selectedNote = spendableNotes[noteIndex]
+    const selectedNote = spendableNotes[uiNoteIndex]
     const amountWei = BigInt(Math.floor(amountNum * 1e18))
     
     if (amountWei > selectedNote.amount) {
@@ -80,61 +119,95 @@ export function TransferInterface({ notes, onSuccess }: TransferInterfaceProps) 
       return
     }
     
+    // Get fresh notes to ensure correct leafIndex
+    const freshNotes = getNotes()
+    const freshSpendable = freshNotes.filter(n => n.leafIndex !== undefined && n.amount > 0n)
+    const actualNote = freshSpendable[uiNoteIndex]
+    
+    if (!actualNote || actualNote.leafIndex === undefined) {
+      toast({
+        title: "Note Sync Error",
+        description: "Please refresh the page and try again",
+        variant: "destructive",
+      })
+      return
+    }
+    
+    // Find actual index in full notes array
+    const actualNoteIndex = freshNotes.findIndex(n => 
+      n.commitment === actualNote.commitment && n.leafIndex === actualNote.leafIndex
+    )
+    
+    if (actualNoteIndex === -1) {
+      toast({
+        title: "Note Not Found",
+        description: "Could not find note in wallet",
+        variant: "destructive",
+      })
+      return
+    }
+    
     try {
       setStatus("proving")
       
-      // Generate proof
+      // Calculate relayer fee
+      const { fee: relayerFeeWei } = calculateFee(amountWei)
+      const relayerFeeDoge = Number(relayerFeeWei) / 1e18
+      
+      console.log('[Transfer] Generating proof...')
+      console.log('[Transfer] Amount:', amountNum, selectedNote.token || 'DOGE')
+      console.log('[Transfer] Relayer fee:', relayerFeeDoge)
+      
+      // Generate proof with fee (relayer address is handled by backend)
       const result = await prepareTransfer(
         recipientAddress,
         amountNum,
         SHIELDED_POOL_ADDRESS,
-        noteIndex
+        actualNoteIndex,
+        undefined, // relayerAddress - backend will fill this
+        relayerFeeDoge
       )
       
-      // Save recipient note for sharing
+      // Save recipient note for sharing (they'll need this to discover the note)
       const recipientNoteString = noteToShareableString(result.recipientNote)
       setRecipientNote(recipientNoteString)
       
-      setStatus("confirming")
+      console.log('[Transfer] Proof generated, sending to relayer...')
+      setStatus("relaying")
       
-      // Send transaction
-      const provider = (window as any).ethereum
-      if (!provider) throw new Error("No wallet provider")
-      
-      // Encode transfer call
-      const callData = encodeTransfer(
-        result.proof.proof,
-        result.root,
-        result.nullifierHash,
-        result.outputCommitment1,
-        result.outputCommitment2
-      )
-      
-      const txHash = await provider.request({
-        method: "eth_sendTransaction",
-        params: [{
-          from: (await provider.request({ method: "eth_accounts" }))[0],
-          to: SHIELDED_POOL_ADDRESS,
-          data: callData,
-        }],
+      // Send to relayer
+      const response = await fetch(`${RELAYER_URL}/api/shielded/relay/transfer`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          poolAddress: SHIELDED_POOL_ADDRESS,
+          proof: result.proof.proof,
+          root: result.root,
+          nullifierHash: result.nullifierHash,
+          outputCommitment1: result.outputCommitment1,
+          outputCommitment2: result.outputCommitment2,
+          encryptedMemo1: result.encryptedMemo1 || '',
+          encryptedMemo2: result.encryptedMemo2 || '',
+          fee: relayerFeeWei.toString(),
+        }),
       })
       
-      setTxHash(txHash)
+      const data = await response.json()
       
-      // Wait for confirmation
-      await new Promise(resolve => setTimeout(resolve, 3000))
+      if (!response.ok) {
+        throw new Error(data.message || data.error || 'Relayer transaction failed')
+      }
       
-      // TODO: Get actual leafIndex from event
-      const changeLeafIndex = Math.floor(Math.random() * 1000)
+      setTxHash(data.txHash)
       
-      // Complete transfer (update local state)
-      completeTransfer(noteIndex, result.changeNote, changeLeafIndex)
+      // Complete transfer (remove input note, add change note)
+      completeTransfer(actualNoteIndex, result.changeNote, data.leafIndex2 || 0)
       
       setStatus("success")
       
       toast({
         title: "Transfer Successful!",
-        description: `Sent ${amountNum} DOGE privately`,
+        description: `Sent ${amountNum} ${selectedNote.token || 'DOGE'} privately (0% gas paid by you!)`,
       })
       
       onSuccess?.()
@@ -142,6 +215,7 @@ export function TransferInterface({ notes, onSuccess }: TransferInterfaceProps) 
     } catch (error: any) {
       console.error("Transfer error:", error)
       setStatus("error")
+      setErrorMessage(error.message || "Transaction failed")
       toast({
         title: "Transfer Failed",
         description: error.message || "Transaction failed",
@@ -165,6 +239,7 @@ export function TransferInterface({ notes, onSuccess }: TransferInterfaceProps) 
     setRecipientNote(null)
     setShowNote(false)
     setTxHash(null)
+    setErrorMessage(null)
   }
   
   if (spendableNotes.length === 0) {
@@ -172,7 +247,7 @@ export function TransferInterface({ notes, onSuccess }: TransferInterfaceProps) 
       <div className="text-center py-8">
         <p className="text-muted-foreground">No shielded notes to transfer</p>
         <p className="text-sm text-muted-foreground mt-2">
-          Shield some DOGE first to enable transfers
+          Shield some tokens first to enable transfers
         </p>
       </div>
     )
@@ -181,11 +256,34 @@ export function TransferInterface({ notes, onSuccess }: TransferInterfaceProps) 
   return (
     <div className="space-y-4">
       <div>
-        <h3 className="text-lg font-medium">Transfer Shielded DOGE</h3>
+        <h3 className="text-lg font-medium flex items-center gap-2">
+          Private Transfer
+          <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full flex items-center gap-1">
+            <Zap className="h-3 w-3" /> Gas-Free
+          </span>
+        </h3>
         <p className="text-sm text-muted-foreground">
-          Send shielded funds to another shielded address
+          Send shielded tokens to another shielded address privately
         </p>
       </div>
+      
+      {/* Relayer Status */}
+      {relayerInfo && (
+        <div className="p-3 rounded-lg bg-muted/30 border border-muted text-sm">
+          <div className="flex items-center gap-2">
+            <Shield className="h-4 w-4 text-primary" />
+            <span className="font-medium">Privacy-Preserving Relayer</span>
+            {relayerInfo.available ? (
+              <span className="text-xs bg-green-500/20 text-green-500 px-2 py-0.5 rounded-full">Active</span>
+            ) : (
+              <span className="text-xs bg-red-500/20 text-red-500 px-2 py-0.5 rounded-full">Offline</span>
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground mt-1">
+            Fee: {relayerInfo.feePercent}% (min {relayerInfo.minFee}) • Your wallet never signs
+          </p>
+        </div>
+      )}
       
       {status === "idle" && (
         <div className="space-y-4">
@@ -198,7 +296,7 @@ export function TransferInterface({ notes, onSuccess }: TransferInterfaceProps) 
               <SelectContent>
                 {spendableNotes.map((note, index) => (
                   <SelectItem key={index} value={index.toString()}>
-                    {formatWeiToAmount(note.amount).toFixed(4)} DOGE (Note #{note.leafIndex})
+                    {formatWeiToAmount(note.amount).toFixed(4)} {note.token || 'DOGE'} (Note #{note.leafIndex})
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -209,29 +307,78 @@ export function TransferInterface({ notes, onSuccess }: TransferInterfaceProps) 
             <Label htmlFor="recipient">Recipient Shielded Address</Label>
             <Input
               id="recipient"
-              placeholder="dogenado:z1..."
+              placeholder="dogenado:z..."
               value={recipientAddress}
               onChange={(e) => setRecipientAddress(e.target.value)}
             />
+            <p className="text-xs text-muted-foreground">
+              Enter the recipient's shielded address (starts with 'dogenado:z')
+            </p>
           </div>
           
           <div className="space-y-2">
-            <Label htmlFor="amount">Amount (DOGE)</Label>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="amount">Amount</Label>
+              {selectedNoteIndex && spendableNotes[parseInt(selectedNoteIndex)] && (
+                <Button
+                  variant="link"
+                  size="sm"
+                  className="h-auto p-0 text-xs"
+                  onClick={() => {
+                    const note = spendableNotes[parseInt(selectedNoteIndex)]
+                    setAmount(formatWeiToAmount(note.amount).toFixed(4))
+                  }}
+                >
+                  Max: {formatWeiToAmount(spendableNotes[parseInt(selectedNoteIndex)].amount).toFixed(4)}
+                </Button>
+              )}
+            </div>
             <Input
               id="amount"
               type="number"
-              placeholder="50"
+              placeholder="10"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
             />
-            {selectedNoteIndex && (
-              <p className="text-xs text-muted-foreground">
-                Available: {formatWeiToAmount(spendableNotes[parseInt(selectedNoteIndex)]?.amount || 0n).toFixed(4)} DOGE
-              </p>
-            )}
           </div>
           
-          <Button className="w-full" onClick={handleTransfer}>
+          {/* Fee Preview */}
+          {selectedNoteIndex && amount && relayerInfo && (
+            <div className="p-3 rounded-lg bg-muted/50 space-y-1">
+              {(() => {
+                const amountWei = BigInt(Math.floor(parseFloat(amount || "0") * 1e18))
+                const selectedNote = spendableNotes[parseInt(selectedNoteIndex)]
+                const tokenSymbol = selectedNote?.token || 'DOGE'
+                const { fee, received } = calculateFee(amountWei)
+                return (
+                  <>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Send amount:</span>
+                      <span>{amount} {tokenSymbol}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Relayer fee:</span>
+                      <span className="text-orange-500">-{formatWeiToAmount(fee).toFixed(4)} {tokenSymbol}</span>
+                    </div>
+                    <div className="flex justify-between text-sm font-medium border-t pt-1 mt-1">
+                      <span>Recipient receives:</span>
+                      <span className="text-green-500">{formatWeiToAmount(received).toFixed(4)} {tokenSymbol}</span>
+                    </div>
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>Gas you pay:</span>
+                      <span className="text-primary">0 ✓</span>
+                    </div>
+                  </>
+                )
+              })()}
+            </div>
+          )}
+          
+          <Button 
+            className="w-full" 
+            onClick={handleTransfer}
+            disabled={!relayerInfo?.available}
+          >
             <Send className="h-4 w-4 mr-2" />
             Send Privately
           </Button>
@@ -241,51 +388,27 @@ export function TransferInterface({ notes, onSuccess }: TransferInterfaceProps) 
       {status === "proving" && (
         <div className="flex flex-col items-center py-8 space-y-4">
           <Loader2 className="h-8 w-8 animate-spin" />
-          <p className="text-muted-foreground">Generating zero-knowledge proof...</p>
-          <p className="text-xs text-muted-foreground">This may take 30-60 seconds</p>
+          <p className="text-muted-foreground">Generating ZK proof...</p>
+          <p className="text-xs text-muted-foreground">This may take 10-30 seconds</p>
         </div>
       )}
       
-      {status === "confirming" && (
+      {status === "relaying" && (
         <div className="flex flex-col items-center py-8 space-y-4">
           <Loader2 className="h-8 w-8 animate-spin" />
-          <p className="text-muted-foreground">Waiting for confirmation...</p>
+          <p className="text-muted-foreground">Relayer submitting transaction...</p>
+          <p className="text-xs text-muted-foreground">Your wallet never signs - complete privacy!</p>
         </div>
       )}
       
-      {status === "success" && recipientNote && (
+      {status === "success" && (
         <div className="space-y-4">
           <Alert>
             <Check className="h-4 w-4 text-green-500" />
             <AlertDescription>
-              Transfer successful! Share the note below with the recipient.
+              Transfer successful! Share the note with the recipient.
             </AlertDescription>
           </Alert>
-          
-          <Alert variant="default">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
-              <strong>Important:</strong> The recipient needs this note to access the funds.
-              Send it to them securely (encrypted message, in-person, etc.)
-            </AlertDescription>
-          </Alert>
-          
-          <div className="p-4 rounded-lg border bg-muted/50">
-            <div className="flex items-center justify-between mb-2">
-              <Label>Note for Recipient</Label>
-              <div className="flex gap-2">
-                <Button variant="ghost" size="sm" onClick={() => setShowNote(!showNote)}>
-                  {showNote ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </Button>
-                <Button variant="ghost" size="sm" onClick={copyNote}>
-                  {copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
-                </Button>
-              </div>
-            </div>
-            <code className="text-xs break-all block">
-              {showNote ? recipientNote : "•".repeat(60)}
-            </code>
-          </div>
           
           {txHash && (
             <div className="text-sm">
@@ -301,8 +424,32 @@ export function TransferInterface({ notes, onSuccess }: TransferInterfaceProps) 
             </div>
           )}
           
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              <strong>Share this note with the recipient!</strong> They need it to claim the funds.
+            </AlertDescription>
+          </Alert>
+          
+          <div className="p-4 rounded-lg border bg-muted/50">
+            <div className="flex items-center justify-between mb-2">
+              <Label>Recipient's Note</Label>
+              <div className="flex gap-2">
+                <Button variant="ghost" size="sm" onClick={() => setShowNote(!showNote)}>
+                  {showNote ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
+                <Button variant="ghost" size="sm" onClick={copyNote}>
+                  {copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+                </Button>
+              </div>
+            </div>
+            <code className="text-xs break-all block">
+              {showNote ? recipientNote : "•".repeat(60)}
+            </code>
+          </div>
+          
           <Button className="w-full" onClick={reset}>
-            Make Another Transfer
+            Send Another Transfer
           </Button>
         </div>
       )}
@@ -313,6 +460,7 @@ export function TransferInterface({ notes, onSuccess }: TransferInterfaceProps) 
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
               Transfer failed. Your funds are safe.
+              {errorMessage && <p className="mt-1 text-xs">{errorMessage}</p>}
             </AlertDescription>
           </Alert>
           
@@ -324,19 +472,3 @@ export function TransferInterface({ notes, onSuccess }: TransferInterfaceProps) 
     </div>
   )
 }
-
-// Helper to encode transfer function call
-function encodeTransfer(
-  proof: string[],
-  root: `0x${string}`,
-  nullifierHash: `0x${string}`,
-  outputCommitment1: `0x${string}`,
-  outputCommitment2: `0x${string}`
-): string {
-  // This is a simplified encoding - in production use viem's encodeFunctionData
-  // Function selector for transfer(uint256[8],bytes32,bytes32,bytes32,bytes32,address,uint256)
-  const selector = "00000000" // TODO: Compute actual selector
-  return "0x" + selector
-}
-
-

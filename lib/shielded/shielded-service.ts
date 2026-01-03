@@ -149,7 +149,8 @@ export function getShieldedBalance(): bigint {
  * @returns Note and commitment for contract call
  */
 export async function prepareShield(
-  amountDoge: number
+  amount: number,
+  token: string = 'DOGE'
 ): Promise<{
   note: ShieldedNote;
   commitment: `0x${string}`;
@@ -159,13 +160,13 @@ export async function prepareShield(
     throw new Error('Wallet not initialized');
   }
   
-  const amountWei = parseAmountToWei(amountDoge);
+  const amountWei = parseAmountToWei(amount);
   
-  // Create note for ourselves
+  // Create note for ourselves with the specified token
   const note = await createNote(
     amountWei,
     walletState.identity.shieldedAddress,
-    'DOGE'
+    token
   );
   
   return {

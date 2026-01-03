@@ -86,6 +86,14 @@ export function SwapInterface({ notes, onSuccess }: SwapInterfaceProps) {
   
   // Execute swap
   const handleSwap = async () => {
+    // Swap functionality requires DEX integration
+    // The circuit and contract are ready, but we need liquidity
+    toast({
+      title: "Coming Soon",
+      description: "Private swaps require DEX liquidity integration. Available in next release.",
+    })
+    return
+    
     if (!quote) {
       toast({
         title: "No Quote",
