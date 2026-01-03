@@ -292,7 +292,7 @@ shieldedRouter.post('/relay/unshield', async (req: Request, res: Response) => {
     });
   }
   
-  const { poolAddress, proof, root, nullifierHash, recipient, amount } = req.body;
+  const { poolAddress, proof, root, nullifierHash, recipient, amount, fee: requestFee } = req.body;
   
   // Validate inputs
   if (!poolAddress || !proof || !root || !nullifierHash || !recipient || !amount) {
@@ -308,11 +308,20 @@ shieldedRouter.post('/relay/unshield', async (req: Request, res: Response) => {
   
   const amountBigInt = BigInt(amount);
   
-  // Calculate fee
-  const feePercent = BigInt(Math.floor(RELAYER_FEE_PERCENT * 100)); // 0.5% = 50 basis points
-  let fee = (amountBigInt * feePercent) / 10000n;
-  if (fee < MIN_RELAYER_FEE) {
-    fee = MIN_RELAYER_FEE;
+  // Use fee from request if provided (proof was generated with this fee!)
+  // Otherwise calculate (but this will likely fail proof verification)
+  let fee: bigint;
+  if (requestFee !== undefined && requestFee !== null) {
+    fee = BigInt(requestFee);
+    console.log(`[ShieldedRelayer] Using fee from request: ${Number(fee) / 1e18} DOGE`);
+  } else {
+    // Fallback: calculate fee (may not match proof!)
+    console.warn('[ShieldedRelayer] No fee in request, calculating (may cause InvalidProof!)');
+    const feePercent = BigInt(Math.floor(RELAYER_FEE_PERCENT * 100));
+    fee = (amountBigInt * feePercent) / 10000n;
+    if (fee < MIN_RELAYER_FEE) {
+      fee = MIN_RELAYER_FEE;
+    }
   }
   
   // Ensure fee doesn't exceed amount

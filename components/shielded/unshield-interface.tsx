@@ -142,17 +142,39 @@ export function UnshieldInterface({ notes, onSuccess }: UnshieldInterfaceProps) 
     try {
       setStatus("proving")
       
-      // Generate proof locally
+      // Calculate relayer fee BEFORE generating proof (must match relayer's calculation)
+      const noteAmount = selectedNote.amount
+      const feePercent = relayerInfo?.feePercent || 0.5
+      const minFee = relayerInfo?.minFee ? parseFloat(relayerInfo.minFee) : 0.001
+      
+      // Calculate fee: 0.5% of amount, minimum 0.001 DOGE
+      let relayerFeeWei = (noteAmount * BigInt(Math.floor(feePercent * 100))) / 10000n
+      const minFeeWei = BigInt(Math.floor(minFee * 1e18))
+      if (relayerFeeWei < minFeeWei) {
+        relayerFeeWei = minFeeWei
+      }
+      
+      // Convert to DOGE for prepareUnshield
+      const relayerFeeDoge = Number(relayerFeeWei) / 1e18
+      
+      console.log(`[Unshield] Note amount: ${Number(noteAmount) / 1e18} DOGE`)
+      console.log(`[Unshield] Relayer fee: ${relayerFeeDoge.toFixed(6)} DOGE`)
+      
+      // Generate proof with the correct fee
       const result = await prepareUnshield(
         recipientAddress,
         actualNoteIndex,
-        SHIELDED_POOL_ADDRESS
+        SHIELDED_POOL_ADDRESS,
+        relayerInfo?.address || undefined,
+        relayerFeeDoge
       )
       
       console.log('[Unshield] Proof generated, sending to relayer...')
       setStatus("relaying")
       
       // Send to relayer (USER NEVER SIGNS, NEVER PAYS GAS!)
+      // Include fee so relayer doesn't recalculate it
+      // amount = withdrawAmount (what recipient gets) = noteAmount - fee
       const response = await fetch(`${RELAYER_URL}/api/shielded/relay/unshield`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -162,7 +184,8 @@ export function UnshieldInterface({ notes, onSuccess }: UnshieldInterfaceProps) 
           root: result.root,
           nullifierHash: result.nullifierHash,
           recipient: recipientAddress,
-          amount: result.amount.toString(),
+          amount: result.amount.toString(), // Send withdrawAmount (note - fee)
+          fee: relayerFeeWei.toString(), // Send calculated fee
         }),
       })
       
