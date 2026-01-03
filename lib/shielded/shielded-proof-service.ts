@@ -535,6 +535,20 @@ export async function generateTransferProof(
   );
   const nullifierHash = await computeNullifierHash(nullifier);
   
+  // DEBUG: Verify note ownerPubkey matches identity shieldedAddress
+  const expectedOwner = senderIdentity.shieldedAddress;
+  console.log('[Transfer] Verifying note ownership...');
+  console.log('  Note ownerPubkey:', inputNote.ownerPubkey.toString(16).slice(0, 16) + '...');
+  console.log('  Identity shieldedAddress:', expectedOwner.toString(16).slice(0, 16) + '...');
+  console.log('  Match:', inputNote.ownerPubkey === expectedOwner);
+  
+  if (inputNote.ownerPubkey !== expectedOwner) {
+    console.error('[Transfer] CRITICAL: Note ownerPubkey does NOT match identity!');
+    console.error('  This note was created with an old/wrong shieldedAddress.');
+    console.error('  Please clear notes from localStorage and re-shield.');
+    throw new Error('Note ownership mismatch. This note was created with an outdated identity. Please clear your notes and re-shield.');
+  }
+  
   // Prepare circuit input
   const circuitInput = {
     // Public
@@ -648,6 +662,18 @@ export async function generateUnshieldProof(
   );
   console.log('✓ Merkle root:', '0x' + root.toString(16));
   console.log('✓ Path depth:', pathElements.length);
+  
+  // DEBUG: Verify note ownerPubkey matches identity shieldedAddress
+  const expectedOwner = identity.shieldedAddress;
+  console.log('[Unshield] Verifying note ownership...');
+  console.log('  Note ownerPubkey:', note.ownerPubkey.toString(16).slice(0, 16) + '...');
+  console.log('  Identity shieldedAddress:', expectedOwner.toString(16).slice(0, 16) + '...');
+  console.log('  Match:', note.ownerPubkey === expectedOwner);
+  
+  if (note.ownerPubkey !== expectedOwner) {
+    console.error('[Unshield] CRITICAL: Note ownerPubkey does NOT match identity!');
+    throw new Error('Note ownership mismatch. This note was created with an outdated identity. Please clear your notes and re-shield.');
+  }
   
   // Compute nullifier
   const nullifier = await computeNullifier(
