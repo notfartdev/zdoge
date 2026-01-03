@@ -79,7 +79,7 @@ export function TransferInterface({ notes, onSuccess }: TransferInterfaceProps) 
     if (!isValidShieldedAddress(recipientAddress)) {
       toast({
         title: "Invalid Address",
-        description: "Please enter a valid shielded address (starts with 'dogenado:z')",
+        description: "Please enter a valid shielded address (starts with 'zdoge:')",
         variant: "destructive",
       })
       return
@@ -307,12 +307,12 @@ export function TransferInterface({ notes, onSuccess }: TransferInterfaceProps) 
             <Label htmlFor="recipient">Recipient Shielded Address</Label>
             <Input
               id="recipient"
-              placeholder="dogenado:z..."
+              placeholder="zdoge:..."
               value={recipientAddress}
               onChange={(e) => setRecipientAddress(e.target.value)}
             />
             <p className="text-xs text-muted-foreground">
-              Enter the recipient's shielded address (starts with 'dogenado:z')
+              Enter the recipient's shielded address (starts with 'zdoge:')
             </p>
           </div>
           

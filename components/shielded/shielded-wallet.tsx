@@ -162,7 +162,7 @@ export function ShieldedWallet() {
   
   // Copy address to clipboard
   const copyAddress = async () => {
-    const addressToCopy = stealthAddress || walletState?.identity?.addressString
+    const addressToCopy = walletState?.identity?.addressString
     if (!addressToCopy) return
     
     await navigator.clipboard.writeText(addressToCopy)
@@ -170,7 +170,7 @@ export function ShieldedWallet() {
     setTimeout(() => setCopied(false), 2000)
     
     toast({
-      title: "Stealth Address Copied",
+      title: "Shielded Address Copied",
       description: "Share this to receive private payments",
     })
   }
@@ -400,13 +400,12 @@ export function ShieldedWallet() {
             </div>
           </div>
           
-          {/* Stealth Receive Address */}
+          {/* Your Shielded Address */}
           <div className="p-4 rounded-lg border bg-gradient-to-r from-primary/5 to-transparent">
             <div className="flex items-center justify-between mb-2">
               <div className="text-sm font-medium flex items-center gap-2">
-                <Lock className="h-4 w-4 text-primary" />
-                Stealth Receive Address
-                <Badge variant="secondary" className="text-xs">One-Time</Badge>
+                <Shield className="h-4 w-4 text-primary" />
+                Your Shielded Address
               </div>
               <div className="flex items-center gap-2">
                 <Button
@@ -429,13 +428,13 @@ export function ShieldedWallet() {
                 </Button>
               </div>
             </div>
-            <code className="text-xs break-all">
+            <code className="text-sm font-mono break-all bg-muted/50 p-2 rounded block">
               {showAddress
-                ? (stealthAddress || walletState?.identity?.addressString)
-                : shortenAddress(stealthAddress || walletState?.identity?.addressString || "", 12)}
+                ? walletState?.identity?.addressString
+                : shortenAddress(walletState?.identity?.addressString || "", 12)}
             </code>
             <p className="text-xs text-muted-foreground mt-2">
-              🔒 Senders derive one-time addresses from this — no link to your wallet
+              Share this address to receive private payments
             </p>
           </div>
         </CardContent>

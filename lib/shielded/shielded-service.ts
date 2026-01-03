@@ -195,8 +195,8 @@ async function deriveIdentityFromSignature(signature: string): Promise<ShieldedI
   // In simplified form: shieldedAddress = spendingKey (in production, use G * spendingKey on curve)
   const shieldedAddress = spendingKey;
   
-  // Create shielded address string
-  const addressString = `dogenado:z${shieldedAddress.toString(16).padStart(64, '0')}`;
+  // Create shielded address string with zdoge: prefix
+  const addressString = `zdoge:${shieldedAddress.toString(16).padStart(64, '0')}`;
   
   return {
     spendingKey,

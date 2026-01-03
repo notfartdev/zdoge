@@ -25,7 +25,7 @@ import {
 const ADDRESS_VERSION = 1;
 
 // Address prefix
-const ADDRESS_PREFIX = 'dogenado:z';
+const ADDRESS_PREFIX = 'zdoge:';
 
 /**
  * A complete shielded identity (keys + address)
@@ -106,13 +106,13 @@ export async function recoverFromSpendingKey(spendingKey: bigint): Promise<Shiel
 
 /**
  * Serialize shielded address to shareable string format
- * Format: dogenado:z<version><base16_pubkey>
+ * Format: zdoge:<base16_pubkey>
  * 
- * Example: dogenado:z1abc123...def456
+ * Example: zdoge:1abc123...def456
  */
 export function serializeShieldedAddress(shieldedAddress: bigint): string {
   const hex = shieldedAddress.toString(16).padStart(64, '0');
-  return `${ADDRESS_PREFIX}${ADDRESS_VERSION}${hex}`;
+  return `${ADDRESS_PREFIX}${hex}`;
 }
 
 /**
@@ -121,24 +121,29 @@ export function serializeShieldedAddress(shieldedAddress: bigint): string {
  * @returns The public key (bigint)
  */
 export function parseShieldedAddress(addressString: string): bigint {
-  // Validate prefix
-  if (!addressString.startsWith(ADDRESS_PREFIX)) {
-    throw new Error(`Invalid address format: must start with ${ADDRESS_PREFIX}`);
+  // Validate prefix - accept both old and new formats
+  const isNewFormat = addressString.startsWith('zdoge:');
+  const isOldFormat = addressString.startsWith('dogenado:z');
+  
+  if (!isNewFormat && !isOldFormat) {
+    throw new Error(`Invalid address format: must start with 'zdoge:' or 'dogenado:z'`);
   }
   
-  // Extract version and pubkey
-  const afterPrefix = addressString.slice(ADDRESS_PREFIX.length);
+  // Extract hex pubkey
+  let hex: string;
   
-  if (afterPrefix.length < 65) { // 1 char version + 64 char hex
+  if (isNewFormat) {
+    // New format: zdoge:<64-char-hex>
+    hex = addressString.slice('zdoge:'.length);
+  } else {
+    // Old format: dogenado:z<version><64-char-hex>
+    const afterPrefix = addressString.slice('dogenado:z'.length);
+    hex = afterPrefix.slice(1); // Skip version char
+  }
+  
+  if (hex.length < 64) {
     throw new Error('Invalid address format: too short');
   }
-  
-  const version = parseInt(afterPrefix[0], 10);
-  if (version !== ADDRESS_VERSION) {
-    throw new Error(`Unsupported address version: ${version}`);
-  }
-  
-  const hex = afterPrefix.slice(1);
   
   // Validate hex
   if (!/^[0-9a-fA-F]+$/.test(hex)) {
