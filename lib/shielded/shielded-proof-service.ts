@@ -382,31 +382,50 @@ async function checkIfRootIsKnown(poolAddress: string, root: bigint): Promise<bo
  */
 export async function fetchMerklePath(
   poolAddress: string,
-  leafIndex: number
+  leafIndex: number,
+  forceClientSide: boolean = false
 ): Promise<{ pathElements: bigint[]; pathIndices: number[]; root: bigint }> {
-  // TEMPORARY: Skip indexer due to backend bug, go straight to client-side
-  console.log('[Merkle] Skipping indexer, building client-side Merkle tree...');
-  
-  // Try indexer first (note: shielded pools use /api/shielded/pool/...)
-  try {
-    const response = await fetch(
-      `${INDEXER_URL}/api/shielded/pool/${poolAddress}/path/${leafIndex}`,
-      { signal: AbortSignal.timeout(5000) } // 5 second timeout
-    );
-    
-    if (response.ok) {
-      const data = await response.json();
-      console.log('[Merkle] Got path from indexer');
-      return {
-        pathElements: data.pathElements.map((e: string) => BigInt(e)),
-        pathIndices: data.pathIndices,
-        root: BigInt(data.root),
-      };
-    } else {
-      console.log(`[Merkle] Indexer returned ${response.status}, falling back to client-side...`);
+  // Always use client-side for freshest data (indexer may lag)
+  // This ensures newly shielded notes can be immediately spent
+  if (!forceClientSide) {
+    // Try indexer first but with short timeout
+    try {
+      const response = await fetch(
+        `${INDEXER_URL}/api/shielded/pool/${poolAddress}/path/${leafIndex}`,
+        { signal: AbortSignal.timeout(3000) } // 3 second timeout
+      );
+      
+      if (response.ok) {
+        const data = await response.json();
+        
+        // Verify the indexer has this leaf
+        if (data.pathElements && data.pathElements.length > 0) {
+          console.log('[Merkle] Got path from indexer');
+          
+          // Double-check: verify this root exists on-chain
+          const indexerRoot = BigInt(data.root);
+          const isKnown = await checkIfRootIsKnown(poolAddress, indexerRoot);
+          
+          if (isKnown) {
+            return {
+              pathElements: data.pathElements.map((e: string) => BigInt(e)),
+              pathIndices: data.pathIndices,
+              root: indexerRoot,
+            };
+          } else {
+            console.log('[Merkle] Indexer root not known on-chain, using client-side...');
+          }
+        } else {
+          console.log('[Merkle] Indexer returned empty path, using client-side...');
+        }
+      } else {
+        console.log(`[Merkle] Indexer returned ${response.status}, falling back to client-side...`);
+      }
+    } catch (error) {
+      console.log('[Merkle] Indexer timeout/error, building Merkle tree client-side...');
     }
-  } catch (error) {
-    console.log('[Merkle] Indexer not available, building Merkle tree client-side...');
+  } else {
+    console.log('[Merkle] Forced client-side Merkle tree building...');
   }
   
   // Fallback: Build Merkle tree client-side from blockchain events
