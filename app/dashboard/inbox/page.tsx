@@ -439,11 +439,11 @@ export default function InboxPage() {
                   <Inbox className="w-16 h-16 text-gray-700 mx-auto mb-4" />
                   <h3 className="text-xl font-bold text-white mb-2">Your inbox is empty</h3>
                   <p className="text-gray-500 font-mono text-sm mb-6">
-                    Make a deposit to start using the privacy mixer
+                    Shield some DOGE to start using private transactions
                   </p>
-                  <a href="/dashboard">
+                  <a href="/shield">
                     <Button className="bg-[#C2A633] hover:bg-[#C2A633]/90 text-black font-mono font-bold">
-                      Go to Mixer
+                      Go to Shielded
                     </Button>
                   </a>
                 </div>

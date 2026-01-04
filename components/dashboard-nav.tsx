@@ -25,14 +25,6 @@ export function DashboardNav() {
             </Link>
             <div className="hidden md:flex items-center gap-8">
               <Link
-                href="/dashboard"
-                className={`font-mono text-sm transition-colors ${
-                  pathname === "/dashboard" ? "text-[#C2A633] font-bold" : "text-gray-400 hover:text-white"
-                }`}
-              >
-                Mixer
-              </Link>
-              <Link
                 href="/shield"
                 className={`font-mono text-sm transition-colors flex items-center gap-1.5 ${
                   pathname === "/shield" ? "text-[#C2A633] font-bold" : "text-gray-400 hover:text-white"
@@ -104,15 +96,6 @@ export function DashboardNav() {
           <div className="lg:hidden border-t border-[#C2A633]/20 bg-black">
             <div className="px-4 py-4 space-y-3">
               {/* Mobile Navigation Links */}
-              <Link
-                href="/dashboard"
-                onClick={() => setMobileMenuOpen(false)}
-                className={`font-mono text-sm transition-colors flex items-center gap-2 py-2 ${
-                  pathname === "/dashboard" ? "text-[#C2A633] font-bold" : "text-gray-400 hover:text-white"
-                }`}
-              >
-                Mixer
-              </Link>
               <Link
                 href="/shield"
                 onClick={() => setMobileMenuOpen(false)}
