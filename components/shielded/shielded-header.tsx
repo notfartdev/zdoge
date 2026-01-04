@@ -13,6 +13,7 @@ import {
   initializeShieldedWallet,
   getWalletState,
   getShieldedBalance,
+  getShieldedBalancePerToken,
   getNotes,
   backupWallet,
   syncNotesWithChain,
@@ -166,8 +167,11 @@ export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", compact 
   }, [mounted, wallet?.isConnected, wallet?.address])
   
   const refreshState = () => {
-    const state = getWalletState()
-    setWalletState(state)
+    // Reload state from storage to ensure we have the latest notes
+    if (wallet?.address) {
+      const state = getWalletState()
+      setWalletState(state)
+    }
     onStateChange?.()
   }
   
@@ -223,7 +227,7 @@ export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", compact 
     )
   }
   
-  const shieldedBalance = walletState ? getShieldedBalance() : {}
+  const shieldedBalance = walletState ? getShieldedBalancePerToken() : {}
   const allNotes = walletState ? getNotes() : []
   const tokenNotes = allNotes.filter(note => (note.token || 'DOGE') === selectedToken)
   const isAutoDiscovery = isAutoDiscoveryRunning()
@@ -316,10 +320,11 @@ export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", compact 
       {walletState?.shieldedAddress && !compact && (
         <div className="p-4 rounded-lg bg-muted/30 border mt-4">
           <div className="flex items-center justify-between">
-            <div>
+            <div className="flex-1">
               <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
                 <Shield className="h-3.5 w-3.5 opacity-85" strokeWidth={1.75} />
                 Your Shielded Address
+                <Badge variant="outline" className="text-[10px] ml-1">Permanent</Badge>
               </div>
               <code className="text-sm font-mono bg-muted px-3 py-1.5 rounded block">
                 {showAddress 
@@ -327,9 +332,11 @@ export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", compact 
                   : `zdoge:${shortenAddress(walletState.shieldedAddress)}`
                 }
               </code>
-              <p className="text-xs text-muted-foreground mt-1">Share this address to receive private payments</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Share this address to receive private payments • This address never changes
+              </p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 ml-3">
               <Button variant="ghost" size="icon" onClick={() => setShowAddress(!showAddress)}>
                 {showAddress ? <EyeOff className="h-4 w-4 opacity-85" strokeWidth={1.75} /> : <Eye className="h-4 w-4 opacity-85" strokeWidth={1.75} />}
               </Button>
@@ -346,11 +353,11 @@ export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", compact 
 
 export function useShieldedState() {
   const [notes, setNotes] = useState(getNotes())
-  const [balance, setBalance] = useState(getShieldedBalance())
+  const [balance, setBalance] = useState(getShieldedBalancePerToken())
   
   const refresh = () => {
     setNotes(getNotes())
-    setBalance(getShieldedBalance())
+    setBalance(getShieldedBalancePerToken())
   }
   
   return { notes, balance, refresh }

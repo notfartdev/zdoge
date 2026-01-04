@@ -3,7 +3,7 @@
 import { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Menu, X, Shield, Send, ArrowLeftRight, ShieldOff } from "lucide-react"
+import { Menu, X, Shield, Send, ArrowLeftRight, ShieldOff, QrCode, Activity } from "lucide-react"
 import { WalletConnectButton } from "./wallet-connect-button"
 import { AccountModal } from "./account-modal"
 
@@ -16,6 +16,8 @@ export function DashboardNav() {
     { href: "/send", label: "Send", icon: Send },
     { href: "/swap", label: "Swap", icon: ArrowLeftRight },
     { href: "/unshield", label: "Unshield", icon: ShieldOff },
+    { href: "/receive", label: "Receive", icon: QrCode },
+    { href: "/activity", label: "Activity", icon: Activity },
   ]
 
   return (

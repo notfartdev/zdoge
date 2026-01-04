@@ -22,6 +22,7 @@ import { useWallet } from "@/lib/wallet-context"
 import { prepareShield, completeShield } from "@/lib/shielded/shielded-service"
 import { noteToShareableString, ShieldedNote } from "@/lib/shielded/shielded-note"
 import { shieldedPool, ERC20ABI, tokens, ShieldedPoolABI } from "@/lib/dogeos-config"
+import { addTransaction, initTransactionHistory } from "@/lib/shielded/transaction-history"
 import { createPublicClient, http, parseAbiItem, type Address, encodeFunctionData, toHex, keccak256, toBytes } from "viem"
 import { dogeosTestnet } from "@/lib/dogeos-config"
 
@@ -67,6 +68,13 @@ interface ShieldInterfaceProps {
 export function ShieldInterface({ onSuccess, selectedToken: externalToken, onTokenChange }: ShieldInterfaceProps) {
   const { wallet } = useWallet()
   const { toast } = useToast()
+  
+  // Initialize transaction history
+  useEffect(() => {
+    if (wallet?.address) {
+      initTransactionHistory(wallet.address)
+    }
+  }, [wallet?.address])
   
   const [internalToken, setInternalToken] = useState<ShieldedToken>("DOGE")
   
@@ -332,6 +340,20 @@ export function ShieldInterface({ onSuccess, selectedToken: externalToken, onTok
       
       // Complete the shield (save note with leafIndex)
       completeShield(note, actualLeafIndex)
+      
+      // Add to transaction history
+      addTransaction({
+        type: 'shield',
+        txHash: hash as string,
+        timestamp: Math.floor(Date.now() / 1000),
+        token: selectedToken,
+        amount: amountNum.toFixed(4),
+        amountWei: noteAmountWei.toString(),
+        commitment: commitment,
+        leafIndex: actualLeafIndex,
+        status: 'confirmed',
+        blockNumber: Number(receipt.blockNumber),
+      })
       
       // NOW show the note backup (after confirmation)
       const backup = noteToShareableString(note)

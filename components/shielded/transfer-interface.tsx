@@ -11,6 +11,8 @@ import { useToast } from "@/hooks/use-toast"
 import { ShieldedNote, formatWeiToAmount, noteToShareableString } from "@/lib/shielded/shielded-note"
 import { isValidShieldedAddress } from "@/lib/shielded/shielded-address"
 import { prepareTransfer, completeTransfer, getNotes } from "@/lib/shielded/shielded-service"
+import { addTransaction, initTransactionHistory } from "@/lib/shielded/transaction-history"
+import { useWallet } from "@/lib/wallet-context"
 import { shieldedPool } from "@/lib/dogeos-config"
 
 const SHIELDED_POOL_ADDRESS = shieldedPool.address
@@ -240,6 +242,20 @@ export function TransferInterface({ notes, onSuccess, selectedToken = "DOGE", on
         result.recipientNote,  // Also pass recipient note
         data.leafIndex1 || 0   // And its leaf index
       )
+      
+      // Add to transaction history
+      addTransaction({
+        type: 'transfer',
+        txHash: data.txHash,
+        timestamp: Math.floor(Date.now() / 1000),
+        token: selectedNote.token || 'DOGE',
+        amount: amountNum.toFixed(4),
+        amountWei: (BigInt(Math.floor(amountNum * 1e18))).toString(),
+        recipientAddress: recipientAddress,
+        fee: (result.fee || 0n).toString(),
+        changeAmount: result.changeNote.amount > 0n ? (Number(result.changeNote.amount) / 1e18).toFixed(4) : undefined,
+        status: 'confirmed',
+      })
       
       setStatus("success")
       

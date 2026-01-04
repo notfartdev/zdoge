@@ -9,6 +9,7 @@ import { Loader2, LogOut, AlertCircle, Check, Zap, Shield, ShieldOff, Info, Coin
 import { useToast } from "@/hooks/use-toast"
 import { ShieldedNote, formatWeiToAmount } from "@/lib/shielded/shielded-note"
 import { prepareUnshield, completeUnshield, getNotes } from "@/lib/shielded/shielded-service"
+import { addTransaction, initTransactionHistory } from "@/lib/shielded/transaction-history"
 import { useWallet } from "@/lib/wallet-context"
 import { shieldedPool } from "@/lib/dogeos-config"
 
@@ -32,6 +33,13 @@ interface UnshieldInterfaceProps {
 export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", onTokenChange }: UnshieldInterfaceProps) {
   const { wallet } = useWallet()
   const { toast } = useToast()
+  
+  // Initialize transaction history
+  useEffect(() => {
+    if (wallet?.address) {
+      initTransactionHistory(wallet.address)
+    }
+  }, [wallet?.address])
   
   const [amount, setAmount] = useState("")
   const [recipientAddress, setRecipientAddress] = useState("")
@@ -192,6 +200,20 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
         txHashes.push(data.txHash)
         totalReceived += Number(data.amountReceived) / 1e18
         completeUnshield(noteIndex)
+        
+        // Add to transaction history
+        addTransaction({
+          type: 'unshield',
+          txHash: data.txHash,
+          timestamp: Math.floor(Date.now() / 1000),
+          token: 'DOGE',
+          amount: (Number(data.amountReceived) / 1e18).toFixed(4),
+          amountWei: data.amountReceived,
+          recipientPublicAddress: wallet.address,
+          relayerFee: (Number(relayerFeeWei) / 1e18).toFixed(4),
+          status: 'confirmed',
+        })
+        
         setConsolidateProgress({ current: i + 1, total: worthyNotes.length, totalReceived })
         setConsolidateTxHashes([...txHashes])
       } catch (error: any) {
@@ -244,11 +266,27 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
       const data = await response.json()
       if (!response.ok) throw new Error(data.message || data.error || 'Relayer failed')
       setTxHash(data.txHash)
-      setWithdrawnAmount((Number(data.amountReceived) / 1e18).toFixed(4))
-      setFee((Number(data.fee) / 1e18).toFixed(4))
+      const receivedAmount = (Number(data.amountReceived) / 1e18).toFixed(4)
+      const feeAmount = (Number(data.fee) / 1e18).toFixed(4)
+      setWithdrawnAmount(receivedAmount)
+      setFee(feeAmount)
       completeUnshield(actualNoteIndex)
+      
+      // Add to transaction history
+      addTransaction({
+        type: 'unshield',
+        txHash: data.txHash,
+        timestamp: Math.floor(Date.now() / 1000),
+        token: selectedToken,
+        amount: receivedAmount,
+        amountWei: data.amountReceived,
+        recipientPublicAddress: wallet.address,
+        relayerFee: feeAmount,
+        status: 'confirmed',
+      })
+      
       setStatus("success")
-      toast({ title: "Unshield Successful!", description: `Received ${(Number(data.amountReceived) / 1e18).toFixed(4)} DOGE` })
+      toast({ title: "Unshield Successful!", description: `Received ${receivedAmount} DOGE` })
       onSuccess?.()
     } catch (error: any) {
       setStatus("error")

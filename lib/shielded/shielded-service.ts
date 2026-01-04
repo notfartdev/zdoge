@@ -92,11 +92,40 @@ let walletState: ShieldedWalletState = {
 const DEFAULT_POOL_ADDRESS = '0x6d237c2ed7036bf2F2006BcA6D3cA98E6E45b5f6';
 
 /**
+ * PERMANENT SIGNATURE MESSAGE FORMAT
+ * 
+ * CRITICAL: This message format MUST NEVER CHANGE.
+ * Changing this will break the permanent 1-wallet-to-1-address mapping.
+ * 
+ * Format: "zDoge.cash Shielded Wallet\n\n...\n\nWallet: {address}\nVersion: 1"
+ */
+const SHIELDED_IDENTITY_MESSAGE_VERSION = 1;
+function getShieldedIdentityMessage(walletAddress: string): string {
+  return `zDoge.cash Shielded Wallet
+
+Sign this message to create your permanent shielded identity.
+
+This signature is used to derive your private spending key.
+The same wallet will ALWAYS produce the same shielded address.
+This address is permanent and will never change.
+
+Wallet: ${walletAddress}
+Version: ${SHIELDED_IDENTITY_MESSAGE_VERSION}`;
+}
+
+/**
  * Initialize shielded wallet
- * Derives identity from wallet signature for consistent cross-device experience
+ * 
+ * CRITICAL: This creates a PERMANENT, DETERMINISTIC shielded address.
+ * 
+ * Rules:
+ * - 1 wallet address = 1 shielded address (FOREVER)
+ * - Same wallet on any device/browser = same shielded address
+ * - Shielded address NEVER changes (permanent)
+ * - Derived deterministically from wallet signature
  * 
  * @param walletAddress - The connected wallet's address
- * @param signMessage - Function to request wallet signature
+ * @param signMessage - Function to request wallet signature (REQUIRED)
  * @param poolAddress - Optional pool address for syncing
  */
 export async function initializeShieldedWallet(
@@ -108,13 +137,25 @@ export async function initializeShieldedWallet(
   currentWalletAddress = walletAddress;
   const keys = getStorageKeys();
   
-  // Try to load existing identity for this wallet
+  // Try to load existing identity for this wallet from localStorage (cache)
   const storedIdentity = await loadIdentityFromStorage();
   
   if (storedIdentity) {
     walletState.identity = storedIdentity;
     walletState.notes = loadNotesFromStorage();
     walletState.isInitialized = true;
+    
+    // Verify: Re-derive identity from stored signature to ensure consistency
+    const storedSig = typeof window !== 'undefined' ? localStorage.getItem(keys.signature) : null;
+    if (storedSig) {
+      const verifiedIdentity = await deriveIdentityFromSignature(storedSig);
+      if (verifiedIdentity.shieldedAddress !== storedIdentity.shieldedAddress) {
+        console.error('[ShieldedWallet] Identity mismatch detected! Re-deriving...');
+        // Update to verified identity
+        walletState.identity = verifiedIdentity;
+        saveIdentityToStorage(verifiedIdentity);
+      }
+    }
     
     // Auto-sync notes with chain if we have any
     if (walletState.notes.length > 0) {
@@ -126,44 +167,45 @@ export async function initializeShieldedWallet(
       }
     }
     
-    console.log(`[ShieldedWallet] Loaded identity for ${walletAddress.slice(0, 8)}...`);
-    return storedIdentity;
+    console.log(`[ShieldedWallet] Loaded permanent identity for ${walletAddress.slice(0, 8)}...`);
+    return walletState.identity;
   }
   
-  // No existing identity - derive from wallet signature
-  console.log(`[ShieldedWallet] Creating new identity for ${walletAddress.slice(0, 8)}...`);
+  // No stored identity - MUST derive from wallet signature (permanent)
+  console.log(`[ShieldedWallet] Creating permanent identity for ${walletAddress.slice(0, 8)}...`);
+  
+  // REQUIRE signature - no random fallback
+  if (!signMessage) {
+    throw new Error(
+      'signMessage function is required. Shielded addresses are permanent and must be derived from wallet signature.'
+    );
+  }
   
   let signature: string;
   
-  // Check if we have a stored signature (from previous session)
+  // Check if we have a stored signature (from previous session on this browser)
   const storedSig = typeof window !== 'undefined' ? localStorage.getItem(keys.signature) : null;
   
   if (storedSig) {
+    // Verify stored signature produces same identity
     signature = storedSig;
-    console.log('[ShieldedWallet] Using stored signature');
-  } else if (signMessage) {
-    // Request new signature from wallet
-    const message = `zDoge.cash Shielded Wallet\n\nSign this message to create your shielded identity.\n\nThis signature is used to derive your private spending key.\nIt will be the same on any device where you sign with this wallet.\n\nWallet: ${walletAddress}\nVersion: 1`;
+    console.log('[ShieldedWallet] Using stored signature (permanent address)');
+  } else {
+    // Request signature from wallet using FIXED message format
+    const message = getShieldedIdentityMessage(walletAddress);
     
+    console.log('[ShieldedWallet] Requesting signature for permanent identity...');
     signature = await signMessage(message);
     
-    // Store signature for future sessions (so user doesn't have to sign again)
+    // Store signature permanently (so user doesn't have to sign again)
+    // This is safe because signature is deterministic - same wallet = same signature
     if (typeof window !== 'undefined') {
       localStorage.setItem(keys.signature, signature);
     }
-    console.log('[ShieldedWallet] New signature obtained and stored');
-  } else {
-    // Fallback: generate random identity (not recommended for production)
-    console.warn('[ShieldedWallet] No signMessage provided, generating random identity');
-    const identity = await generateShieldedIdentity();
-    saveIdentityToStorage(identity);
-    walletState.identity = identity;
-    walletState.notes = [];
-    walletState.isInitialized = true;
-    return identity;
+    console.log('[ShieldedWallet] Signature obtained and stored (permanent)');
   }
   
-  // Derive identity from signature
+  // Derive identity from signature (DETERMINISTIC - always same for same wallet)
   const identity = await deriveIdentityFromSignature(signature);
   saveIdentityToStorage(identity);
   
@@ -171,19 +213,31 @@ export async function initializeShieldedWallet(
   walletState.notes = [];
   walletState.isInitialized = true;
   
-  console.log(`[ShieldedWallet] Identity created: ${identity.addressString.slice(0, 20)}...`);
+  console.log(`[ShieldedWallet] Permanent identity created: ${identity.addressString}`);
+  console.log(`[ShieldedWallet] This address will NEVER change for wallet ${walletAddress.slice(0, 8)}...`);
+  
   return identity;
 }
 
 /**
  * Derive shielded identity from wallet signature
- * This ensures the same wallet always gets the same shielded address
+ * 
+ * CRITICAL: This function is DETERMINISTIC.
+ * Same signature → Same spending key → Same shielded address
+ * 
+ * This ensures:
+ * - 1 wallet = 1 shielded address (FOREVER)
+ * - Same wallet on any device/browser = same address
+ * - Address is PERMANENT and never changes
+ * 
+ * @param signature - Wallet signature (deterministic for same wallet)
  */
 async function deriveIdentityFromSignature(signature: string): Promise<ShieldedIdentity> {
   const { keccak256, toBytes } = await import('viem');
   const { FIELD_SIZE, mimcHash2, DOMAIN } = await import('./shielded-crypto');
   
-  // Hash the signature to get spending key
+  // Hash the signature to get spending key (DETERMINISTIC)
+  // Same wallet signature → same hash → same spending key
   const hash1 = keccak256(toBytes(signature));
   const spendingKey = BigInt(hash1) % FIELD_SIZE;
   
@@ -191,6 +245,7 @@ async function deriveIdentityFromSignature(signature: string): Promise<ShieldedI
   const viewingKey = await mimcHash2(spendingKey, DOMAIN.VIEWING_KEY);
   
   // Derive shielded address using MiMC (must match circuit's DeriveAddress!)
+  // This is the PERMANENT public address (zdoge:...)
   const shieldedAddress = await mimcHash2(spendingKey, DOMAIN.SHIELDED_ADDRESS);
   
   // Create shielded address string with zdoge: prefix
@@ -226,10 +281,26 @@ export function getNotes(): ShieldedNote[] {
 }
 
 /**
- * Get total shielded balance
+ * Get total shielded balance (single bigint for backward compatibility)
  */
 export function getShieldedBalance(): bigint {
   return walletState.notes.reduce((sum, note) => sum + note.amount, 0n);
+}
+
+/**
+ * Get shielded balance per token
+ */
+export function getShieldedBalancePerToken(): Record<string, bigint> {
+  const balances: Record<string, bigint> = {};
+  
+  for (const note of walletState.notes) {
+    if (note.leafIndex !== undefined) { // Only count confirmed notes
+      const token = note.token || 'DOGE';
+      balances[token] = (balances[token] || 0n) + note.amount;
+    }
+  }
+  
+  return balances;
 }
 
 /**
