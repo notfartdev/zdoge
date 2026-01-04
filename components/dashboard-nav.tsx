@@ -3,7 +3,7 @@
 import { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Inbox, Search, Menu, X, HelpCircle, Shield } from "lucide-react"
+import { Inbox, Search, Menu, X, HelpCircle, Shield, Send, LogOut, ArrowLeftRight } from "lucide-react"
 import { WalletConnectButton } from "./wallet-connect-button"
 import { AccountModal } from "./account-modal"
 import { FAQModal } from "./faq-modal"
@@ -12,18 +12,22 @@ export function DashboardNav() {
   const pathname = usePathname()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [faqOpen, setFaqOpen] = useState(false)
+  
+  const isShieldedPage = ['/shield', '/send', '/swap', '/unshield'].includes(pathname)
 
   return (
     <nav className="border-b border-[#C2A633]/20 bg-black">
       <div className="container mx-auto px-4 sm:px-6">
         <div className="flex items-center justify-between h-16 sm:h-20">
-          {/* Left Side: Logo / Mixer / Docs */}
-          <div className="flex items-center gap-4 sm:gap-12">
+          {/* Left Side: Logo / Links */}
+          <div className="flex items-center gap-4 sm:gap-8">
             <Link href="/" className="flex items-center gap-2 sm:gap-3">
               <img src="/dogenadologo.png" alt="DogenadoCash" className="w-8 h-8 sm:w-10 sm:h-10 rounded-full" />
               <span className="font-mono text-base sm:text-xl font-bold text-white">dogenado</span>
             </Link>
-            <div className="hidden md:flex items-center gap-8">
+            
+            {/* Main Nav Links */}
+            <div className="hidden md:flex items-center gap-6">
               <Link
                 href="/shield"
                 className={`font-mono text-sm transition-colors flex items-center gap-1.5 ${
@@ -31,8 +35,38 @@ export function DashboardNav() {
                 }`}
               >
                 <Shield className="w-4 h-4" />
-                Shielded
+                Shield
               </Link>
+              <Link
+                href="/send"
+                className={`font-mono text-sm transition-colors flex items-center gap-1.5 ${
+                  pathname === "/send" ? "text-[#C2A633] font-bold" : "text-gray-400 hover:text-white"
+                }`}
+              >
+                <Send className="w-4 h-4" />
+                Send
+              </Link>
+              <Link
+                href="/swap"
+                className={`font-mono text-sm transition-colors flex items-center gap-1.5 ${
+                  pathname === "/swap" ? "text-[#C2A633] font-bold" : "text-gray-400 hover:text-white"
+                }`}
+              >
+                <ArrowLeftRight className="w-4 h-4" />
+                Swap
+              </Link>
+              <Link
+                href="/unshield"
+                className={`font-mono text-sm transition-colors flex items-center gap-1.5 ${
+                  pathname === "/unshield" ? "text-[#C2A633] font-bold" : "text-gray-400 hover:text-white"
+                }`}
+              >
+                <LogOut className="w-4 h-4" />
+                Unshield
+              </Link>
+              
+              <div className="h-4 w-px bg-[#C2A633]/20" />
+              
               <a
                 href="https://docs.dogenado.cash"
                 target="_blank"
@@ -43,41 +77,17 @@ export function DashboardNav() {
               </a>
               <button
                 onClick={() => setFaqOpen(true)}
-                className="font-mono text-sm text-gray-400 hover:text-white transition-colors flex items-center gap-2"
+                className="font-mono text-sm text-gray-400 hover:text-white transition-colors flex items-center gap-1.5"
               >
                 <HelpCircle className="w-4 h-4" />
-                How it Works
+                <span className="hidden lg:inline">How it Works</span>
               </button>
             </div>
           </div>
 
-          {/* Desktop Right Side: Connect Wallet / Check / Inbox / Account */}
+          {/* Desktop Right Side: Connect Wallet / Account */}
           <div className="hidden lg:flex items-center gap-4 xl:gap-6">
             <WalletConnectButton />
-            
-            {/* Check Note Status */}
-            <Link
-              href="/dashboard/check"
-              className={`font-mono text-sm transition-colors flex items-center gap-2 ${
-                pathname === "/dashboard/check" ? "text-[#C2A633] font-bold" : "text-gray-400 hover:text-white"
-              }`}
-            >
-              <Search className="w-4 h-4" />
-              <span className="hidden xl:inline">Check</span>
-            </Link>
-            
-            {/* Inbox */}
-            <Link
-              href="/dashboard/inbox"
-              className={`font-mono text-sm transition-colors flex items-center gap-2 ${
-                pathname === "/dashboard/inbox" ? "text-[#C2A633] font-bold" : "text-gray-400 hover:text-white"
-              }`}
-            >
-              <Inbox className="w-4 h-4" />
-              <span className="hidden xl:inline">Inbox</span>
-            </Link>
-
-            {/* Account Modal */}
             <AccountModal />
           </div>
 
@@ -104,8 +114,41 @@ export function DashboardNav() {
                 }`}
               >
                 <Shield className="w-4 h-4" />
-                Shielded
+                Shield
               </Link>
+              <Link
+                href="/send"
+                onClick={() => setMobileMenuOpen(false)}
+                className={`font-mono text-sm transition-colors flex items-center gap-2 py-2 ${
+                  pathname === "/send" ? "text-[#C2A633] font-bold" : "text-gray-400 hover:text-white"
+                }`}
+              >
+                <Send className="w-4 h-4" />
+                Send
+              </Link>
+              <Link
+                href="/swap"
+                onClick={() => setMobileMenuOpen(false)}
+                className={`font-mono text-sm transition-colors flex items-center gap-2 py-2 ${
+                  pathname === "/swap" ? "text-[#C2A633] font-bold" : "text-gray-400 hover:text-white"
+                }`}
+              >
+                <ArrowLeftRight className="w-4 h-4" />
+                Swap
+              </Link>
+              <Link
+                href="/unshield"
+                onClick={() => setMobileMenuOpen(false)}
+                className={`font-mono text-sm transition-colors flex items-center gap-2 py-2 ${
+                  pathname === "/unshield" ? "text-[#C2A633] font-bold" : "text-gray-400 hover:text-white"
+                }`}
+              >
+                <LogOut className="w-4 h-4" />
+                Unshield
+              </Link>
+              
+              <div className="border-t border-[#C2A633]/20 my-3" />
+              
               <a
                 href="https://docs.dogenado.cash"
                 target="_blank"
@@ -129,29 +172,6 @@ export function DashboardNav() {
               {/* Mobile Actions */}
               <div className="pt-3 border-t border-[#C2A633]/20 space-y-3">
                 <WalletConnectButton />
-                
-                <Link
-                  href="/dashboard/check"
-                  onClick={() => setMobileMenuOpen(false)}
-                  className={`font-mono text-sm transition-colors flex items-center gap-2 py-2 ${
-                    pathname === "/dashboard/check" ? "text-[#C2A633] font-bold" : "text-gray-400 hover:text-white"
-                  }`}
-                >
-                  <Search className="w-4 h-4" />
-                  Check Note Status
-                </Link>
-                
-                <Link
-                  href="/dashboard/inbox"
-                  onClick={() => setMobileMenuOpen(false)}
-                  className={`font-mono text-sm transition-colors flex items-center gap-2 py-2 ${
-                    pathname === "/dashboard/inbox" ? "text-[#C2A633] font-bold" : "text-gray-400 hover:text-white"
-                  }`}
-                >
-                  <Inbox className="w-4 h-4" />
-                  Inbox
-                </Link>
-
                 <div onClick={() => setMobileMenuOpen(false)}>
                   <AccountModal />
                 </div>
