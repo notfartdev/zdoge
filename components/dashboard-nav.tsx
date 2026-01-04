@@ -35,7 +35,7 @@ export function DashboardNav() {
           </div>
 
           {/* Center: Main Nav Links */}
-          <div className="hidden md:flex items-center justify-center flex-1">
+          <div className="hidden lg:flex items-center justify-center flex-1">
             <div className="flex items-center gap-1 bg-white/5 rounded-full p-1">
               {navLinks.map((link) => {
                 const Icon = link.icon
@@ -59,13 +59,13 @@ export function DashboardNav() {
           </div>
 
           {/* Right: Wallet & Account */}
-          <div className="hidden md:flex items-center gap-3 flex-shrink-0">
+          <div className="hidden lg:flex items-center gap-3 flex-shrink-0">
             <WalletConnectButton />
             <AccountModal />
           </div>
 
           {/* Mobile Menu Button */}
-          <div className="md:hidden ml-auto">
+          <div className="lg:hidden ml-auto">
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               className="p-2 text-gray-400 hover:text-white transition-colors"
@@ -79,7 +79,7 @@ export function DashboardNav() {
 
       {/* Mobile Menu */}
       {mobileMenuOpen && (
-        <div className="md:hidden border-t border-[#C2A633]/20 bg-black/95 backdrop-blur-sm">
+        <div className="lg:hidden border-t border-[#C2A633]/20 bg-black/95 backdrop-blur-sm">
           <div className="px-4 py-4 space-y-2">
             {/* Mobile Navigation Links */}
             {navLinks.map((link) => {

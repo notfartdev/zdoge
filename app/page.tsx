@@ -354,7 +354,7 @@ export default function HomePage() {
                 className="flex flex-col items-center gap-6"
               >
                 <Link href="/shield">
-                  <button className="group relative px-12 py-3.5 bg-[#C2A633] text-black/90 font-mono text-sm tracking-[0.25em] font-bold transition-colors duration-300 hover:text-black flex items-center gap-3">
+                  <button className="group relative px-8 sm:px-12 py-3 sm:py-3.5 bg-[#C2A633] text-black/90 font-mono text-xs sm:text-sm tracking-[0.15em] sm:tracking-[0.25em] font-bold transition-colors duration-300 hover:text-black flex items-center gap-2 sm:gap-3">
                     <span className="relative z-10">LAUNCH APP</span>
                     
                     {/* Arrow icon */}
@@ -377,9 +377,10 @@ export default function HomePage() {
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ delay: 0.7, duration: 0.8 }}
-                  className="font-mono text-[10px] sm:text-xs text-white/25 tracking-[0.2em]"
+                  className="font-mono text-[9px] sm:text-xs text-white/25 tracking-[0.1em] sm:tracking-[0.2em] px-4"
                 >
-                  NO SIGNUP&nbsp;&nbsp;·&nbsp;&nbsp;NO TRACKING&nbsp;&nbsp;·&nbsp;&nbsp;NON-CUSTODIAL
+                  <span className="hidden sm:inline">NO SIGNUP&nbsp;&nbsp;·&nbsp;&nbsp;NO TRACKING&nbsp;&nbsp;·&nbsp;&nbsp;NON-CUSTODIAL</span>
+                  <span className="sm:hidden">NO SIGNUP · NO TRACKING · NON-CUSTODIAL</span>
                 </motion.p>
               </motion.div>
             </motion.div>
@@ -612,9 +613,9 @@ export default function HomePage() {
                     funds or private keys. You are solely responsible for keeping your wallet secure. 
                     Always backup your shielded wallet before transactions.
                   </p>
-                  <div className="flex flex-wrap gap-3 mt-4">
+                  <div className="flex flex-wrap gap-2 sm:gap-3 mt-4">
                     {['DECENTRALIZED', 'NON-CUSTODIAL', 'ZK-PRIVATE'].map((tag) => (
-                      <span key={tag} className="px-3 py-1 border border-[#C2A633]/25 text-[#C2A633]/80 font-mono text-[10px] tracking-wider">
+                      <span key={tag} className="px-2 sm:px-3 py-1 border border-[#C2A633]/25 text-[#C2A633]/80 font-mono text-[9px] sm:text-[10px] tracking-wider">
                         {tag}
                       </span>
                     ))}
