@@ -316,34 +316,10 @@ async function fetchCommitmentsFromChain(poolAddress: string): Promise<{ commitm
       results.push({ commitment, leafIndex });
     }
     
-    // Also check for Transfer events which add two new commitments
-    // Transfer events have 4 topics and commitments in data
-    // But we only add them if they have valid (small) leaf indices
-    const transferLogs = logs.filter((log: any) => {
-      if (!log.topics || log.topics.length < 4) return false;
-      // Topics[2] and [3] should be valid leaf indices for Transfer events
-      const idx1 = parseInt(log.topics[2], 16);
-      const idx2 = parseInt(log.topics[3], 16);
-      return idx1 >= 0 && idx1 < MAX_VALID_LEAF_INDEX && idx2 >= 0 && idx2 < MAX_VALID_LEAF_INDEX;
-    });
-    
-    console.log(`Found ${transferLogs.length} Transfer events with valid indices`);
-    
-    for (const log of transferLogs) {
-      const leafIndex1 = parseInt(log.topics[2], 16);
-      const leafIndex2 = parseInt(log.topics[3], 16);
-      
-      // Data contains: outputCommitment1, outputCommitment2, ...
-      if (log.data && log.data.length >= 130) {
-        const dataHex = log.data.slice(2);
-        const commitment1 = BigInt('0x' + dataHex.slice(0, 64));
-        const commitment2 = BigInt('0x' + dataHex.slice(64, 128));
-        
-        console.log(`  Transfer: idx1=${leafIndex1}, idx2=${leafIndex2}`);
-        results.push({ commitment: commitment1, leafIndex: leafIndex1 });
-        results.push({ commitment: commitment2, leafIndex: leafIndex2 });
-      }
-    }
+    // NOTE: Transfer event parsing disabled - was causing root mismatches
+    // The events being parsed as "Transfer" were actually other event types
+    // with wrong data, overwriting correct Shield commitments.
+    // For now, we only use Shield events which contain all the commitments.
     
     // Sort by leafIndex to ensure correct order
     results.sort((a, b) => a.leafIndex - b.leafIndex);
