@@ -288,18 +288,22 @@ async function fetchCommitmentsFromChain(poolAddress: string): Promise<{ commitm
     const uniqueTopics = new Set(logs.map((log: any) => log.topics[0]));
     console.log('Event signatures found:', Array.from(uniqueTopics));
     
-    // Shield event signature: Shield(bytes32 indexed commitment, uint256 indexed leafIndex, address indexed token, uint256 amount, uint256 timestamp)
-    // keccak256("Shield(bytes32,uint256,address,uint256,uint256)") 
-    const SHIELD_EVENT_SIG = '0x784c8f4dbf0ffedd6e72c76501c545a70f8b203b30a26ce542bf92ba87c248a4';
+    // Filter events that look like Shield events (commitment + valid leafIndex)
+    // Valid leafIndex should be a reasonable number (< 100000), not a bytes32 hash
+    const MAX_VALID_LEAF_INDEX = 100000;
     
-    // Filter ONLY Shield events (not Transfer events which have different structure)
-    const shieldLogs = logs.filter((log: any) => 
-      log.topics && 
-      log.topics.length >= 3 && 
-      log.topics[0].toLowerCase() === SHIELD_EVENT_SIG.toLowerCase()
-    );
+    // Pre-filter: events with 3+ topics where topics[2] is a valid small number
+    const shieldLogs = logs.filter((log: any) => {
+      if (!log.topics || log.topics.length < 3) return false;
+      
+      // Parse topics[2] as leafIndex - must be a small reasonable number
+      const leafIndex = parseInt(log.topics[2], 16);
+      const isValidLeafIndex = !isNaN(leafIndex) && leafIndex >= 0 && leafIndex < MAX_VALID_LEAF_INDEX;
+      
+      return isValidLeafIndex;
+    });
     
-    console.log(`Found ${shieldLogs.length} Shield events (filtered from ${logs.length} total)`);
+    console.log(`Found ${shieldLogs.length} Shield-like events (valid leafIndex < ${MAX_VALID_LEAF_INDEX})`);
     
     // Extract commitments from Shield logs
     // commitment is topics[1], leafIndex is topics[2]
@@ -312,31 +316,30 @@ async function fetchCommitmentsFromChain(poolAddress: string): Promise<{ commitm
       results.push({ commitment, leafIndex });
     }
     
-    // Also parse Transfer events which add two new commitments each
-    // Transfer event: Transfer(bytes32 indexed nullifierHash, uint256 indexed leafIndex1, uint256 indexed leafIndex2, ...)
-    // The commitments are in the data field, not indexed
-    const TRANSFER_EVENT_SIG = '0xb94750cc0be5c55efe2c73c50ea1d2e36c3232ac9818923f399e1699b29025eb';
-    const transferLogs = logs.filter((log: any) => 
-      log.topics && 
-      log.topics.length >= 4 && 
-      log.topics[0].toLowerCase() === TRANSFER_EVENT_SIG.toLowerCase()
-    );
+    // Also check for Transfer events which add two new commitments
+    // Transfer events have 4 topics and commitments in data
+    // But we only add them if they have valid (small) leaf indices
+    const transferLogs = logs.filter((log: any) => {
+      if (!log.topics || log.topics.length < 4) return false;
+      // Topics[2] and [3] should be valid leaf indices for Transfer events
+      const idx1 = parseInt(log.topics[2], 16);
+      const idx2 = parseInt(log.topics[3], 16);
+      return idx1 >= 0 && idx1 < MAX_VALID_LEAF_INDEX && idx2 >= 0 && idx2 < MAX_VALID_LEAF_INDEX;
+    });
     
-    console.log(`Found ${transferLogs.length} Transfer events`);
+    console.log(`Found ${transferLogs.length} Transfer events with valid indices`);
     
     for (const log of transferLogs) {
-      // topics[2] = leafIndex1, topics[3] = leafIndex2
       const leafIndex1 = parseInt(log.topics[2], 16);
       const leafIndex2 = parseInt(log.topics[3], 16);
       
-      // Data contains: outputCommitment1 (32 bytes), outputCommitment2 (32 bytes), ...
-      // Each bytes32 is 64 hex chars, data starts with 0x
-      if (log.data && log.data.length >= 130) { // 0x + 64 + 64 = 130 chars minimum
-        const dataHex = log.data.slice(2); // remove 0x
+      // Data contains: outputCommitment1, outputCommitment2, ...
+      if (log.data && log.data.length >= 130) {
+        const dataHex = log.data.slice(2);
         const commitment1 = BigInt('0x' + dataHex.slice(0, 64));
         const commitment2 = BigInt('0x' + dataHex.slice(64, 128));
         
-        console.log(`  Transfer: Commitment1 leafIndex=${leafIndex1}, Commitment2 leafIndex=${leafIndex2}`);
+        console.log(`  Transfer: idx1=${leafIndex1}, idx2=${leafIndex2}`);
         results.push({ commitment: commitment1, leafIndex: leafIndex1 });
         results.push({ commitment: commitment2, leafIndex: leafIndex2 });
       }
