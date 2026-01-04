@@ -3,7 +3,7 @@
 import { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Menu, X, Shield, Send, ArrowLeftRight, LogOut } from "lucide-react"
+import { Menu, X, Shield, Send, ArrowLeftRight, ShieldOff } from "lucide-react"
 import { WalletConnectButton } from "./wallet-connect-button"
 import { AccountModal } from "./account-modal"
 
@@ -15,13 +15,22 @@ export function DashboardNav() {
     { href: "/shield", label: "Shield", icon: Shield },
     { href: "/send", label: "Send", icon: Send },
     { href: "/swap", label: "Swap", icon: ArrowLeftRight },
-    { href: "/unshield", label: "Unshield", icon: LogOut },
+    { href: "/unshield", label: "Unshield", icon: ShieldOff },
   ]
 
   return (
     <nav className="border-b border-[#C2A633]/20 bg-black sticky top-0 z-50">
+      {/* Dashboard Identity Line */}
+      <div className="border-b border-white/[0.03] bg-black/50">
+        <div className="px-4 sm:px-6 lg:px-8 py-2">
+          <p className="text-[10px] font-mono tracking-[0.3em] text-white/40 text-center uppercase">
+            zDOGE Private Operations
+          </p>
+        </div>
+      </div>
+      
       <div className="px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center h-16 sm:h-18">
+        <div className="flex items-center h-14 sm:h-16">
           
           {/* Left: Logo only */}
           <div className="flex-shrink-0">
@@ -50,7 +59,7 @@ export function DashboardNav() {
                         : "text-gray-400 hover:text-white hover:bg-white/10"
                     }`}
                   >
-                    <Icon className="w-3.5 h-3.5" />
+                    <Icon className="w-3.5 h-3.5" strokeWidth={1.75} />
                     {link.label.toUpperCase()}
                   </Link>
                 )
@@ -96,7 +105,7 @@ export function DashboardNav() {
                       : "text-gray-400 hover:text-white hover:bg-white/5"
                   }`}
                 >
-                  <Icon className="w-5 h-5" />
+                  <Icon className="w-5 h-5 opacity-85" strokeWidth={1.75} />
                   {link.label.toUpperCase()}
                 </Link>
               )

@@ -48,9 +48,10 @@ const TOKEN_CONFIG: Record<string, { name: string; logo: string; address?: strin
 interface ShieldedHeaderProps {
   onStateChange?: () => void
   selectedToken?: string
+  compact?: boolean // Use smaller header on secondary pages
 }
 
-export function ShieldedHeader({ onStateChange, selectedToken = "DOGE" }: ShieldedHeaderProps) {
+export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", compact = false }: ShieldedHeaderProps) {
   const { toast } = useToast()
   const { wallet, signMessage } = useWallet()
   const [mounted, setMounted] = useState(false)
@@ -228,79 +229,96 @@ export function ShieldedHeader({ onStateChange, selectedToken = "DOGE" }: Shield
   const isAutoDiscovery = isAutoDiscoveryRunning()
   
   return (
-    <Card className="p-6 mb-6 bg-card/50 backdrop-blur border-primary/20">
-      <div className="flex items-center justify-between mb-4">
+    <Card className={`${compact ? 'p-4' : 'p-6'} mb-6 bg-card/50 backdrop-blur border-primary/20`}>
+      <div className={`flex items-center justify-between ${compact ? 'mb-3' : 'mb-4'}`}>
         <div className="flex items-center gap-3">
-          <div className="p-2 rounded-full bg-primary/10">
-            <Shield className="h-6 w-6 text-primary" />
-          </div>
+          {!compact && (
+            <div className="p-2 rounded-full bg-primary/10">
+              <Shield className="h-5 w-5 text-primary opacity-85" strokeWidth={1.75} />
+            </div>
+          )}
           <div>
-            <h2 className="text-xl font-bold flex items-center gap-2">
-              Shielded Wallet
-              {isAutoDiscovery && (
-                <Badge variant="outline" className="text-xs flex items-center gap-1">
-                  <Radio className="h-3 w-3 animate-pulse" />
-                  Auto-sync
-                </Badge>
-              )}
-            </h2>
-            <p className="text-sm text-muted-foreground">Private token transactions</p>
+            {compact ? (
+              <p className="text-xs font-mono tracking-wider text-muted-foreground flex items-center gap-2">
+                <Shield className="h-3.5 w-3.5 text-primary opacity-85" strokeWidth={1.75} />
+                Using Shielded Wallet
+                {isAutoDiscovery && (
+                  <Badge variant="outline" className="text-[10px] flex items-center gap-1 py-0">
+                    <Radio className="h-2.5 w-2.5 animate-pulse" strokeWidth={1.75} />
+                    Sync
+                  </Badge>
+                )}
+              </p>
+            ) : (
+              <>
+                <h2 className="text-lg font-bold flex items-center gap-2">
+                  Shielded Wallet
+                  {isAutoDiscovery && (
+                    <Badge variant="outline" className="text-xs flex items-center gap-1">
+                      <Radio className="h-3 w-3 animate-pulse" strokeWidth={1.75} />
+                      Auto-sync
+                    </Badge>
+                  )}
+                </h2>
+                <p className="text-sm text-muted-foreground">Private token transactions</p>
+              </>
+            )}
           </div>
         </div>
         
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={handleSync} disabled={isLoading || !isInitialized}>
-            <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-            Sync
+            <RefreshCw className={`h-4 w-4 ${compact ? '' : 'mr-2'} opacity-85 ${isLoading ? 'animate-spin' : ''}`} strokeWidth={1.75} />
+            {!compact && 'Sync'}
           </Button>
           <Button variant="outline" size="sm" onClick={handleBackup} disabled={!isInitialized}>
-            <Key className="h-4 w-4 mr-2" />
-            Backup
+            <Key className={`h-4 w-4 ${compact ? '' : 'mr-2'} opacity-85`} strokeWidth={1.75} />
+            {!compact && 'Backup'}
           </Button>
         </div>
       </div>
       
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-        <div className="p-4 rounded-lg bg-muted/30 border">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-            <Wallet className="h-4 w-4" />
+      <div className={`grid grid-cols-1 md:grid-cols-2 gap-3 ${compact ? '' : 'mb-4'}`}>
+        <div className={`${compact ? 'p-3' : 'p-4'} rounded-lg bg-muted/30 border`}>
+          <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
+            <Wallet className="h-3.5 w-3.5 opacity-85" strokeWidth={1.75} />
             Public Balance
           </div>
-          <div className="text-2xl font-bold flex items-center gap-2">
+          <div className={`${compact ? 'text-lg' : 'text-2xl'} font-bold flex items-center gap-2`}>
             <img 
               src={tokenConfig.logo} 
               alt={selectedToken} 
-              className="w-6 h-6 rounded-full"
+              className={`${compact ? 'w-5 h-5' : 'w-6 h-6'} rounded-full`}
             />
             {publicBalance} {selectedToken}
           </div>
-          <div className="text-xs text-muted-foreground">Available to shield</div>
+          {!compact && <div className="text-xs text-muted-foreground">Available to shield</div>}
         </div>
         
-        <div className="p-4 rounded-lg bg-primary/5 border border-primary/20">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-            <Lock className="h-4 w-4" />
+        <div className={`${compact ? 'p-3' : 'p-4'} rounded-lg bg-primary/5 border border-primary/20`}>
+          <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
+            <Lock className="h-3.5 w-3.5 opacity-85" strokeWidth={1.75} />
             Shielded Balance
           </div>
-          <div className="text-2xl font-bold flex items-center gap-2">
+          <div className={`${compact ? 'text-lg' : 'text-2xl'} font-bold flex items-center gap-2`}>
             <img 
               src={tokenConfig.logo} 
               alt={selectedToken} 
-              className="w-6 h-6 rounded-full"
+              className={`${compact ? 'w-5 h-5' : 'w-6 h-6'} rounded-full`}
             />
             {selectedToken}
             <span className="ml-auto">{formatWeiToAmount(shieldedBalance[selectedToken] || 0n).toFixed(4)}</span>
           </div>
-          <div className="text-xs text-muted-foreground">{tokenNotes.length} notes • Private</div>
+          {!compact && <div className="text-xs text-muted-foreground">{tokenNotes.length} notes • Private</div>}
         </div>
       </div>
       
-      {walletState?.shieldedAddress && (
-        <div className="p-4 rounded-lg bg-muted/30 border">
+      {walletState?.shieldedAddress && !compact && (
+        <div className="p-4 rounded-lg bg-muted/30 border mt-4">
           <div className="flex items-center justify-between">
             <div>
-              <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-                <Shield className="h-4 w-4" />
+              <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
+                <Shield className="h-3.5 w-3.5 opacity-85" strokeWidth={1.75} />
                 Your Shielded Address
               </div>
               <code className="text-sm font-mono bg-muted px-3 py-1.5 rounded block">
@@ -313,10 +331,10 @@ export function ShieldedHeader({ onStateChange, selectedToken = "DOGE" }: Shield
             </div>
             <div className="flex items-center gap-2">
               <Button variant="ghost" size="icon" onClick={() => setShowAddress(!showAddress)}>
-                {showAddress ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                {showAddress ? <EyeOff className="h-4 w-4 opacity-85" strokeWidth={1.75} /> : <Eye className="h-4 w-4 opacity-85" strokeWidth={1.75} />}
               </Button>
               <Button variant="ghost" size="icon" onClick={copyAddress}>
-                {copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+                {copied ? <Check className="h-4 w-4 text-green-500" strokeWidth={1.75} /> : <Copy className="h-4 w-4 opacity-85" strokeWidth={1.75} />}
               </Button>
             </div>
           </div>

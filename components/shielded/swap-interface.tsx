@@ -305,11 +305,11 @@ export function SwapInterface({ notes, onSuccess, onInputTokenChange }: SwapInte
           </Alert>
           
           <Button 
-            className="w-full" 
+            className="w-full bg-[#C2A633]/20 hover:bg-[#C2A633]/30 text-[#C2A633] border border-[#C2A633]/40" 
             onClick={handleSwap}
             disabled={!quote || parseFloat(inputAmount) <= 0}
           >
-            <ArrowDownUp className="h-4 w-4 mr-2" />
+            <ArrowDownUp className="h-4 w-4 mr-2 opacity-85" strokeWidth={1.75} />
             Swap Privately
           </Button>
         </div>

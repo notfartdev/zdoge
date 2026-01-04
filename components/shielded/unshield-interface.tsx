@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Loader2, LogOut, AlertCircle, Check, Zap, Shield, Info, Coins, Layers, ArrowRight } from "lucide-react"
+import { Loader2, LogOut, AlertCircle, Check, Zap, Shield, ShieldOff, Info, Coins, Layers, ArrowRight } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { ShieldedNote, formatWeiToAmount } from "@/lib/shielded/shielded-note"
 import { prepareUnshield, completeUnshield, getNotes } from "@/lib/shielded/shielded-service"
@@ -403,8 +403,14 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
               ) : null}
             </div>
           )}
-          <Button className="w-full" onClick={handleUnshield} disabled={!relayerInfo?.available || !selectedInfo || 'error' in selectedInfo}>
-            <LogOut className="h-4 w-4 mr-2" />Unshield to Public Wallet
+          <Button 
+            className="w-full border-[#C2A633] text-[#C2A633] hover:bg-[#C2A633]/10" 
+            variant="outline"
+            onClick={handleUnshield} 
+            disabled={!relayerInfo?.available || !selectedInfo || 'error' in selectedInfo}
+          >
+            <ShieldOff className="h-4 w-4 mr-2 opacity-85" strokeWidth={1.75} />
+            Unshield to Public Wallet
           </Button>
         </div>
       )}
