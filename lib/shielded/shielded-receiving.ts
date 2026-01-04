@@ -91,7 +91,7 @@ function bigintToBytes(value: bigint, length: number): Uint8Array {
  * Encrypt note details for a recipient
  * 
  * @param note The note being sent (with recipient's pubkey as owner)
- * @param recipientViewingKey Recipient's viewing key (or derived from their address)
+ * @param recipientShieldedAddress Recipient's shielded address (public)
  * @returns Encrypted memo to publish on-chain
  */
 export async function encryptNoteForRecipient(
@@ -102,9 +102,9 @@ export async function encryptNoteForRecipient(
   const ephemeralPrivate = randomFieldElement();
   const ephemeralPubkey = await mimcHash2(ephemeralPrivate, BigInt(0));
   
-  // Derive shared secret (simplified - in production use proper ECDH)
-  // The recipient can compute the same key using their viewing key
-  const sharedSecret = await mimcHash2(ephemeralPrivate, recipientShieldedAddress);
+  // Derive shared secret using ephemeralPubkey and recipientShieldedAddress
+  // Recipient will compute the SAME value: MiMC(ephemeralPubkey, theirShieldedAddress)
+  const sharedSecret = await mimcHash2(ephemeralPubkey, recipientShieldedAddress);
   
   // Prepare note data
   const memoData: NoteMemoData = {
@@ -151,15 +151,10 @@ export async function tryDecryptMemo(
     const ephemeralPubkey = BigInt('0x' + memo.ephemeralPubkey);
     const nonce = BigInt('0x' + memo.nonce);
     
-    // Compute shared secret using our viewing key
-    // sharedSecret = MiMC(viewingKey, ephemeralPubkey)
-    // But we need to match what the sender computed...
-    // Sender computed: MiMC(ephemeralPrivate, recipientShieldedAddress)
-    // We need: A way to derive the same key
-    
-    // Simplified approach: Use shielded address for shared secret
-    // In production: Use proper ECDH with viewing key
-    const sharedSecret = await mimcHash2(identity.viewingKey, ephemeralPubkey);
+    // Compute shared secret: MiMC(ephemeralPubkey, ourShieldedAddress)
+    // This matches what the sender computed: MiMC(ephemeralPubkey, recipientShieldedAddress)
+    // If we're the recipient, these will be equal!
+    const sharedSecret = await mimcHash2(ephemeralPubkey, identity.shieldedAddress);
     
     // Derive decryption key
     const decKey = await mimcHash2(sharedSecret, nonce);
