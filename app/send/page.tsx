@@ -14,7 +14,6 @@ export default function SendPage() {
   
   const handleSuccess = () => {
     refresh()
-    setKey(k => k + 1)
   }
 
   return (

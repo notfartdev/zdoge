@@ -4,13 +4,13 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Loader2, Send, AlertCircle, Check, Copy, Eye, EyeOff, Zap, Shield } from "lucide-react"
+import { Progress } from "@/components/ui/progress"
+import { Loader2, Send, AlertCircle, Check, Shield } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-import { ShieldedNote, formatWeiToAmount, noteToShareableString } from "@/lib/shielded/shielded-note"
+import { ShieldedNote, formatWeiToAmount } from "@/lib/shielded/shielded-note"
 import { isValidShieldedAddress } from "@/lib/shielded/shielded-address"
-import { prepareTransfer, completeTransfer, getNotes } from "@/lib/shielded/shielded-service"
+import { prepareTransfer, completeTransfer, getNotes, getShieldedBalancePerToken } from "@/lib/shielded/shielded-service"
 import { addTransaction, initTransactionHistory } from "@/lib/shielded/transaction-history"
 import { useWallet } from "@/lib/wallet-context"
 import { shieldedPool } from "@/lib/dogeos-config"
@@ -37,16 +37,21 @@ export function TransferInterface({ notes, onSuccess, selectedToken = "DOGE", on
   
   const [recipientAddress, setRecipientAddress] = useState("")
   const [amount, setAmount] = useState("")
-  const [selectedNoteIndex, setSelectedNoteIndex] = useState<string>("")
   const [status, setStatus] = useState<"idle" | "proving" | "relaying" | "success" | "error">("idle")
-  const [recipientNote, setRecipientNote] = useState<string | null>(null)
-  const [showNote, setShowNote] = useState(false)
-  const [copied, setCopied] = useState(false)
   const [txHash, setTxHash] = useState<string | null>(null)
   const [relayerInfo, setRelayerInfo] = useState<RelayerInfo | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [transactionDetails, setTransactionDetails] = useState<{
+    amountSent: number
+    noteConsumed: bigint
+    changeReceived: bigint
+    selectedNote: ShieldedNote | null
+  } | null>(null)
   
-  const spendableNotes = notes.filter(n => n.leafIndex !== undefined && n.amount > 0n)
+  const spendableNotes = notes.filter(n => n.leafIndex !== undefined && n.amount > 0n && (n.token || 'DOGE') === selectedToken)
+  
+  // Calculate total shielded balance for selected token
+  const totalBalance = spendableNotes.reduce((sum, n) => sum + n.amount, 0n)
   
   // Fetch relayer info on mount
   useEffect(() => {
@@ -76,33 +81,64 @@ export function TransferInterface({ notes, onSuccess, selectedToken = "DOGE", on
     return { fee, received: amount - fee }
   }
   
-  // Calculate maximum sendable amount so that amount + fee = note balance exactly
-  // Solves: max + max(max * feePercent, minFee) = noteAmount
-  const calculateMaxSendable = (noteAmount: bigint, relayer: RelayerInfo | null): bigint => {
-    if (!relayer) return noteAmount
+  // Find the best note that can cover the requested amount + fee
+  const findBestNote = (requestedAmount: bigint): { note: ShieldedNote; noteIndex: number } | null => {
+    if (!relayerInfo) return null
     
-    const minFee = BigInt(Math.floor(parseFloat(relayer.minFee) * 1e18))
+    const feePercent = BigInt(Math.floor(relayerInfo.feePercent * 100))
+    const minFee = BigInt(Math.floor(parseFloat(relayerInfo.minFee) * 1e18))
+    let requiredFee = (requestedAmount * feePercent) / 10000n
+    if (requiredFee < minFee) requiredFee = minFee
+    const requiredNoteAmount = requestedAmount + requiredFee
     
-    // Can't send anything if note is less than min fee
-    if (noteAmount <= minFee) return 0n
+    // Get fresh notes - need full array for index calculation
+    const freshNotes = getNotes()
+    const filteredNotes = freshNotes.filter(n => n.leafIndex !== undefined && n.amount > 0n && (n.token || 'DOGE') === selectedToken)
+    const sortedAsc = [...filteredNotes].sort((a, b) => Number(a.amount - b.amount))
     
-    // Calculate max if percentage fee applies
-    // max + max * feePercent = noteAmount
-    // max * (1 + feePercent) = noteAmount
-    // max = noteAmount / (1 + feePercent)
-    // Using integer math: max = noteAmount * 10000 / (10000 + feePercent*100)
-    const feePercentScaled = BigInt(Math.floor(relayer.feePercent * 100))
-    const maxWithPercentFee = (noteAmount * 10000n) / (10000n + feePercentScaled)
+    // Find smallest note that can cover the amount + fee
+    for (const note of sortedAsc) {
+      if (note.amount >= requiredNoteAmount) {
+        // Find index in full notes array (prepareTransfer expects this)
+        const actualIndex = freshNotes.findIndex(n => 
+          n.commitment === note.commitment && n.leafIndex === note.leafIndex
+        )
+        if (actualIndex !== -1) {
+          return { note, noteIndex: actualIndex }
+        }
+      }
+    }
     
-    // Check if percentage fee at this max is >= minFee
+    return null
+  }
+  
+  // Calculate maximum sendable from total balance
+  // Note: In UTXO system, can only send from one note at a time
+  // So max is the largest single note amount (minus fees)
+  const calculateMaxSendable = (): bigint => {
+    if (totalBalance === 0n || spendableNotes.length === 0) return 0n
+    
+    // Find the largest note
+    const largestNote = spendableNotes.reduce((max, note) => 
+      note.amount > max.amount ? note : max, spendableNotes[0]
+    )
+    
+    if (!relayerInfo) {
+      // If relayer info not loaded, return largest note amount (will be adjusted when relayer loads)
+      return largestNote.amount
+    }
+    
+    const minFee = BigInt(Math.floor(parseFloat(relayerInfo.minFee) * 1e18))
+    if (largestNote.amount <= minFee) return 0n
+    
+    const feePercentScaled = BigInt(Math.floor(relayerInfo.feePercent * 100))
+    const maxWithPercentFee = (largestNote.amount * 10000n) / (10000n + feePercentScaled)
     const percentFeeAtMax = (maxWithPercentFee * feePercentScaled) / 10000n
     
     if (percentFeeAtMax >= minFee) {
-      // Percentage fee applies, use calculated max
       return maxWithPercentFee
     } else {
-      // Min fee applies: max = noteAmount - minFee
-      return noteAmount - minFee
+      return largestNote.amount - minFee
     }
   }
   
@@ -130,56 +166,38 @@ export function TransferInterface({ notes, onSuccess, selectedToken = "DOGE", on
       return
     }
     
-    // Validate note selection
-    const uiNoteIndex = parseInt(selectedNoteIndex)
-    if (isNaN(uiNoteIndex) || !spendableNotes[uiNoteIndex]) {
-      toast({
-        title: "Select a Note",
-        description: "Please select a note to spend",
-        variant: "destructive",
-      })
-      return
-    }
-    
-    const selectedNote = spendableNotes[uiNoteIndex]
     const amountWei = BigInt(Math.floor(amountNum * 1e18))
     
-    if (amountWei > selectedNote.amount) {
+    // Validate total balance
+    if (amountWei > totalBalance) {
       toast({
         title: "Insufficient Balance",
-        description: "Selected note doesn't have enough balance",
+        description: `You don't have enough ${selectedToken} in your shielded balance`,
         variant: "destructive",
       })
       return
     }
     
-    // Get fresh notes to ensure correct leafIndex
-    const freshNotes = getNotes()
-    const freshSpendable = freshNotes.filter(n => n.leafIndex !== undefined && n.amount > 0n)
-    const actualNote = freshSpendable[uiNoteIndex]
-    
-    if (!actualNote || actualNote.leafIndex === undefined) {
+    // Automatically find the best note
+    const bestNoteResult = findBestNote(amountWei)
+    if (!bestNoteResult) {
       toast({
-        title: "Note Sync Error",
-        description: "Please refresh the page and try again",
+        title: "Insufficient Balance",
+        description: "No single note can cover this amount after fees. Try a smaller amount.",
         variant: "destructive",
       })
       return
     }
     
-    // Find actual index in full notes array
-    const actualNoteIndex = freshNotes.findIndex(n => 
-      n.commitment === actualNote.commitment && n.leafIndex === actualNote.leafIndex
-    )
+    const { note: selectedNote, noteIndex: actualNoteIndex } = bestNoteResult
     
-    if (actualNoteIndex === -1) {
-      toast({
-        title: "Note Not Found",
-        description: "Could not find note in wallet",
-        variant: "destructive",
-      })
-      return
-    }
+    // Store transaction details for success message
+    setTransactionDetails({
+      amountSent: amountNum,
+      noteConsumed: selectedNote.amount,
+      changeReceived: 0n, // Will be updated after transaction
+      selectedNote
+    })
     
     try {
       setStatus("proving")
@@ -202,9 +220,6 @@ export function TransferInterface({ notes, onSuccess, selectedToken = "DOGE", on
         relayerFeeDoge
       )
       
-      // Save recipient note for sharing (they'll need this to discover the note)
-      const recipientNoteString = noteToShareableString(result.recipientNote)
-      setRecipientNote(recipientNoteString)
       
       console.log('[Transfer] Proof generated, sending to relayer...')
       setStatus("relaying")
@@ -233,6 +248,14 @@ export function TransferInterface({ notes, onSuccess, selectedToken = "DOGE", on
       }
       
       setTxHash(data.txHash)
+      
+      // Update transaction details with change amount
+      if (transactionDetails) {
+        setTransactionDetails({
+          ...transactionDetails,
+          changeReceived: result.changeNote.amount
+        })
+      }
       
       // Complete transfer (remove input note, add recipient note if sent to self, add change note)
       completeTransfer(
@@ -288,7 +311,6 @@ export function TransferInterface({ notes, onSuccess, selectedToken = "DOGE", on
   const reset = () => {
     setRecipientAddress("")
     setAmount("")
-    setSelectedNoteIndex("")
     setStatus("idle")
     setRecipientNote(null)
     setShowNote(false)
@@ -310,53 +332,14 @@ export function TransferInterface({ notes, onSuccess, selectedToken = "DOGE", on
   return (
     <div className="space-y-4">
       <div>
-        <h3 className="text-lg font-medium flex items-center gap-2">
-          Private Transfer
-          <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full flex items-center gap-1">
-            <Zap className="h-3 w-3" /> Gas-Free
-          </span>
-        </h3>
+        <h3 className="text-lg font-medium">Private Transfer</h3>
         <p className="text-sm text-muted-foreground">
           Send shielded tokens to another shielded address privately
         </p>
       </div>
       
-      {/* Relayer Status */}
-      {relayerInfo && (
-        <div className="p-3 rounded-lg bg-muted/30 border border-muted text-sm">
-          <div className="flex items-center gap-2">
-            <Shield className="h-4 w-4 text-primary" />
-            <span className="font-medium">Privacy-Preserving Relayer</span>
-            {relayerInfo.available ? (
-              <span className="text-xs bg-green-500/20 text-green-500 px-2 py-0.5 rounded-full">Active</span>
-            ) : (
-              <span className="text-xs bg-red-500/20 text-red-500 px-2 py-0.5 rounded-full">Offline</span>
-            )}
-          </div>
-          <p className="text-xs text-muted-foreground mt-1">
-            Fee: {relayerInfo.feePercent}% (min {relayerInfo.minFee}) • Your wallet never signs
-          </p>
-        </div>
-      )}
-      
       {status === "idle" && (
         <div className="space-y-4">
-          <div className="space-y-2">
-            <Label>Select Note to Spend</Label>
-            <Select value={selectedNoteIndex} onValueChange={setSelectedNoteIndex}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select a note" />
-              </SelectTrigger>
-              <SelectContent>
-                {spendableNotes.map((note, index) => (
-                  <SelectItem key={index} value={index.toString()}>
-                    {formatWeiToAmount(note.amount).toFixed(4)} {note.token || 'DOGE'} (Note #{note.leafIndex})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          
           <div className="space-y-2">
             <Label htmlFor="recipient">Recipient Shielded Address</Label>
             <Input
@@ -372,29 +355,25 @@ export function TransferInterface({ notes, onSuccess, selectedToken = "DOGE", on
           
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label htmlFor="amount">Amount</Label>
-              {selectedNoteIndex && spendableNotes[parseInt(selectedNoteIndex)] && (
+              <Label htmlFor="amount">Amount ({selectedToken})</Label>
+              {relayerInfo ? (
                 <Button
                   variant="link"
                   size="sm"
                   className="h-auto p-0 text-xs"
                   onClick={() => {
-                    const note = spendableNotes[parseInt(selectedNoteIndex)]
-                    const maxSendable = calculateMaxSendable(note.amount, relayerInfo)
-                    // Round DOWN to 4 decimals to never exceed note balance
-                    const maxDoge = Math.floor(formatWeiToAmount(maxSendable) * 10000) / 10000
+                    const maxWei = calculateMaxSendable()
+                    const maxDoge = Math.floor(formatWeiToAmount(maxWei) * 10000) / 10000
                     setAmount(maxDoge.toFixed(4))
                   }}
                 >
-                  Max: {(() => {
-                    const maxWei = calculateMaxSendable(
-                      spendableNotes[parseInt(selectedNoteIndex)].amount,
-                      relayerInfo
-                    )
-                    // Round DOWN to ensure it never exceeds
-                    return (Math.floor(formatWeiToAmount(maxWei) * 10000) / 10000).toFixed(4)
-                  })()}
+                  Max: {formatWeiToAmount(calculateMaxSendable()).toFixed(4)}
                 </Button>
+              ) : (
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  <span>Calculating max...</span>
+                </div>
               )}
             </div>
             <Input
@@ -407,40 +386,44 @@ export function TransferInterface({ notes, onSuccess, selectedToken = "DOGE", on
           </div>
           
           {/* Fee Preview */}
-          {selectedNoteIndex && amount && relayerInfo && (
+          {amount && relayerInfo && (
             <div className="p-3 rounded-lg bg-muted/50 space-y-1">
               {(() => {
                 const amountWei = BigInt(Math.floor(parseFloat(amount || "0") * 1e18))
-                const selectedNote = spendableNotes[parseInt(selectedNoteIndex)]
-                const tokenSymbol = selectedNote?.token || 'DOGE'
                 const { fee, received } = calculateFee(amountWei)
-                const totalNeeded = amountWei + fee
-                const hasInsufficientFunds = totalNeeded > selectedNote.amount
+                const maxSendable = calculateMaxSendable()
+                const largestNote = spendableNotes.reduce((max, note) => 
+                  note.amount > max.amount ? note : max, spendableNotes[0]
+                )
+                const hasInsufficientFunds = amountWei + fee > totalBalance
+                const exceedsSingleNote = amountWei > maxSendable && spendableNotes.length > 0
                 return (
                   <>
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Send amount:</span>
-                      <span>{amount} {tokenSymbol}</span>
+                      <span>{amount} {selectedToken}</span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Relayer fee:</span>
-                      <span className="text-orange-500">-{formatWeiToAmount(fee).toFixed(4)} {tokenSymbol}</span>
+                      <span className="text-orange-500">-{formatWeiToAmount(fee).toFixed(4)} {selectedToken}</span>
                     </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Total from note:</span>
-                      <span className={hasInsufficientFunds ? "text-red-500" : ""}>
-                        {formatWeiToAmount(totalNeeded).toFixed(4)} {tokenSymbol}
-                      </span>
-                    </div>
+                    {exceedsSingleNote && !hasInsufficientFunds && (
+                      <Alert className="border-yellow-500/50 bg-yellow-500/10 py-2 px-3 mt-2">
+                        <AlertCircle className="h-3 w-3 text-yellow-500" />
+                        <AlertDescription className="text-xs text-yellow-200">
+                          You have {spendableNotes.length} note{spendableNotes.length > 1 ? 's' : ''} but can only send {formatWeiToAmount(maxSendable).toFixed(4)} {selectedToken} per transaction (largest note: {formatWeiToAmount(largestNote.amount).toFixed(4)} {selectedToken}). Make multiple transactions to send more.
+                        </AlertDescription>
+                      </Alert>
+                    )}
                     {hasInsufficientFunds && (
                       <div className="text-xs text-red-500 flex items-center gap-1 mt-1">
                         <AlertCircle className="h-3 w-3" />
-                        Exceeds note balance ({formatWeiToAmount(selectedNote.amount).toFixed(4)} {tokenSymbol}). Reduce amount.
+                        Insufficient balance. Available: {formatWeiToAmount(totalBalance).toFixed(4)} {selectedToken}
                       </div>
                     )}
                     <div className="flex justify-between text-sm font-medium border-t pt-1 mt-1">
                       <span>Recipient receives:</span>
-                      <span className="text-green-500">{formatWeiToAmount(received).toFixed(4)} {tokenSymbol}</span>
+                      <span className="text-green-500">{formatWeiToAmount(received).toFixed(4)} {selectedToken}</span>
                     </div>
                     <div className="flex justify-between text-xs text-muted-foreground">
                       <span>Gas you pay:</span>
@@ -455,13 +438,11 @@ export function TransferInterface({ notes, onSuccess, selectedToken = "DOGE", on
           <Button 
             className="w-full" 
             onClick={handleTransfer}
-            disabled={!relayerInfo?.available || (() => {
-              if (!selectedNoteIndex || !amount) return false
+            disabled={!relayerInfo?.available || !amount || parseFloat(amount) <= 0 || (() => {
+              if (!amount || !relayerInfo) return true
               const amountWei = BigInt(Math.floor(parseFloat(amount || "0") * 1e18))
-              const selectedNote = spendableNotes[parseInt(selectedNoteIndex)]
-              if (!selectedNote) return false
               const { fee } = calculateFee(amountWei)
-              return amountWei + fee > selectedNote.amount
+              return amountWei + fee > totalBalance
             })()}
           >
             <Send className="h-4 w-4 mr-2" />
@@ -473,65 +454,67 @@ export function TransferInterface({ notes, onSuccess, selectedToken = "DOGE", on
       {status === "proving" && (
         <div className="flex flex-col items-center py-8 space-y-4">
           <Loader2 className="h-8 w-8 animate-spin" />
-          <p className="text-muted-foreground">Generating ZK proof...</p>
-          <p className="text-xs text-muted-foreground">This may take 10-30 seconds</p>
+          <div className="w-full max-w-xs space-y-2">
+            <Progress value={33} className="h-2" />
+            <p className="text-sm text-muted-foreground text-center">Generating ZK proof...</p>
+            <p className="text-xs text-muted-foreground text-center">This may take 10-30 seconds</p>
+          </div>
         </div>
       )}
       
       {status === "relaying" && (
         <div className="flex flex-col items-center py-8 space-y-4">
           <Loader2 className="h-8 w-8 animate-spin" />
-          <p className="text-muted-foreground">Relayer submitting transaction...</p>
-          <p className="text-xs text-muted-foreground">Your wallet never signs - complete privacy!</p>
+          <div className="w-full max-w-xs space-y-2">
+            <Progress value={66} className="h-2" />
+            <p className="text-sm text-muted-foreground text-center">Submitting transaction...</p>
+            <p className="text-xs text-muted-foreground text-center">Your wallet never signs - complete privacy!</p>
+          </div>
         </div>
       )}
       
       {status === "success" && (
-        <div className="space-y-4">
-          <Alert>
+        <div className="space-y-4" ref={(el) => {
+          if (el) {
+            setTimeout(() => el.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100)
+          }
+        }}>
+          <Alert className="border-green-500/50 bg-green-500/10">
             <Check className="h-4 w-4 text-green-500" />
-            <AlertDescription>
-              Transfer successful! Share the note with the recipient.
-            </AlertDescription>
-          </Alert>
-          
-          {txHash && (
-            <div className="text-sm">
-              <span className="text-muted-foreground">Transaction: </span>
-              <a 
-                href={`https://blockscout.testnet.dogeos.com/tx/${txHash}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-primary hover:underline"
-              >
-                {txHash.slice(0, 10)}...{txHash.slice(-8)}
-              </a>
-            </div>
-          )}
-          
-          <Alert variant="destructive">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
-              <strong>Share this note with the recipient!</strong> They need it to claim the funds.
-            </AlertDescription>
-          </Alert>
-          
-          <div className="p-4 rounded-lg border bg-muted/50">
-            <div className="flex items-center justify-between mb-2">
-              <Label>Recipient's Note</Label>
-              <div className="flex gap-2">
-                <Button variant="ghost" size="sm" onClick={() => setShowNote(!showNote)}>
-                  {showNote ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </Button>
-                <Button variant="ghost" size="sm" onClick={copyNote}>
-                  {copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
-                </Button>
+            <AlertDescription className="flex flex-col gap-2">
+              <div>
+                <strong>Transfer Successful!</strong> {transactionDetails?.amountSent} {selectedToken} sent privately.
               </div>
-            </div>
-            <code className="text-xs break-all block">
-              {showNote ? recipientNote : "•".repeat(60)}
-            </code>
-          </div>
+              {transactionDetails && (
+                <div className="text-xs space-y-1 mt-1 pt-2 border-t border-green-500/20">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Amount sent:</span>
+                    <span>{formatWeiToAmount(BigInt(Math.floor(transactionDetails.amountSent * 1e18))).toFixed(4)} {selectedToken}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Note consumed:</span>
+                    <span>{formatWeiToAmount(transactionDetails.noteConsumed).toFixed(4)} {selectedToken}</span>
+                  </div>
+                  {transactionDetails.changeReceived > 0n && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Change received:</span>
+                      <span className="text-green-500">{formatWeiToAmount(transactionDetails.changeReceived).toFixed(4)} {selectedToken}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+              {txHash && (
+                <a
+                  href={`https://blockscout.testnet.dogeos.com/tx/${txHash}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary hover:underline text-sm font-mono flex items-center gap-1 mt-1"
+                >
+                  View transaction on Blockscout →
+                </a>
+              )}
+            </AlertDescription>
+          </Alert>
           
           <Button className="w-full" onClick={reset}>
             Send Another Transfer

@@ -3,9 +3,10 @@
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { useWallet } from "@/lib/wallet-context"
-import { User, X, Wallet, Globe, LogOut, ChevronDown, Check, Copy, Coins, Network } from "lucide-react"
+import { User, X, Wallet, Globe, LogOut, ChevronDown, Check, Copy, Coins, Network, RefreshCw } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-import { dogeosTestnet, tokens } from "@/lib/dogeos-config"
+import { dogeosTestnet, tokens, shieldedPool } from "@/lib/dogeos-config"
+import { syncNotesWithChain } from "@/lib/shielded/shielded-service"
 
 // Available RPC endpoints for DogeOS
 const RPC_OPTIONS = [
@@ -30,6 +31,7 @@ export function AccountModal() {
   const [copied, setCopied] = useState(false)
   const [tokenBalances, setTokenBalances] = useState<TokenBalance[]>([])
   const [loadingBalances, setLoadingBalances] = useState(false)
+  const [isSyncing, setIsSyncing] = useState(false)
 
   // Fetch token balances when modal opens
   useEffect(() => {
@@ -133,6 +135,18 @@ export function AccountModal() {
     disconnect()
     setIsOpen(false)
     toast({ title: "Disconnected", description: "Wallet disconnected successfully" })
+  }
+
+  const handleSync = async () => {
+    setIsSyncing(true)
+    try {
+      await syncNotesWithChain(shieldedPool.address)
+      toast({ title: "Synced!", description: "Notes synchronized with blockchain" })
+    } catch (error: any) {
+      toast({ title: "Sync Failed", description: error.message || "Failed to sync notes", variant: "destructive" })
+    } finally {
+      setIsSyncing(false)
+    }
   }
 
   const formatAddress = (address: string) => {
@@ -327,6 +341,19 @@ export function AccountModal() {
                 </div>
               )}
             </div>
+
+            {/* Sync Button */}
+            {wallet?.isConnected && (
+              <Button
+                variant="outline"
+                onClick={handleSync}
+                disabled={isSyncing}
+                className="w-full font-mono text-sm border-[#C2A633]/50 text-[#C2A633] hover:bg-[#C2A633]/10 hover:text-[#C2A633] flex items-center justify-center gap-2"
+              >
+                <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
+                {isSyncing ? 'Syncing...' : 'Sync Shielded Notes'}
+              </Button>
+            )}
 
             {/* Disconnect Button */}
             {wallet?.isConnected && (

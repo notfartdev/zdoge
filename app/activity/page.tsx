@@ -9,8 +9,17 @@ import {
   Copy,
   Check,
   RefreshCw,
-  Wallet
+  Wallet,
+  Activity
 } from "lucide-react"
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination"
 import { useWallet } from "@/lib/wallet-context"
 import { useToast } from "@/hooks/use-toast"
 import {
@@ -31,6 +40,7 @@ export default function ActivityPage() {
   const [filter, setFilter] = useState<TransactionType | 'all'>('all')
   const [copiedHash, setCopiedHash] = useState<string | null>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [currentPage, setCurrentPage] = useState(1)
 
   // Initialize and load transactions
   useEffect(() => {
@@ -42,6 +52,11 @@ export default function ActivityPage() {
     initTransactionHistory(wallet.address)
     loadTransactions()
   }, [wallet?.address])
+
+  // Reset to page 1 when filter changes
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [filter])
 
   const loadTransactions = () => {
     const history = filter === 'all' 
@@ -123,6 +138,13 @@ export default function ActivityPage() {
   const filteredTransactions = filter === 'all' 
     ? transactions
     : transactions.filter(tx => tx.type === filter)
+  
+  // Pagination constants and logic
+  const itemsPerPage = 10
+  const totalPages = Math.ceil(filteredTransactions.length / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const endIndex = startIndex + itemsPerPage
+  const paginatedTransactions = filteredTransactions.slice(startIndex, endIndex)
 
   const typeCounts = {
     all: transactions.length,
@@ -136,9 +158,10 @@ export default function ActivityPage() {
     <div className="min-h-screen bg-background">
       <DashboardNav />
       <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 max-w-5xl">
-        <div className="mb-8">
+        <div className="mb-6 sm:mb-8">
           <div className="flex items-center justify-between mb-2">
-            <h1 className="text-2xl sm:text-3xl font-bold font-mono tracking-tight">
+            <h1 className="text-2xl sm:text-3xl font-bold mb-2 flex items-center gap-2 sm:gap-3">
+              <Activity className="h-6 w-6 sm:h-8 sm:w-8 text-primary" />
               Activity
             </h1>
             <Button
@@ -146,100 +169,97 @@ export default function ActivityPage() {
               size="sm"
               onClick={handleRefresh}
               disabled={isRefreshing}
-              className="border-[#C2A633]/20 hover:bg-[#C2A633]/10 hover:border-[#C2A633]/40"
             >
-              <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${isRefreshing ? 'animate-spin' : ''}`} />
-              <span className="text-xs font-mono">Refresh</span>
+              <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+              Refresh
             </Button>
           </div>
-          <p className="text-xs text-muted-foreground font-mono">
-            Transaction history
+          <p className="text-sm sm:text-base text-muted-foreground">
+            View your shielded transaction history
           </p>
         </div>
 
         {/* Filter Tabs */}
-        <div className="flex flex-wrap items-center gap-1.5 mb-6 pb-4 border-b border-[#C2A633]/10">
+        <div className="flex flex-wrap items-center gap-2 mb-6">
           {(['all', 'shield', 'transfer', 'swap', 'unshield'] as const).map((type) => {
             const count = typeCounts[type]
             const isActive = filter === type
             return (
-              <button
+              <Button
                 key={type}
+                variant={isActive ? "default" : "outline"}
+                size="sm"
                 onClick={() => {
                   setFilter(type)
                   loadTransactions()
                 }}
-                className={`text-xs font-mono tracking-wider px-3 py-1.5 rounded transition-all ${
-                  isActive 
-                    ? 'bg-[#C2A633] text-black font-bold' 
-                    : 'text-muted-foreground hover:text-foreground hover:bg-white/5'
-                }`}
               >
-                {type === 'all' ? 'ALL' : formatTransactionType(type).toUpperCase()}
+                {type === 'all' ? 'All' : formatTransactionType(type)}
                 {count > 0 && (
-                  <span className={`ml-1.5 ${isActive ? 'text-black/60' : 'text-muted-foreground'}`}>
+                  <span className="ml-1.5 opacity-70">
                     ({count})
                   </span>
                 )}
-              </button>
+              </Button>
             )
           })}
         </div>
 
         {/* Transaction List */}
         {filteredTransactions.length === 0 ? (
-          <Card className="p-12 text-center bg-zinc-950 border-[#C2A633]/20">
-            <h3 className="text-lg font-bold mb-2 font-mono">No Transactions</h3>
-            <p className="text-sm text-muted-foreground font-mono mb-4">
+          <Card className="p-12 text-center">
+            <h3 className="text-lg font-bold mb-2">No Transactions</h3>
+            <p className="text-sm text-muted-foreground mb-4">
               Your shielded transactions will appear here
             </p>
           </Card>
         ) : (
-          <div className="space-y-2">
-            {filteredTransactions.map((tx) => {
+          <>
+            <div className="space-y-2">
+              {paginatedTransactions.map((tx) => {
               return (
-                <Card key={tx.id} className="p-4 bg-zinc-950 border-[#C2A633]/20 hover:border-[#C2A633]/40 transition-colors">
+                <Card key={tx.id} className="p-4">
                   <div className="flex items-start justify-between gap-4">
                     {/* Main Content */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-3 mb-2">
-                        <span className="text-xs font-mono text-[#C2A633] font-bold tracking-wider">
-                          {formatTransactionType(tx.type).toUpperCase()}
+                        <span className="text-xs font-medium text-primary">
+                          {formatTransactionType(tx.type)}
                         </span>
-                        <span className="text-xs text-muted-foreground font-mono">
+                        <span className="text-xs text-muted-foreground">
                           {tx.token}
                         </span>
-                        <span className={`text-xs font-mono ml-auto ${
+                        <span className={`text-xs ml-auto ${
                           tx.status === 'confirmed' 
                             ? 'text-muted-foreground' 
                             : tx.status === 'failed' 
-                            ? 'text-muted-foreground/60' 
+                            ? 'text-destructive' 
                             : 'text-muted-foreground/80'
                         }`}>
-                          {tx.status === 'confirmed' ? 'CONFIRMED' : tx.status === 'failed' ? 'FAILED' : 'PENDING'}
+                          {tx.status === 'confirmed' ? 'Confirmed' : tx.status === 'failed' ? 'Failed' : 'Pending'}
                         </span>
                       </div>
 
                       {/* Amount and Details */}
                       <div className="space-y-1.5">
                         {tx.type === 'shield' && (
-                          <p className="text-xl font-bold font-mono">
+                          <p className="text-xl font-bold">
                             +{tx.amount} {tx.token}
                           </p>
                         )}
                         
                         {tx.type === 'transfer' && (
                           <>
-                            <p className="text-xl font-bold font-mono">
+                            <p className="text-xl font-bold">
                               -{tx.amount} {tx.token}
                             </p>
                             {tx.recipientAddress && (
-                              <p className="text-xs text-muted-foreground font-mono">
+                              <p className="text-xs text-muted-foreground">
                                 To: {shortenAddress(tx.recipientAddress, 12)}
                               </p>
                             )}
                             {tx.fee && parseFloat(tx.fee) > 0 && (
-                              <p className="text-xs text-muted-foreground font-mono">
+                              <p className="text-xs text-muted-foreground">
                                 Fee: {tx.fee} {tx.token}
                               </p>
                             )}
@@ -248,11 +268,11 @@ export default function ActivityPage() {
                         
                         {tx.type === 'swap' && (
                           <>
-                            <p className="text-xl font-bold font-mono">
+                            <p className="text-xl font-bold">
                               {tx.inputToken} → {tx.outputToken}
                             </p>
                             {tx.amount && tx.outputAmount && (
-                              <p className="text-xs text-muted-foreground font-mono">
+                              <p className="text-xs text-muted-foreground">
                                 {tx.amount} {tx.inputToken} → {tx.outputAmount} {tx.outputToken}
                               </p>
                             )}
@@ -261,16 +281,16 @@ export default function ActivityPage() {
                         
                         {tx.type === 'unshield' && (
                           <>
-                            <p className="text-xl font-bold font-mono">
+                            <p className="text-xl font-bold">
                               +{tx.amount} {tx.token}
                             </p>
                             {tx.recipientPublicAddress && (
-                              <p className="text-xs text-muted-foreground font-mono">
+                              <p className="text-xs text-muted-foreground">
                                 To: {tx.recipientPublicAddress.slice(0, 8)}...{tx.recipientPublicAddress.slice(-6)}
                               </p>
                             )}
                             {tx.relayerFee && parseFloat(tx.relayerFee) > 0 && (
-                              <p className="text-xs text-muted-foreground font-mono">
+                              <p className="text-xs text-muted-foreground">
                                 Fee: {tx.relayerFee} {tx.token}
                               </p>
                             )}
@@ -278,36 +298,44 @@ export default function ActivityPage() {
                         )}
 
                         {/* Timestamp and Hash */}
-                        <div className="flex items-center justify-between pt-2 mt-2 border-t border-[#C2A633]/10">
-                          <span className="text-xs text-muted-foreground font-mono" title={formatFullTimestamp(tx.timestamp)}>
+                        <div className="flex items-center justify-between pt-2 mt-2 border-t">
+                          <span className="text-xs text-muted-foreground" title={formatFullTimestamp(tx.timestamp)}>
                             {formatTimestamp(tx.timestamp)}
                           </span>
                           <div className="flex items-center gap-1.5">
-                            <button
+                            <Button
+                              variant="ghost"
+                              size="sm"
                               onClick={() => copyHash(tx.txHash)}
-                              className="p-1.5 hover:bg-white/5 rounded transition-colors"
+                              className="h-7 w-7 p-0"
                               title="Copy transaction hash"
                             >
                               {copiedHash === tx.txHash ? (
-                                <Check className="h-3.5 w-3.5 text-[#C2A633]" />
+                                <Check className="h-4 w-4 text-green-500" />
                               ) : (
-                                <Copy className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
+                                <Copy className="h-4 w-4" />
                               )}
-                            </button>
-                            <a
-                              href={`${links.explorer}/tx/${tx.txHash}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              asChild
+                              className="h-7 w-7 p-0"
                               title="View on block explorer"
-                              className="p-1.5 hover:bg-white/5 rounded transition-colors"
                             >
-                              <ExternalLink className="h-3.5 w-3.5 text-muted-foreground hover:text-[#C2A633]" />
-                            </a>
+                              <a
+                                href={`${links.explorer}/tx/${tx.txHash}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                <ExternalLink className="h-4 w-4" />
+                              </a>
+                            </Button>
                           </div>
                         </div>
 
                         {/* Transaction Hash */}
-                        <code className="text-[10px] text-muted-foreground/60 font-mono break-all block mt-1">
+                        <code className="text-xs text-muted-foreground/60 font-mono break-all block mt-1">
                           {formatHash(tx.txHash)}
                         </code>
                       </div>
@@ -315,32 +343,93 @@ export default function ActivityPage() {
                   </div>
                 </Card>
               )
-            })}
-          </div>
+              })}
+            </div>
+            
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="mt-6 flex justify-center">
+                <Pagination>
+                  <PaginationContent>
+                    <PaginationItem>
+                      <PaginationPrevious 
+                        href="#"
+                        onClick={(e) => {
+                          e.preventDefault()
+                          if (currentPage > 1) setCurrentPage(currentPage - 1)
+                        }}
+                        className={currentPage === 1 ? 'pointer-events-none opacity-50' : ''}
+                      />
+                    </PaginationItem>
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
+                      // Show first page, last page, current page, and pages around current
+                      if (
+                        page === 1 ||
+                        page === totalPages ||
+                        (page >= currentPage - 1 && page <= currentPage + 1)
+                      ) {
+                        return (
+                          <PaginationItem key={page}>
+                            <PaginationLink
+                              href="#"
+                              onClick={(e) => {
+                                e.preventDefault()
+                                setCurrentPage(page)
+                              }}
+                              isActive={currentPage === page}
+                            >
+                              {page}
+                            </PaginationLink>
+                          </PaginationItem>
+                        )
+                      } else if (page === currentPage - 2 || page === currentPage + 2) {
+                        return (
+                          <PaginationItem key={page}>
+                            <span className="px-2">...</span>
+                          </PaginationItem>
+                        )
+                      }
+                      return null
+                    })}
+                    <PaginationItem>
+                      <PaginationNext
+                        href="#"
+                        onClick={(e) => {
+                          e.preventDefault()
+                          if (currentPage < totalPages) setCurrentPage(currentPage + 1)
+                        }}
+                        className={currentPage === totalPages ? 'pointer-events-none opacity-50' : ''}
+                      />
+                    </PaginationItem>
+                  </PaginationContent>
+                </Pagination>
+              </div>
+            )}
+          </>
         )}
 
         {/* Summary Stats */}
         {transactions.length > 0 && (
-          <div className="mt-8 pt-6 border-t border-[#C2A633]/10">
+          <Card className="mt-8 p-6">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
               <div>
-                <p className="text-xs text-muted-foreground font-mono mb-1">TOTAL</p>
-                <p className="text-2xl font-bold font-mono">{transactions.length}</p>
+                <p className="text-xs text-muted-foreground mb-1">Total</p>
+                <p className="text-2xl font-bold">{transactions.length}</p>
               </div>
               <div>
-                <p className="text-xs text-muted-foreground font-mono mb-1">SHIELDS</p>
-                <p className="text-2xl font-bold font-mono">{typeCounts.shield}</p>
+                <p className="text-xs text-muted-foreground mb-1">Shields</p>
+                <p className="text-2xl font-bold">{typeCounts.shield}</p>
               </div>
               <div>
-                <p className="text-xs text-muted-foreground font-mono mb-1">TRANSFERS</p>
-                <p className="text-2xl font-bold font-mono">{typeCounts.transfer}</p>
+                <p className="text-xs text-muted-foreground mb-1">Transfers</p>
+                <p className="text-2xl font-bold">{typeCounts.transfer}</p>
               </div>
               <div>
-                <p className="text-xs text-muted-foreground font-mono mb-1">UNSHIELDS</p>
-                <p className="text-2xl font-bold font-mono">{typeCounts.unshield}</p>
+                <p className="text-xs text-muted-foreground mb-1">Unshields</p>
+                <p className="text-2xl font-bold">{typeCounts.unshield}</p>
               </div>
             </div>
-          </div>
+          </Card>
         )}
       </main>
     </div>

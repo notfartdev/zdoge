@@ -5,13 +5,14 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Loader2, LogOut, AlertCircle, Check, Zap, Shield, ShieldOff, Info, Coins, Layers, ArrowRight } from "lucide-react"
+import { Loader2, LogOut, AlertCircle, Check, Shield, ShieldOff, Info, Coins, Layers } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { ShieldedNote, formatWeiToAmount } from "@/lib/shielded/shielded-note"
 import { prepareUnshield, completeUnshield, getNotes } from "@/lib/shielded/shielded-service"
 import { addTransaction, initTransactionHistory } from "@/lib/shielded/transaction-history"
 import { useWallet } from "@/lib/wallet-context"
 import { shieldedPool } from "@/lib/dogeos-config"
+import { getUSDValue, formatUSD } from "@/lib/price-service"
 
 const SHIELDED_POOL_ADDRESS = shieldedPool.address
 const RELAYER_URL = process.env.NEXT_PUBLIC_INDEXER_URL || 'https://dogenadocash.onrender.com'
@@ -51,6 +52,7 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [consolidateProgress, setConsolidateProgress] = useState<{ current: number; total: number; totalReceived: number } | null>(null)
   const [consolidateTxHashes, setConsolidateTxHashes] = useState<string[]>([])
+  const [usdValue, setUsdValue] = useState<string | null>(null)
   
   const spendableNotes = useMemo(() => 
     notes.filter(n => n.leafIndex !== undefined && n.amount > 0n)
@@ -87,6 +89,25 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
     }
     return total
   }, [spendableNotes, relayerInfo])
+  
+  // Calculate USD value
+  useEffect(() => {
+    async function calculateUSD() {
+      const dogeAmount = formatWeiToAmount(totalReceivableAfterFees)
+      try {
+        const usd = await getUSDValue(dogeAmount, "DOGE")
+        setUsdValue(formatUSD(usd))
+      } catch (error) {
+        console.error('Failed to calculate USD value:', error)
+        setUsdValue(null)
+      }
+    }
+    if (totalReceivableAfterFees > 0n) {
+      calculateUSD()
+    } else {
+      setUsdValue(null)
+    }
+  }, [totalReceivableAfterFees])
   
   useEffect(() => {
     async function fetchRelayerInfo() {
@@ -330,13 +351,8 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
   return (
     <div className="space-y-4">
       <div>
-        <h3 className="text-lg font-medium flex items-center gap-2">
-          Send to Public Address
-          <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full flex items-center gap-1">
-            <Zap className="h-3 w-3" /> Gas-Free
-          </span>
-        </h3>
-        <p className="text-sm text-muted-foreground">Send shielded DOGE to <strong>any</strong> public wallet.</p>
+        <h3 className="text-lg font-medium">Send to Public Address</h3>
+        <p className="text-sm text-muted-foreground">Send shielded DOGE to any public wallet</p>
       </div>
       
       <div className="p-4 rounded-lg bg-gradient-to-r from-primary/10 to-transparent border">
@@ -347,7 +363,6 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
           </div>
           <div className="text-right">
             <div className="text-xl font-bold">{formatWeiToAmount(totalBalance).toFixed(4)} DOGE</div>
-            <div className="text-xs text-muted-foreground">{spendableNotes.length} notes</div>
           </div>
         </div>
         {largestNote && (
@@ -368,13 +383,18 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
                 <span className="text-xs bg-green-500/20 text-green-500 px-2 py-0.5 rounded-full">Recommended</span>
               </h4>
               <p className="text-sm text-muted-foreground mt-1">
-                Unshield all {spendableNotes.length} notes to your wallet, then re-shield as one big note.
+                Unshield all available notes to your wallet
               </p>
-              <div className="flex items-center gap-2 mt-2 text-sm">
-                <span className="text-muted-foreground">You'll receive:</span>
-                <span className="font-medium text-green-500">~{formatWeiToAmount(totalReceivableAfterFees).toFixed(4)} DOGE</span>
-                <ArrowRight className="h-4 w-4 text-muted-foreground" />
-                <span className="text-muted-foreground">then re-shield</span>
+              <div className="mt-2 text-sm">
+                <div className="flex items-center gap-2">
+                  <span className="text-muted-foreground">You'll receive:</span>
+                  <span className="font-medium text-green-500">~{formatWeiToAmount(totalReceivableAfterFees).toFixed(4)} DOGE</span>
+                </div>
+                {usdValue && (
+                  <div className="text-muted-foreground mt-1">
+                    {usdValue}
+                  </div>
+                )}
               </div>
               <Button className="mt-3 w-full" variant="outline" onClick={handleConsolidateAll} disabled={!relayerInfo?.available || !wallet?.address}>
                 <Layers className="h-4 w-4 mr-2" />
@@ -385,20 +405,6 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
         </div>
       )}
       
-      {relayerInfo && status === "idle" && (
-        <div className="p-3 rounded-lg bg-muted/30 border border-muted text-sm">
-          <div className="flex items-center gap-2">
-            <Shield className="h-4 w-4 text-primary" />
-            <span className="font-medium">Privacy-Preserving Relayer</span>
-            {relayerInfo.available ? (
-              <span className="text-xs bg-green-500/20 text-green-500 px-2 py-0.5 rounded-full">Active</span>
-            ) : (
-              <span className="text-xs bg-red-500/20 text-red-500 px-2 py-0.5 rounded-full">Offline</span>
-            )}
-          </div>
-          <p className="text-xs text-muted-foreground mt-1">Fee: {relayerInfo.feePercent}% (min {relayerInfo.minFee} DOGE)</p>
-        </div>
-      )}
       
       {status === "idle" && (
         <div className="space-y-4">

@@ -8,12 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { 
   Loader2, 
-  Download, 
   AlertCircle, 
   Check, 
-  Copy, 
-  Eye, 
-  EyeOff,
   ShieldPlus,
   Coins
 } from "lucide-react"
@@ -88,8 +84,6 @@ export function ShieldInterface({ onSuccess, selectedToken: externalToken, onTok
   const [amount, setAmount] = useState("")
   const [status, setStatus] = useState<"idle" | "approving" | "preparing" | "confirming" | "success" | "error">("idle")
   const [noteBackup, setNoteBackup] = useState<string | null>(null)
-  const [showNote, setShowNote] = useState(false)
-  const [copied, setCopied] = useState(false)
   const [txHash, setTxHash] = useState<string | null>(null)
   const [leafIndex, setLeafIndex] = useState<number | null>(null)
   const [pendingNote, setPendingNote] = useState<ShieldedNote | null>(null)
@@ -381,29 +375,10 @@ export function ShieldInterface({ onSuccess, selectedToken: externalToken, onTok
     }
   }
   
-  const copyNote = async () => {
-    if (!noteBackup) return
-    await navigator.clipboard.writeText(noteBackup)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
-  
-  const downloadNote = () => {
-    if (!noteBackup) return
-    const blob = new Blob([noteBackup], { type: "text/plain" })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = `zdoge-${selectedToken}-note-${Date.now()}.txt`
-    a.click()
-    URL.revokeObjectURL(url)
-  }
-  
   const reset = () => {
     setAmount("")
     setStatus("idle")
     setNoteBackup(null)
-    setShowNote(false)
     setTxHash(null)
     setLeafIndex(null)
     setPendingNote(null)
@@ -539,14 +514,6 @@ export function ShieldInterface({ onSuccess, selectedToken: externalToken, onTok
             <p className="text-muted-foreground">
               {selectedTokenInfo.isNative ? "Waiting for confirmation..." : "Step 2/2: Shielding tokens..."}
             </p>
-            <p className="text-xs text-muted-foreground">
-              Your note will appear after the transaction is confirmed
-            </p>
-            <div className="p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/30 mt-4">
-              <p className="text-xs text-yellow-600 dark:text-yellow-400">
-                💡 <strong>No popup?</strong> Check if MetaMask is open and has a pending transaction.
-              </p>
-            </div>
           </div>
           <Button 
             variant="outline" 
@@ -559,57 +526,29 @@ export function ShieldInterface({ onSuccess, selectedToken: externalToken, onTok
       )}
       
       {status === "success" && noteBackup && (
-        <div className="space-y-4">
-          <Alert>
+        <div className="space-y-4" ref={(el) => {
+          if (el) {
+            setTimeout(() => el.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100)
+          }
+        }}>
+          <Alert className="border-green-500/50 bg-green-500/10">
             <Check className="h-4 w-4 text-green-500" />
-            <AlertDescription>
-              Successfully shielded {amount} {selectedToken}! Your funds are now private.
-            </AlertDescription>
-          </Alert>
-          
-          {txHash && (
-            <div className="text-sm">
-              <span className="text-muted-foreground">Transaction: </span>
-              <a 
-                href={`https://blockscout.testnet.dogeos.com/tx/${txHash}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-primary hover:underline"
-              >
-                {txHash.slice(0, 10)}...{txHash.slice(-8)}
-              </a>
-            </div>
-          )}
-          
-          {/* Show note backup ONLY after confirmation */}
-          <Alert variant="destructive">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
-              <strong>SAVE THIS NOTE!</strong> You need it to recover your shielded funds.
-            </AlertDescription>
-          </Alert>
-          
-          <div className="p-4 rounded-lg border bg-muted/50">
-            <div className="flex items-center justify-between mb-2">
-              <Label>Your Secret Note</Label>
-              <div className="flex gap-2">
-                <Button variant="ghost" size="sm" onClick={() => setShowNote(!showNote)}>
-                  {showNote ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </Button>
-                <Button variant="ghost" size="sm" onClick={copyNote}>
-                  {copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
-                </Button>
+            <AlertDescription className="flex flex-col gap-2">
+              <div>
+                <strong>Shield Successful!</strong> {amount} {selectedToken} is now shielded. Your funds are now private.
               </div>
-            </div>
-            <code className="text-xs break-all block">
-              {showNote ? noteBackup : "•".repeat(60)}
-            </code>
-          </div>
-          
-          <Button variant="outline" className="w-full" onClick={downloadNote}>
-            <Download className="h-4 w-4 mr-2" />
-            Download Note Backup
-          </Button>
+              {txHash && (
+                <a 
+                  href={`https://blockscout.testnet.dogeos.com/tx/${txHash}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary hover:underline text-sm font-mono flex items-center gap-1 mt-1"
+                >
+                  View transaction on Blockscout →
+                </a>
+              )}
+            </AlertDescription>
+          </Alert>
           
           <Button className="w-full" onClick={reset}>
             Shield More Tokens

@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { 
-  Shield, Copy, Check, Eye, EyeOff, Wallet, RefreshCw, Key, Lock, Radio
+  Shield, Copy, Check, Eye, EyeOff, Wallet, Lock
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { useWallet } from "@/lib/wallet-context"
@@ -15,8 +15,6 @@ import {
   getShieldedBalance,
   getShieldedBalancePerToken,
   getNotes,
-  backupWallet,
-  syncNotesWithChain,
   getIdentity,
   type ShieldedWalletState,
 } from "@/lib/shielded/shielded-service"
@@ -57,7 +55,6 @@ export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", compact 
   const { wallet, signMessage } = useWallet()
   const [mounted, setMounted] = useState(false)
   const [isInitialized, setIsInitialized] = useState(false)
-  const [isLoading, setIsLoading] = useState(false)
   const [walletState, setWalletState] = useState<ShieldedWalletState | null>(null)
   const [showAddress, setShowAddress] = useState(false)
   const [copied, setCopied] = useState(false)
@@ -175,32 +172,6 @@ export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", compact 
     onStateChange?.()
   }
   
-  const handleSync = async () => {
-    setIsLoading(true)
-    try {
-      await syncNotesWithChain()
-      refreshState()
-      toast({ title: "Synced!", description: "Notes synchronized with blockchain" })
-    } catch (error: any) {
-      toast({ title: "Sync Failed", description: error.message, variant: "destructive" })
-    } finally {
-      setIsLoading(false)
-    }
-  }
-  
-  const handleBackup = async () => {
-    const backup = backupWallet()
-    if (backup) {
-      const blob = new Blob([backup], { type: 'application/json' })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `shielded-wallet-backup-${Date.now()}.json`
-      a.click()
-      URL.revokeObjectURL(url)
-      toast({ title: "Backup created", description: "Save this file securely!" })
-    }
-  }
   
   const copyAddress = async () => {
     if (!walletState?.shieldedAddress) return
@@ -245,41 +216,17 @@ export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", compact 
             {compact ? (
               <p className="text-xs font-mono tracking-wider text-muted-foreground flex items-center gap-2">
                 <Shield className="h-3.5 w-3.5 text-primary opacity-85" strokeWidth={1.75} />
-                Using Shielded Wallet
-                {isAutoDiscovery && (
-                  <Badge variant="outline" className="text-[10px] flex items-center gap-1 py-0">
-                    <Radio className="h-2.5 w-2.5 animate-pulse" strokeWidth={1.75} />
-                    Sync
-                  </Badge>
-                )}
+                Shielded Wallet
               </p>
             ) : (
               <>
-                <h2 className="text-lg font-bold flex items-center gap-2">
-                  Shielded Wallet
-                  {isAutoDiscovery && (
-                    <Badge variant="outline" className="text-xs flex items-center gap-1">
-                      <Radio className="h-3 w-3 animate-pulse" strokeWidth={1.75} />
-                      Auto-sync
-                    </Badge>
-                  )}
-                </h2>
+                <h2 className="text-lg font-bold">Shielded Wallet</h2>
                 <p className="text-sm text-muted-foreground">Private token transactions</p>
               </>
             )}
           </div>
         </div>
         
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={handleSync} disabled={isLoading || !isInitialized}>
-            <RefreshCw className={`h-4 w-4 ${compact ? '' : 'mr-2'} opacity-85 ${isLoading ? 'animate-spin' : ''}`} strokeWidth={1.75} />
-            {!compact && 'Sync'}
-          </Button>
-          <Button variant="outline" size="sm" onClick={handleBackup} disabled={!isInitialized}>
-            <Key className={`h-4 w-4 ${compact ? '' : 'mr-2'} opacity-85`} strokeWidth={1.75} />
-            {!compact && 'Backup'}
-          </Button>
-        </div>
       </div>
       
       <div className={`grid grid-cols-1 md:grid-cols-2 gap-3 ${compact ? '' : 'mb-4'}`}>
@@ -313,7 +260,7 @@ export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", compact 
             {selectedToken}
             <span className="ml-auto">{formatWeiToAmount(shieldedBalance[selectedToken] || 0n).toFixed(4)}</span>
           </div>
-          {!compact && <div className="text-xs text-muted-foreground">{tokenNotes.length} notes • Private</div>}
+          {!compact && <div className="text-xs text-muted-foreground">Private balance</div>}
         </div>
       </div>
       

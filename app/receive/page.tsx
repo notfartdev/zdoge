@@ -209,12 +209,6 @@ export default function ReceivePage() {
                 </Button>
               </div>
 
-              <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
-                <p className="text-xs text-blue-600 dark:text-blue-400">
-                  💡 <strong>Public transactions:</strong> This address is visible on the blockchain. 
-                  Use for receiving public payments or withdrawing from exchanges.
-                </p>
-              </div>
             </div>
           </Card>
 
@@ -285,49 +279,11 @@ export default function ReceivePage() {
                   </Button>
                 </div>
 
-                <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/20">
-                  <p className="text-xs text-green-600 dark:text-green-400">
-                    🔒 <strong>Private & Permanent:</strong> This shielded address is permanently tied to your wallet. 
-                    Share it to receive shielded tokens. Sender, recipient, and amount are hidden on-chain.
-                    <br />
-                    <strong>1 wallet = 1 shielded address forever</strong> — works on any device/browser.
-                  </p>
-                </div>
               </div>
             )}
           </Card>
         </div>
 
-        {/* Info Card */}
-        <Card className="p-6 mt-6 bg-muted/30">
-          <h3 className="text-lg font-semibold mb-3">Address Comparison</h3>
-          <div className="grid md:grid-cols-2 gap-4 text-sm">
-            <div>
-              <h4 className="font-semibold mb-2 flex items-center gap-2">
-                <Wallet className="h-4 w-4" />
-                Public Address
-              </h4>
-              <ul className="space-y-1 text-muted-foreground">
-                <li>• Visible on blockchain</li>
-                <li>• Transaction history public</li>
-                <li>• Standard DOGE transfers</li>
-                <li>• Compatible with all wallets</li>
-              </ul>
-            </div>
-            <div>
-              <h4 className="font-semibold mb-2 flex items-center gap-2">
-                <Shield className="h-4 w-4 text-primary" />
-                Shielded Address
-              </h4>
-              <ul className="space-y-1 text-muted-foreground">
-                <li>• Private on-chain</li>
-                <li>• No transaction history visible</li>
-                <li>• Shielded token transfers only</li>
-                <li>• Requires zDOGE compatible wallet</li>
-              </ul>
-            </div>
-          </div>
-        </Card>
       </main>
     </div>
   )

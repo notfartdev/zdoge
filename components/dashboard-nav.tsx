@@ -22,15 +22,6 @@ export function DashboardNav() {
 
   return (
     <nav className="border-b border-[#C2A633]/20 bg-black sticky top-0 z-50">
-      {/* Dashboard Identity Line */}
-      <div className="border-b border-white/[0.03] bg-black/50">
-        <div className="px-4 sm:px-6 lg:px-8 py-2">
-          <p className="text-[10px] font-mono tracking-[0.3em] text-white/40 text-center uppercase">
-            zDOGE Private Operations
-          </p>
-        </div>
-      </div>
-      
       <div className="px-4 sm:px-6 lg:px-8">
         <div className="flex items-center h-14 sm:h-16">
           

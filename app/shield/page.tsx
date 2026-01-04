@@ -14,7 +14,8 @@ export default function ShieldPage() {
   
   const handleSuccess = () => {
     refresh()
-    setKey(k => k + 1)
+    // Don't reset key immediately - let the success state display first
+    // The component will reset when user clicks "Shield More Tokens"
   }
 
   return (
