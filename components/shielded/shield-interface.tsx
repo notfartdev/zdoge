@@ -60,11 +60,9 @@ const ShieldEventABI = parseAbiItem('event Shield(bytes32 indexed commitment, ui
 
 interface ShieldInterfaceProps {
   onSuccess?: () => void
-  publicBalance?: string // User's current public DOGE balance
-  tokenBalances?: Record<string, string> // Balances for all tokens
 }
 
-export function ShieldInterface({ onSuccess, publicBalance = "0", tokenBalances = {} }: ShieldInterfaceProps) {
+export function ShieldInterface({ onSuccess }: ShieldInterfaceProps) {
   const { wallet } = useWallet()
   const { toast } = useToast()
   
@@ -101,8 +99,19 @@ export function ShieldInterface({ onSuccess, publicBalance = "0", tokenBalances 
       for (const token of SHIELDED_TOKENS) {
         try {
           if (token.isNative) {
-            // Use public balance for native DOGE
-            balances[token.symbol] = publicBalance
+            // Fetch native DOGE balance directly
+            const provider = (window as any).ethereum
+            if (provider) {
+              const balance = await provider.request({
+                method: "eth_getBalance",
+                params: [wallet.address, "latest"],
+              })
+              const balanceWei = BigInt(balance)
+              const balanceDoge = Number(balanceWei) / 1e18
+              balances[token.symbol] = balanceDoge.toFixed(4)
+            } else {
+              balances[token.symbol] = "0"
+            }
           } else {
             // Fetch ERC20 balance
             const balance = await publicClient.readContract({
@@ -122,7 +131,11 @@ export function ShieldInterface({ onSuccess, publicBalance = "0", tokenBalances 
       setAllTokenBalances(balances)
     }
     fetchAllBalances()
-  }, [wallet?.address, publicBalance])
+    
+    // Refresh balances every 10 seconds
+    const interval = setInterval(fetchAllBalances, 10000)
+    return () => clearInterval(interval)
+  }, [wallet?.address])
   
   // Quick action: Shield all balance
   const handleShieldAll = () => {

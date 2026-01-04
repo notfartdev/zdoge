@@ -235,7 +235,11 @@ export function ShieldedHeader({ onStateChange }: ShieldedHeaderProps) {
             Shielded Balance
           </div>
           <div className="text-2xl font-bold flex items-center gap-2">
-            <span className="text-lg">🐕</span>
+            <img 
+              src="https://assets.coingecko.com/coins/images/5/large/dogecoin.png" 
+              alt="DOGE" 
+              className="w-6 h-6 rounded-full"
+            />
             DOGE
             <span className="ml-auto">{formatWeiToAmount(totalDoge).toFixed(4)}</span>
           </div>
