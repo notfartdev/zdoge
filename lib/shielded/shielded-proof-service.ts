@@ -288,27 +288,76 @@ async function fetchCommitmentsFromChain(poolAddress: string): Promise<{ commitm
     const uniqueTopics = new Set(logs.map((log: any) => log.topics[0]));
     console.log('Event signatures found:', Array.from(uniqueTopics));
     
-    // The Shielded/Deposit event has 3 topics: [eventSig, commitment, leafIndex]
-    // Filter logs that have exactly 3 topics (deposit-style events)
-    const depositLogs = logs.filter((log: any) => 
-      log.topics && log.topics.length >= 3
+    // Shield event signature: Shield(bytes32 indexed commitment, uint256 indexed leafIndex, address indexed token, uint256 amount, uint256 timestamp)
+    // keccak256("Shield(bytes32,uint256,address,uint256,uint256)") 
+    const SHIELD_EVENT_SIG = '0x784c8f4dbf0ffedd6e72c76501c545a70f8b203b30a26ce542bf92ba87c248a4';
+    
+    // Filter ONLY Shield events (not Transfer events which have different structure)
+    const shieldLogs = logs.filter((log: any) => 
+      log.topics && 
+      log.topics.length >= 3 && 
+      log.topics[0].toLowerCase() === SHIELD_EVENT_SIG.toLowerCase()
     );
     
-    console.log(`Found ${depositLogs.length} deposit-style events`);
+    console.log(`Found ${shieldLogs.length} Shield events (filtered from ${logs.length} total)`);
     
-    // Extract commitments from logs
+    // Extract commitments from Shield logs
     // commitment is topics[1], leafIndex is topics[2]
-    const results: { commitment: bigint; leafIndex: number }[] = depositLogs.map((log: any) => {
+    const results: { commitment: bigint; leafIndex: number }[] = [];
+    
+    for (const log of shieldLogs) {
       const commitment = BigInt(log.topics[1]);
       const leafIndex = parseInt(log.topics[2], 16);
-      console.log(`  Commitment: ${log.topics[1].slice(0, 20)}... leafIndex: ${leafIndex}`);
-      return { commitment, leafIndex };
-    });
+      console.log(`  Shield: Commitment ${log.topics[1].slice(0, 20)}... leafIndex: ${leafIndex}`);
+      results.push({ commitment, leafIndex });
+    }
+    
+    // Also parse Transfer events which add two new commitments each
+    // Transfer event: Transfer(bytes32 indexed nullifierHash, uint256 indexed leafIndex1, uint256 indexed leafIndex2, ...)
+    // The commitments are in the data field, not indexed
+    const TRANSFER_EVENT_SIG = '0xb94750cc0be5c55efe2c73c50ea1d2e36c3232ac9818923f399e1699b29025eb';
+    const transferLogs = logs.filter((log: any) => 
+      log.topics && 
+      log.topics.length >= 4 && 
+      log.topics[0].toLowerCase() === TRANSFER_EVENT_SIG.toLowerCase()
+    );
+    
+    console.log(`Found ${transferLogs.length} Transfer events`);
+    
+    for (const log of transferLogs) {
+      // topics[2] = leafIndex1, topics[3] = leafIndex2
+      const leafIndex1 = parseInt(log.topics[2], 16);
+      const leafIndex2 = parseInt(log.topics[3], 16);
+      
+      // Data contains: outputCommitment1 (32 bytes), outputCommitment2 (32 bytes), ...
+      // Each bytes32 is 64 hex chars, data starts with 0x
+      if (log.data && log.data.length >= 130) { // 0x + 64 + 64 = 130 chars minimum
+        const dataHex = log.data.slice(2); // remove 0x
+        const commitment1 = BigInt('0x' + dataHex.slice(0, 64));
+        const commitment2 = BigInt('0x' + dataHex.slice(64, 128));
+        
+        console.log(`  Transfer: Commitment1 leafIndex=${leafIndex1}, Commitment2 leafIndex=${leafIndex2}`);
+        results.push({ commitment: commitment1, leafIndex: leafIndex1 });
+        results.push({ commitment: commitment2, leafIndex: leafIndex2 });
+      }
+    }
     
     // Sort by leafIndex to ensure correct order
     results.sort((a, b) => a.leafIndex - b.leafIndex);
     
-    return results;
+    // Filter out any duplicates (same leafIndex, keep last one)
+    const uniqueResults = new Map<number, bigint>();
+    for (const r of results) {
+      uniqueResults.set(r.leafIndex, r.commitment);
+    }
+    
+    const finalResults = Array.from(uniqueResults.entries())
+      .map(([leafIndex, commitment]) => ({ commitment, leafIndex }))
+      .sort((a, b) => a.leafIndex - b.leafIndex);
+    
+    console.log(`Total unique commitments: ${finalResults.length}`);
+    
+    return finalResults;
   } catch (error) {
     console.error('Failed to fetch commitments from chain:', error);
     return [];
