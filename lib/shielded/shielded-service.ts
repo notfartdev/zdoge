@@ -382,13 +382,13 @@ export function completeTransfer(
   // Remove spent note
   walletState.notes.splice(spentNoteIndex, 1);
   
-  // Add recipient note if it belongs to us (sent to self)
+  // Check if recipient note belongs to us (sent to our own shielded address)
   if (recipientNote && recipientLeafIndex !== undefined && walletState.identity) {
-    // Check if recipient note belongs to current user
-    if (recipientNote.ownerPubkey === walletState.identity.shieldedAddress) {
+    const isOurNote = recipientNote.ownerPubkey === walletState.identity.shieldedAddress;
+    if (isOurNote && recipientNote.amount > 0n) {
       recipientNote.leafIndex = recipientLeafIndex;
       walletState.notes.push(recipientNote);
-      console.log('[Transfer] Added recipient note (sent to self):', recipientLeafIndex);
+      console.log('[Transfer] Added recipient note to wallet (sent to self):', recipientLeafIndex);
     }
   }
   
@@ -396,7 +396,7 @@ export function completeTransfer(
   if (changeNote.amount > 0n) {
     changeNote.leafIndex = changeLeafIndex;
     walletState.notes.push(changeNote);
-    console.log('[Transfer] Added change note:', changeLeafIndex);
+    console.log('[Transfer] Added change note to wallet:', changeLeafIndex);
   }
   
   saveNotesToStorage(walletState.notes);

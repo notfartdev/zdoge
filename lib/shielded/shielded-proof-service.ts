@@ -288,55 +288,27 @@ async function fetchCommitmentsFromChain(poolAddress: string): Promise<{ commitm
     const uniqueTopics = new Set(logs.map((log: any) => log.topics[0]));
     console.log('Event signatures found:', Array.from(uniqueTopics));
     
-    // Filter events that look like Shield events (commitment + valid leafIndex)
-    // Valid leafIndex should be a reasonable number (< 100000), not a bytes32 hash
-    const MAX_VALID_LEAF_INDEX = 100000;
+    // The Shielded/Deposit event has 3 topics: [eventSig, commitment, leafIndex]
+    // Filter logs that have exactly 3 topics (deposit-style events)
+    const depositLogs = logs.filter((log: any) => 
+      log.topics && log.topics.length >= 3
+    );
     
-    // Pre-filter: events with 3+ topics where topics[2] is a valid small number
-    const shieldLogs = logs.filter((log: any) => {
-      if (!log.topics || log.topics.length < 3) return false;
-      
-      // Parse topics[2] as leafIndex - must be a small reasonable number
-      const leafIndex = parseInt(log.topics[2], 16);
-      const isValidLeafIndex = !isNaN(leafIndex) && leafIndex >= 0 && leafIndex < MAX_VALID_LEAF_INDEX;
-      
-      return isValidLeafIndex;
-    });
+    console.log(`Found ${depositLogs.length} deposit-style events`);
     
-    console.log(`Found ${shieldLogs.length} Shield-like events (valid leafIndex < ${MAX_VALID_LEAF_INDEX})`);
-    
-    // Extract commitments from Shield logs
+    // Extract commitments from logs
     // commitment is topics[1], leafIndex is topics[2]
-    const results: { commitment: bigint; leafIndex: number }[] = [];
-    
-    for (const log of shieldLogs) {
+    const results: { commitment: bigint; leafIndex: number }[] = depositLogs.map((log: any) => {
       const commitment = BigInt(log.topics[1]);
       const leafIndex = parseInt(log.topics[2], 16);
-      console.log(`  Shield: Commitment ${log.topics[1].slice(0, 20)}... leafIndex: ${leafIndex}`);
-      results.push({ commitment, leafIndex });
-    }
-    
-    // NOTE: Transfer event parsing disabled - was causing root mismatches
-    // The events being parsed as "Transfer" were actually other event types
-    // with wrong data, overwriting correct Shield commitments.
-    // For now, we only use Shield events which contain all the commitments.
+      console.log(`  Commitment: ${log.topics[1].slice(0, 20)}... leafIndex: ${leafIndex}`);
+      return { commitment, leafIndex };
+    });
     
     // Sort by leafIndex to ensure correct order
     results.sort((a, b) => a.leafIndex - b.leafIndex);
     
-    // Filter out any duplicates (same leafIndex, keep last one)
-    const uniqueResults = new Map<number, bigint>();
-    for (const r of results) {
-      uniqueResults.set(r.leafIndex, r.commitment);
-    }
-    
-    const finalResults = Array.from(uniqueResults.entries())
-      .map(([leafIndex, commitment]) => ({ commitment, leafIndex }))
-      .sort((a, b) => a.leafIndex - b.leafIndex);
-    
-    console.log(`Total unique commitments: ${finalResults.length}`);
-    
-    return finalResults;
+    return results;
   } catch (error) {
     console.error('Failed to fetch commitments from chain:', error);
     return [];
@@ -410,50 +382,31 @@ async function checkIfRootIsKnown(poolAddress: string, root: bigint): Promise<bo
  */
 export async function fetchMerklePath(
   poolAddress: string,
-  leafIndex: number,
-  forceClientSide: boolean = false
+  leafIndex: number
 ): Promise<{ pathElements: bigint[]; pathIndices: number[]; root: bigint }> {
-  // Always use client-side for freshest data (indexer may lag)
-  // This ensures newly shielded notes can be immediately spent
-  if (!forceClientSide) {
-    // Try indexer first but with short timeout
-    try {
-      const response = await fetch(
-        `${INDEXER_URL}/api/shielded/pool/${poolAddress}/path/${leafIndex}`,
-        { signal: AbortSignal.timeout(3000) } // 3 second timeout
-      );
-      
-      if (response.ok) {
-        const data = await response.json();
-        
-        // Verify the indexer has this leaf
-        if (data.pathElements && data.pathElements.length > 0) {
-          console.log('[Merkle] Got path from indexer');
-          
-          // Double-check: verify this root exists on-chain
-          const indexerRoot = BigInt(data.root);
-          const isKnown = await checkIfRootIsKnown(poolAddress, indexerRoot);
-          
-          if (isKnown) {
-            return {
-              pathElements: data.pathElements.map((e: string) => BigInt(e)),
-              pathIndices: data.pathIndices,
-              root: indexerRoot,
-            };
-          } else {
-            console.log('[Merkle] Indexer root not known on-chain, using client-side...');
-          }
-        } else {
-          console.log('[Merkle] Indexer returned empty path, using client-side...');
-        }
-      } else {
-        console.log(`[Merkle] Indexer returned ${response.status}, falling back to client-side...`);
-      }
-    } catch (error) {
-      console.log('[Merkle] Indexer timeout/error, building Merkle tree client-side...');
+  // TEMPORARY: Skip indexer due to backend bug, go straight to client-side
+  console.log('[Merkle] Skipping indexer, building client-side Merkle tree...');
+  
+  // Try indexer first (note: shielded pools use /api/shielded/pool/...)
+  try {
+    const response = await fetch(
+      `${INDEXER_URL}/api/shielded/pool/${poolAddress}/path/${leafIndex}`,
+      { signal: AbortSignal.timeout(5000) } // 5 second timeout
+    );
+    
+    if (response.ok) {
+      const data = await response.json();
+      console.log('[Merkle] Got path from indexer');
+      return {
+        pathElements: data.pathElements.map((e: string) => BigInt(e)),
+        pathIndices: data.pathIndices,
+        root: BigInt(data.root),
+      };
+    } else {
+      console.log(`[Merkle] Indexer returned ${response.status}, falling back to client-side...`);
     }
-  } else {
-    console.log('[Merkle] Forced client-side Merkle tree building...');
+  } catch (error) {
+    console.log('[Merkle] Indexer not available, building Merkle tree client-side...');
   }
   
   // Fallback: Build Merkle tree client-side from blockchain events
