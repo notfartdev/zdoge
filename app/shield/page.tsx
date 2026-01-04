@@ -10,6 +10,7 @@ import { ShieldPlus } from "lucide-react"
 export default function ShieldPage() {
   const { refresh } = useShieldedState()
   const [key, setKey] = useState(0)
+  const [selectedToken, setSelectedToken] = useState<string>("DOGE")
   
   const handleSuccess = () => {
     refresh()
@@ -23,17 +24,22 @@ export default function ShieldPage() {
         <div className="mb-6 sm:mb-8">
           <h1 className="text-2xl sm:text-3xl font-bold mb-2 flex items-center gap-2 sm:gap-3">
             <ShieldPlus className="h-6 w-6 sm:h-8 sm:w-8 text-primary" />
-            Shield DOGE
+            Shield Tokens
           </h1>
           <p className="text-sm sm:text-base text-muted-foreground">
-            Convert public DOGE to private shielded notes. Your funds become invisible on-chain.
+            Convert public tokens to private shielded notes. Your funds become invisible on-chain.
           </p>
         </div>
         
-        <ShieldedHeader onStateChange={refresh} />
+        <ShieldedHeader onStateChange={refresh} selectedToken={selectedToken} />
         
         <Card className="p-6">
-          <ShieldInterface key={key} onSuccess={handleSuccess} />
+          <ShieldInterface 
+            key={key} 
+            onSuccess={handleSuccess} 
+            selectedToken={selectedToken}
+            onTokenChange={setSelectedToken}
+          />
         </Card>
       </main>
     </div>

@@ -60,13 +60,23 @@ const ShieldEventABI = parseAbiItem('event Shield(bytes32 indexed commitment, ui
 
 interface ShieldInterfaceProps {
   onSuccess?: () => void
+  selectedToken?: string
+  onTokenChange?: (token: string) => void
 }
 
-export function ShieldInterface({ onSuccess }: ShieldInterfaceProps) {
+export function ShieldInterface({ onSuccess, selectedToken: externalToken, onTokenChange }: ShieldInterfaceProps) {
   const { wallet } = useWallet()
   const { toast } = useToast()
   
-  const [selectedToken, setSelectedToken] = useState<ShieldedToken>("DOGE")
+  const [internalToken, setInternalToken] = useState<ShieldedToken>("DOGE")
+  
+  // Use external token if provided, otherwise use internal state
+  const selectedToken = (externalToken as ShieldedToken) || internalToken
+  
+  const handleTokenChange = (token: ShieldedToken) => {
+    setInternalToken(token)
+    onTokenChange?.(token)
+  }
   const [amount, setAmount] = useState("")
   const [status, setStatus] = useState<"idle" | "approving" | "preparing" | "confirming" | "success" | "error">("idle")
   const [noteBackup, setNoteBackup] = useState<string | null>(null)
@@ -395,7 +405,7 @@ export function ShieldInterface({ onSuccess }: ShieldInterfaceProps) {
           {/* Token Selector with Balances */}
           <div className="space-y-2">
             <Label>Select Token</Label>
-            <Select value={selectedToken} onValueChange={(v) => setSelectedToken(v as ShieldedToken)}>
+            <Select value={selectedToken} onValueChange={(v) => handleTokenChange(v as ShieldedToken)}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>

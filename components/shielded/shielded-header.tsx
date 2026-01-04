@@ -24,15 +24,33 @@ import {
   stopAutoDiscovery,
   isAutoDiscoveryRunning,
 } from "@/lib/shielded/auto-discovery"
-import { shieldedPool } from "@/lib/dogeos-config"
+import { shieldedPool, tokens, ERC20ABI } from "@/lib/dogeos-config"
 import { shortenAddress } from "@/lib/shielded/shielded-address"
 import { formatWeiToAmount } from "@/lib/shielded/shielded-note"
+import { createPublicClient, http, type Address } from "viem"
+import { dogeosTestnet } from "@/lib/dogeos-config"
+
+const publicClient = createPublicClient({
+  chain: dogeosTestnet,
+  transport: http(),
+})
+
+// Token configuration with logos
+const TOKEN_CONFIG: Record<string, { name: string; logo: string; address?: string; isNative?: boolean }> = {
+  DOGE: { name: 'Dogecoin', logo: 'https://assets.coingecko.com/coins/images/5/large/dogecoin.png', isNative: true },
+  USDC: { name: 'USD Coin', logo: 'https://assets.coingecko.com/coins/images/6319/large/usdc.png', address: tokens.USDC.address },
+  USDT: { name: 'Tether USD', logo: 'https://assets.coingecko.com/coins/images/325/large/Tether.png', address: tokens.USDT.address },
+  USD1: { name: 'USD1', logo: 'https://assets.coingecko.com/coins/images/54977/standard/USD1_1000x1000_transparent.png', address: tokens.USD1.address },
+  WETH: { name: 'Wrapped ETH', logo: 'https://assets.coingecko.com/coins/images/2518/large/weth.png', address: tokens.WETH.address },
+  LBTC: { name: 'Liquid BTC', logo: 'https://assets.coingecko.com/coins/images/1/large/bitcoin.png', address: tokens.LBTC.address },
+}
 
 interface ShieldedHeaderProps {
   onStateChange?: () => void
+  selectedToken?: string
 }
 
-export function ShieldedHeader({ onStateChange }: ShieldedHeaderProps) {
+export function ShieldedHeader({ onStateChange, selectedToken = "DOGE" }: ShieldedHeaderProps) {
   const { toast } = useToast()
   const { wallet, signMessage } = useWallet()
   const [mounted, setMounted] = useState(false)
@@ -41,37 +59,60 @@ export function ShieldedHeader({ onStateChange }: ShieldedHeaderProps) {
   const [walletState, setWalletState] = useState<ShieldedWalletState | null>(null)
   const [showAddress, setShowAddress] = useState(false)
   const [copied, setCopied] = useState(false)
-  const [publicBalance, setPublicBalance] = useState<string>("0")
+  const [allPublicBalances, setAllPublicBalances] = useState<Record<string, string>>({})
+  
+  const tokenConfig = TOKEN_CONFIG[selectedToken] || TOKEN_CONFIG.DOGE
+  const publicBalance = allPublicBalances[selectedToken] || "0"
   
   useEffect(() => {
     setMounted(true)
   }, [])
   
-  // Fetch public wallet balance
+  // Fetch all public token balances
   useEffect(() => {
     if (!mounted || !wallet?.isConnected || !wallet?.address) {
-      setPublicBalance("0")
+      setAllPublicBalances({})
       return
     }
     
-    async function fetchBalance() {
-      try {
-        const provider = (window as any).ethereum
-        if (!provider) return
-        const balance = await provider.request({
-          method: "eth_getBalance",
-          params: [wallet.address, "latest"],
-        })
-        const balanceWei = BigInt(balance)
-        const balanceDoge = Number(balanceWei) / 1e18
-        setPublicBalance(balanceDoge.toFixed(4))
-      } catch (error) {
-        console.error("Failed to fetch balance:", error)
+    async function fetchAllBalances() {
+      const balances: Record<string, string> = {}
+      
+      for (const [symbol, config] of Object.entries(TOKEN_CONFIG)) {
+        try {
+          if (config.isNative) {
+            // Fetch native DOGE balance
+            const provider = (window as any).ethereum
+            if (provider) {
+              const balance = await provider.request({
+                method: "eth_getBalance",
+                params: [wallet.address, "latest"],
+              })
+              const balanceWei = BigInt(balance)
+              const balanceDoge = Number(balanceWei) / 1e18
+              balances[symbol] = balanceDoge.toFixed(4)
+            }
+          } else if (config.address) {
+            // Fetch ERC20 balance
+            const balance = await publicClient.readContract({
+              address: config.address as Address,
+              abi: ERC20ABI,
+              functionName: 'balanceOf',
+              args: [wallet.address as Address],
+            })
+            balances[symbol] = (Number(balance) / 1e18).toFixed(4)
+          }
+        } catch (error) {
+          console.error(`Failed to fetch ${symbol} balance:`, error)
+          balances[symbol] = "0"
+        }
       }
+      
+      setAllPublicBalances(balances)
     }
     
-    fetchBalance()
-    const interval = setInterval(fetchBalance, 10000)
+    fetchAllBalances()
+    const interval = setInterval(fetchAllBalances, 10000)
     return () => clearInterval(interval)
   }, [mounted, wallet?.isConnected, wallet?.address])
   
@@ -182,8 +223,8 @@ export function ShieldedHeader({ onStateChange }: ShieldedHeaderProps) {
   }
   
   const shieldedBalance = walletState ? getShieldedBalance() : {}
-  const notes = walletState ? getNotes() : []
-  const totalDoge = shieldedBalance['DOGE'] || 0n
+  const allNotes = walletState ? getNotes() : []
+  const tokenNotes = allNotes.filter(note => (note.token || 'DOGE') === selectedToken)
   const isAutoDiscovery = isAutoDiscoveryRunning()
   
   return (
@@ -203,7 +244,7 @@ export function ShieldedHeader({ onStateChange }: ShieldedHeaderProps) {
                 </Badge>
               )}
             </h2>
-            <p className="text-sm text-muted-foreground">Private DOGE transactions</p>
+            <p className="text-sm text-muted-foreground">Private token transactions</p>
           </div>
         </div>
         
@@ -225,7 +266,14 @@ export function ShieldedHeader({ onStateChange }: ShieldedHeaderProps) {
             <Wallet className="h-4 w-4" />
             Public Balance
           </div>
-          <div className="text-2xl font-bold">{publicBalance} DOGE</div>
+          <div className="text-2xl font-bold flex items-center gap-2">
+            <img 
+              src={tokenConfig.logo} 
+              alt={selectedToken} 
+              className="w-6 h-6 rounded-full"
+            />
+            {publicBalance} {selectedToken}
+          </div>
           <div className="text-xs text-muted-foreground">Available to shield</div>
         </div>
         
@@ -236,14 +284,14 @@ export function ShieldedHeader({ onStateChange }: ShieldedHeaderProps) {
           </div>
           <div className="text-2xl font-bold flex items-center gap-2">
             <img 
-              src="https://assets.coingecko.com/coins/images/5/large/dogecoin.png" 
-              alt="DOGE" 
+              src={tokenConfig.logo} 
+              alt={selectedToken} 
               className="w-6 h-6 rounded-full"
             />
-            DOGE
-            <span className="ml-auto">{formatWeiToAmount(totalDoge).toFixed(4)}</span>
+            {selectedToken}
+            <span className="ml-auto">{formatWeiToAmount(shieldedBalance[selectedToken] || 0n).toFixed(4)}</span>
           </div>
-          <div className="text-xs text-muted-foreground">{notes.length} notes • Private</div>
+          <div className="text-xs text-muted-foreground">{tokenNotes.length} notes • Private</div>
         </div>
       </div>
       
