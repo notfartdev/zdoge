@@ -110,7 +110,7 @@ export function AccountModal() {
     setShowRpcDropdown(false)
     
     if (rpc.id !== 'custom') {
-      localStorage.setItem('dogenado-rpc', rpc.url)
+      localStorage.setItem('zdoge-rpc', rpc.url)
       toast({ 
         title: "RPC Changed", 
         description: `Now using ${rpc.name}` 
@@ -120,7 +120,7 @@ export function AccountModal() {
 
   const handleCustomRpcSave = () => {
     if (customRpcUrl) {
-      localStorage.setItem('dogenado-rpc', customRpcUrl)
+      localStorage.setItem('zdoge-rpc', customRpcUrl)
       toast({ 
         title: "Custom RPC Saved", 
         description: "Using your custom RPC endpoint" 

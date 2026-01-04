@@ -104,7 +104,7 @@ export async function validateNote(noteString: string): Promise<{
     }
     
     if (parts[0] !== "dogenado") {
-      return { valid: false, error: "Not a Dogenado note" }
+      return { valid: false, error: "Not a zDoge note" }
     }
     
     if (parts[1] !== "1") {

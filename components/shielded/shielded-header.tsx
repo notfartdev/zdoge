@@ -16,6 +16,7 @@ import {
   getNotes,
   backupWallet,
   syncNotesWithChain,
+  getIdentity,
   type ShieldedWalletState,
 } from "@/lib/shielded/shielded-service"
 import {
@@ -33,7 +34,7 @@ interface ShieldedHeaderProps {
 
 export function ShieldedHeader({ onStateChange }: ShieldedHeaderProps) {
   const { toast } = useToast()
-  const { wallet } = useWallet()
+  const { wallet, signMessage } = useWallet()
   const [mounted, setMounted] = useState(false)
   const [isInitialized, setIsInitialized] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
@@ -46,6 +47,7 @@ export function ShieldedHeader({ onStateChange }: ShieldedHeaderProps) {
     setMounted(true)
   }, [])
   
+  // Fetch public wallet balance
   useEffect(() => {
     if (!mounted || !wallet?.isConnected || !wallet?.address) {
       setPublicBalance("0")
@@ -73,34 +75,44 @@ export function ShieldedHeader({ onStateChange }: ShieldedHeaderProps) {
     return () => clearInterval(interval)
   }, [mounted, wallet?.isConnected, wallet?.address])
   
+  // Initialize shielded wallet when wallet is connected
   useEffect(() => {
-    if (!mounted) return
+    if (!mounted || !wallet?.isConnected || !wallet?.address) {
+      setIsInitialized(false)
+      setWalletState(null)
+      return
+    }
     
     async function init() {
       try {
-        const initialized = await initializeShieldedWallet()
-        if (initialized) {
+        // Pass wallet address and sign message function to initialize
+        const identity = await initializeShieldedWallet(
+          wallet.address!,
+          signMessage ? async (msg: string) => signMessage(msg) : undefined,
+          shieldedPool.address
+        )
+        
+        if (identity) {
           setIsInitialized(true)
           refreshState()
           
-          const identity = getWalletState()?.identity
-          if (identity) {
-            startAutoDiscovery(
-              shieldedPool.address,
-              identity,
-              getNotes(),
-              (note) => {
-                toast({
-                  title: "🔔 Incoming Transfer!",
-                  description: `Received ${formatWeiToAmount(note.amount).toFixed(4)} DOGE`,
-                })
-                refreshState()
-              }
-            )
-          }
+          // Start auto-discovery
+          startAutoDiscovery(
+            shieldedPool.address,
+            identity,
+            getNotes(),
+            (note) => {
+              toast({
+                title: "🔔 Incoming Transfer!",
+                description: `Received ${formatWeiToAmount(note.amount).toFixed(4)} DOGE`,
+              })
+              refreshState()
+              onStateChange?.()
+            }
+          )
         }
       } catch (error) {
-        console.error("Failed to check shielded wallet:", error)
+        console.error("Failed to initialize shielded wallet:", error)
       }
     }
     
@@ -109,7 +121,7 @@ export function ShieldedHeader({ onStateChange }: ShieldedHeaderProps) {
     return () => {
       stopAutoDiscovery()
     }
-  }, [mounted])
+  }, [mounted, wallet?.isConnected, wallet?.address])
   
   const refreshState = () => {
     const state = getWalletState()
@@ -154,6 +166,21 @@ export function ShieldedHeader({ onStateChange }: ShieldedHeaderProps) {
   
   if (!mounted) return null
   
+  // Show connect wallet prompt if not connected
+  if (!wallet?.isConnected || !wallet?.address) {
+    return (
+      <Card className="p-6 mb-6 bg-card/50 backdrop-blur border-primary/20">
+        <div className="text-center py-8">
+          <Shield className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+          <h3 className="text-lg font-semibold mb-2">Connect Your Wallet</h3>
+          <p className="text-sm text-muted-foreground">
+            Connect your wallet to access your shielded balance
+          </p>
+        </div>
+      </Card>
+    )
+  }
+  
   const shieldedBalance = walletState ? getShieldedBalance() : {}
   const notes = walletState ? getNotes() : []
   const totalDoge = shieldedBalance['DOGE'] || 0n
@@ -181,11 +208,11 @@ export function ShieldedHeader({ onStateChange }: ShieldedHeaderProps) {
         </div>
         
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={handleSync} disabled={isLoading}>
+          <Button variant="outline" size="sm" onClick={handleSync} disabled={isLoading || !isInitialized}>
             <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
             Sync
           </Button>
-          <Button variant="outline" size="sm" onClick={handleBackup}>
+          <Button variant="outline" size="sm" onClick={handleBackup} disabled={!isInitialized}>
             <Key className="h-4 w-4 mr-2" />
             Backup
           </Button>
@@ -258,4 +285,3 @@ export function useShieldedState() {
   
   return { notes, balance, refresh }
 }
-

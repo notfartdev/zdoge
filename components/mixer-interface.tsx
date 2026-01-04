@@ -10,14 +10,14 @@ import { AlertCircle, CheckCircle2, Copy } from "lucide-react"
 import { api, tokenPools } from "@/lib/dogeos-config"
 import Link from "next/link"
 
-// Token logo URLs - using Trust Wallet token list and CoinGecko
+// Token logo URLs - using CoinGecko for consistent quality
 const tokenLogos: Record<string, string> = {
-  DOGE: "https://assets.coingecko.com/coins/images/5/large/dogecoin.png", // Native DOGE
-  USDC: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48/logo.png",
-  USDT: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xdAC17F958D2ee523a2206206994597C13D831ec7/logo.png",
-  WETH: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2/logo.png",
-  LBTC: "https://assets.coingecko.com/coins/images/1/large/bitcoin.png", // Using BTC logo for LBTC
-  USD1: "https://assets.coingecko.com/coins/images/54977/standard/USD1_1000x1000_transparent.png?1749297002",
+  DOGE: "https://assets.coingecko.com/coins/images/5/large/dogecoin.png",
+  USDC: "https://assets.coingecko.com/coins/images/6319/large/usdc.png",
+  USDT: "https://assets.coingecko.com/coins/images/325/large/Tether.png",
+  USD1: "https://assets.coingecko.com/coins/images/54977/standard/USD1_1000x1000_transparent.png",
+  WETH: "https://assets.coingecko.com/coins/images/2518/large/weth.png",
+  LBTC: "https://assets.coingecko.com/coins/images/1/large/bitcoin.png",
 }
 
 interface PoolStats {
@@ -134,7 +134,7 @@ export function MixerInterface() {
             <span className="flex items-center">
               <span>D</span>
               <img 
-                src="/dogenadologo.png" 
+                src="/zdoge-logo.png" 
                 alt="O" 
                 className="inline-block h-[1em] w-[1em] object-contain mx-[0.03em] relative top-[0.02em]" 
               />
@@ -205,7 +205,7 @@ export function MixerInterface() {
                       SECRET NOTE
                     </label>
                     <Input
-                      placeholder="dogenado://note/..."
+                      placeholder="zdoge://note/..."
                       className="bg-black/40 border-white/10 font-mono text-xs"
                       readOnly
                     />

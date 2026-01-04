@@ -78,7 +78,7 @@ export function CheckNoteStatus() {
     }
 
     if (!isValidNoteFormat(noteInput)) {
-      setError("Invalid note format. Expected: dogenado-1-<pool>-<secret>-<nullifier>")
+      setError("Invalid note format. Expected: zdoge-1-<pool>-<secret>-<nullifier>")
       return
     }
 
@@ -154,7 +154,7 @@ export function CheckNoteStatus() {
               setStatus('idle')
               setNoteInfo(null)
             }}
-            placeholder="dogenado-1-usdc100-abc123...def456..."
+            placeholder="zdoge-1-usdc100-abc123...def456..."
             disabled={status === 'checking'}
             className="font-mono text-xs bg-black border-[#C2A633]/20 text-white min-h-[100px] resize-none"
           />

@@ -126,7 +126,7 @@ export function ShieldedNotesList({ notes, onRefresh }: ShieldedNotesListProps) 
                   <Label htmlFor="noteString">Note String</Label>
                   <Input
                     id="noteString"
-                    placeholder="dogenado-note-v1-..."
+                    placeholder="zdoge-note-v1-..."
                     value={importString}
                     onChange={(e) => setImportString(e.target.value)}
                   />

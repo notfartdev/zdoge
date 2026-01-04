@@ -89,7 +89,7 @@ export function NoteAccountSetup() {
       const url = URL.createObjectURL(blob)
       const a = document.createElement("a")
       a.href = url
-      a.download = "dogenado-note-account-key.txt"
+      a.download = "zdoge-note-account-key.txt"
       a.click()
       URL.revokeObjectURL(url)
       toast({
@@ -127,7 +127,7 @@ export function NoteAccountSetup() {
 
           <div className="space-y-6 pt-4">
             <p className="font-mono text-sm text-gray-300 leading-relaxed">
-              This key is used to encrypt and store your DogenadoCash private notes on Dogecoin blockchain. Please back it
+              This key is used to encrypt and store your zDoge.cash private notes on DogeOS blockchain. Please back it
               up and never share it with anyone.
             </p>
 

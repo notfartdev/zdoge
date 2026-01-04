@@ -12,8 +12,8 @@ interface FAQItem {
 
 const faqData: FAQItem[] = [
   {
-    question: "How does Dogenado work?",
-    answer: "Dogenado uses zero-knowledge proofs and Merkle trees to break the on-chain link between deposits and withdrawals.",
+    question: "How does zDoge.cash work?",
+    answer: "zDoge.cash uses zero-knowledge proofs and Merkle trees to create shielded transactions where sender, recipient, and amounts are hidden on-chain.",
   },
   {
     question: "What if observers try to guess based on the amount I deposited or withdrew?",
@@ -33,7 +33,7 @@ const faqData: FAQItem[] = [
   },
   {
     question: "Is this safe to use?",
-    answer: "Dogenado uses audited smart contracts and proven cryptographic methods. However, this is currently deployed on testnet. Always verify you're on the correct network and never deposit more than you can afford to lose.",
+    answer: "zDoge.cash uses audited smart contracts and proven cryptographic methods. However, this is currently deployed on testnet. Always verify you're on the correct network and never deposit more than you can afford to lose.",
   },
 ]
 

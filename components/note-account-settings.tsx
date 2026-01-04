@@ -21,7 +21,7 @@ export function NoteAccountSettings() {
     if (!wallet?.address) return
 
     // Generate backup key
-    const key = `dogenado-backup-${wallet.address.slice(0, 8)}-${Date.now()}`
+    const key = `zdoge-backup-${wallet.address.slice(0, 8)}-${Date.now()}`
     setBackupKey(key)
     setIsSetup(true)
 
@@ -48,7 +48,7 @@ export function NoteAccountSettings() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement("a")
     a.href = url
-    a.download = "dogenado-backup-key.txt"
+    a.download = "zdoge-backup-key.txt"
     a.click()
     URL.revokeObjectURL(url)
 

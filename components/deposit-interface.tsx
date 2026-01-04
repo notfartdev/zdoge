@@ -232,7 +232,7 @@ Explorer: ${links.explorer}/tx/${txHash}
     const url = URL.createObjectURL(blob)
     const a = document.createElement("a")
     a.href = url
-    a.download = `dogenado-note-${selectedToken}-${selectedAmount}-${Date.now()}.txt`
+    a.download = `zdoge-note-${selectedToken}-${selectedAmount}-${Date.now()}.txt`
     a.click()
     URL.revokeObjectURL(url)
     setNoteSaved(true)

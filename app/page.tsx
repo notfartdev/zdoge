@@ -195,22 +195,29 @@ function ShieldedPoolVisualization() {
             )
           })}
 
-          {/* Floating particles inside shield */}
-          {[0, 1, 2, 3, 4, 5].map((i) => (
+          {/* Floating particles inside shield - using deterministic values to avoid hydration mismatch */}
+          {[
+            { cx: "435;450;438", cy: "185;205;192", durX: "2.3s", durY: "2.8s", durO: "1.7s" },
+            { cx: "458;445;462", cy: "195;215;188", durX: "2.6s", durY: "3.1s", durO: "2.0s" },
+            { cx: "442;455;440", cy: "210;198;205", durX: "2.1s", durY: "2.9s", durO: "1.8s" },
+            { cx: "465;448;460", cy: "188;208;195", durX: "2.5s", durY: "2.7s", durO: "2.2s" },
+            { cx: "438;460;445", cy: "200;190;212", durX: "2.4s", durY: "3.0s", durO: "1.6s" },
+            { cx: "455;440;458", cy: "192;218;198", durX: "2.2s", durY: "2.6s", durO: "1.9s" },
+          ].map((particle, i) => (
             <circle key={`particle-${i}`} r="3" fill="#C2A633" opacity="0.7">
               <animate 
                 attributeName="cx" 
-                values={`${430 + Math.random() * 40};${440 + Math.random() * 20};${430 + Math.random() * 40}`}
-                dur={`${2 + Math.random()}s`}
+                values={particle.cx}
+                dur={particle.durX}
                 repeatCount="indefinite"
               />
               <animate 
                 attributeName="cy" 
-                values={`${180 + Math.random() * 40};${200 + Math.random() * 20};${180 + Math.random() * 40}`}
-                dur={`${2.5 + Math.random()}s`}
+                values={particle.cy}
+                dur={particle.durY}
                 repeatCount="indefinite"
               />
-              <animate attributeName="opacity" values="0.4;0.9;0.4" dur={`${1.5 + Math.random()}s`} repeatCount="indefinite" />
+              <animate attributeName="opacity" values="0.4;0.9;0.4" dur={particle.durO} repeatCount="indefinite" />
             </circle>
           ))}
 
@@ -283,102 +290,108 @@ export default function HomePage() {
     <SmoothScroll>
       <CustomCursor />
       <Navbar />
-      <main className="min-h-screen">
-        {/* Hero Section */}
-        <section className="relative min-h-screen flex items-center justify-center px-6 md:px-12 overflow-hidden">
-          {/* Animated background gradient */}
-          <div className="absolute inset-0 bg-gradient-to-b from-black via-black to-[#0a0a0a]" />
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-[#C2A633]/5 via-transparent to-transparent" />
+      {/* Global unified background */}
+      <main className="min-h-screen bg-[#0a0a0a] relative">
+        {/* Micro-dither layer - luxury grade, invisible but effective */}
+        <div 
+          className="fixed inset-0 opacity-[0.012] pointer-events-none mix-blend-soft-light z-[1]" 
+          style={{ 
+            backgroundImage: 'url("data:image/svg+xml,%3Csvg viewBox=\'0 0 400 400\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cfilter id=\'n\'%3E%3CfeTurbulence type=\'fractalNoise\' baseFrequency=\'0.4\' numOctaves=\'3\' stitchTiles=\'stitch\'/%3E%3C/filter%3E%3Crect width=\'100%25\' height=\'100%25\' filter=\'url(%23n)\'/%3E%3C/svg%3E")',
+            backgroundSize: '300px 300px',
+            filter: 'blur(0.5px)'
+          }} 
+        />
+        
+        {/* Hero Section - owns the full viewport with breathing room */}
+        <section className="relative min-h-[110vh] flex items-center justify-center px-6 md:px-12 pb-[20vh] overflow-hidden">
           
-          <div className="relative z-10 max-w-5xl mx-auto text-center">
+          {/* Center vignette - calmed, symmetrical, centered */}
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_450px_350px_at_50%_50%,_rgba(194,166,51,0.03)_0%,_transparent_55%)]" />
+          
+          {/* Faint oversized Doge silhouette - moved higher to hug the wordmark */}
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none -translate-y-[8vh]">
+            <img 
+              src="/zdoge-logo.png" 
+              alt="" 
+              className="w-[500px] h-[500px] md:w-[700px] md:h-[700px] opacity-[0.03] blur-sm select-none"
+              aria-hidden="true"
+            />
+          </div>
+          
+          {/* Hero content - moved down to follow background gravity */}
+          <div className="relative z-10 max-w-5xl mx-auto text-center translate-y-[6vh] md:translate-y-[8vh]">
             <motion.div
               initial={{ opacity: 0, y: 30 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
             >
-              {/* Logo Title */}
-              <h1 className="font-sans text-5xl sm:text-6xl md:text-8xl lg:text-9xl font-light tracking-tight mb-6">
-                <span className="inline-flex items-center">
-                  D
-                  <img 
-                    src="/dogenadologo.png" 
-                    alt="O" 
-                    className="w-12 h-12 sm:w-16 sm:h-16 md:w-24 md:h-24 lg:w-28 lg:h-28 mx-1 inline-block rounded-full"
-                  />
-                  GENADO
+              {/* Wordmark - zDOGE with .cash as domain seal */}
+              <h1 className="mb-8 font-serif text-5xl sm:text-6xl md:text-8xl lg:text-9xl font-normal tracking-[-0.02em]">
+                <span className="text-white/90">z</span><span className="text-white">DOGE</span>
+                <span 
+                  className="font-serif italic align-baseline inline-block"
+                  style={{ fontSize: '0.5em', marginLeft: '0.12em', transform: 'translateY(-0.1em)' }}
+                >
+                  <span className="text-[#C2A633]/60">.</span><span className="text-[#C2A633]/90 tracking-[0.02em] ml-[0.03em]">CASH</span>
                 </span>
-                <span className="italic text-[#C2A633]"> CASH</span>
               </h1>
               
+              {/* Subtitle - more breathing room before CTA */}
               <motion.p 
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 0.3, duration: 1 }}
-                className="font-mono text-sm sm:text-base text-muted-foreground max-w-2xl mx-auto mb-12 tracking-wide"
+                className="font-mono text-sm sm:text-base text-white/50 max-w-md mx-auto mb-14 tracking-wide"
               >
-                A decentralized privacy protocol enabling private
-                <br className="hidden sm:block" />
-                transactions on Doge.
+                Zero-knowledge privacy for Doge.
               </motion.p>
               
+              {/* CTA - more breathing room */}
               <motion.div 
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.5, duration: 0.8 }}
-                className="flex flex-col sm:flex-row gap-4 justify-center"
+                className="flex flex-col items-center gap-6"
               >
                 <Link href="/shield">
-                  <button className="px-8 py-4 bg-[#C2A633] text-black font-mono text-sm tracking-wider font-bold hover:bg-[#C2A633]/90 transition-all duration-300 hover:scale-105">
-                    LAUNCH APP
+                  <button className="group relative px-12 py-3.5 bg-[#C2A633] text-black/90 font-mono text-sm tracking-[0.25em] font-bold transition-colors duration-300 hover:text-black flex items-center gap-3">
+                    <span className="relative z-10">LAUNCH APP</span>
+                    
+                    {/* Arrow icon */}
+                    <svg 
+                      viewBox="0 0 24 24" 
+                      className="w-4 h-4 relative z-10 transition-transform duration-300 group-hover:translate-x-0.5" 
+                      fill="none" 
+                      stroke="currentColor" 
+                      strokeWidth="2.5" 
+                      strokeLinecap="round" 
+                      strokeLinejoin="round"
+                    >
+                      <path d="M5 12h14M12 5l7 7-7 7" />
+                    </svg>
                   </button>
                 </Link>
-                <a href="#how-it-works">
-                  <button className="px-8 py-4 border border-[#C2A633]/30 text-[#C2A633] font-mono text-sm tracking-wider hover:bg-[#C2A633]/10 transition-all duration-300">
-                    HOW IT WORKS
-                  </button>
-                </a>
+                
+                {/* Trust line - facts, not slogans */}
+                <motion.p
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.7, duration: 0.8 }}
+                  className="font-mono text-[10px] sm:text-xs text-white/25 tracking-[0.2em]"
+                >
+                  NO SIGNUP&nbsp;&nbsp;·&nbsp;&nbsp;NO TRACKING&nbsp;&nbsp;·&nbsp;&nbsp;NON-CUSTODIAL
+                </motion.p>
               </motion.div>
             </motion.div>
-            
-            {/* Stats Cards */}
-            <motion.div 
-              initial={{ opacity: 0, y: 40 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.8, duration: 1 }}
-              className="mt-20 grid grid-cols-1 md:grid-cols-3 gap-4 max-w-4xl mx-auto"
-            >
-              <div className="border border-white/10 bg-black/40 backdrop-blur-sm p-6 text-left">
-                <p className="font-mono text-xs tracking-widest text-[#C2A633] mb-2 flex items-center gap-2">
-                  <span className="w-2 h-2 bg-[#C2A633] rounded-full animate-pulse" />
-                  PRIVACY MODE
-                </p>
-                <p className="font-sans text-3xl font-light">Shielded</p>
-                <p className="font-mono text-xs text-muted-foreground mt-1">zk-SNARK protected</p>
-              </div>
-              
-              <div className="border border-white/10 bg-black/40 backdrop-blur-sm p-6 text-left">
-                <p className="font-mono text-xs tracking-widest text-[#C2A633] mb-2">SUPPORTED TOKENS</p>
-                <div className="flex items-center gap-2">
-                  <span className="text-2xl">🐕</span>
-                  <span className="font-mono text-lg">DOGE</span>
-                </div>
-                <p className="font-mono text-xs text-muted-foreground mt-1">native DOGE on DogeOS</p>
-              </div>
-              
-              <div className="border border-white/10 bg-black/40 backdrop-blur-sm p-6 text-left">
-                <p className="font-mono text-xs tracking-widest text-[#C2A633] mb-2">TRANSACTION FEE</p>
-                <p className="font-sans text-3xl font-light">0.5%</p>
-                <p className="font-mono text-xs text-muted-foreground mt-1">gas-free via relayer</p>
-              </div>
-            </motion.div>
           </div>
+          
         </section>
 
         {/* How It Works Section */}
-        <section id="how-it-works" className="relative py-24 px-6 md:px-12 border-t border-white/10">
+        <section id="how-it-works" className="relative py-24 px-6 md:px-12">
           <div className="max-w-7xl mx-auto">
             <motion.div
-              initial={{ opacity: 0, y: 40 }}
+              initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 1 }}
@@ -391,14 +404,14 @@ export default function HomePage() {
                 <span className="italic">Shielded Notes</span>
               </h2>
               <p className="font-mono text-xs sm:text-sm text-muted-foreground max-w-2xl">
-                DogenadoCash uses zero-knowledge proofs to create private transactions on DogeOS.
+                zDoge.cash uses zero-knowledge proofs to create private transactions on DogeOS.
                 Like Zcash shielded pools, your DOGE becomes invisible on-chain while remaining 
                 fully yours and spendable anytime.
               </p>
             </motion.div>
 
-            {/* Steps Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-0 mb-16">
+            {/* Steps Grid - tighter binding to explanation */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-0 mb-16 -mt-4">
               {steps.map((step, index) => (
                 <motion.div
                   key={step.title}
@@ -406,7 +419,7 @@ export default function HomePage() {
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true }}
                   transition={{ duration: 0.8, delay: index * 0.2 }}
-                  className="border border-white/10 bg-black/30 p-6 md:p-8 group hover:bg-black/50 transition-all duration-500 relative"
+                  className="border border-white/[0.06] p-6 md:p-8 group hover:border-white/10 transition-all duration-500 relative"
                 >
                   <step.illustration />
                   <h3 className="font-mono text-lg sm:text-xl font-bold text-[#C2A633] tracking-wide mb-3 italic">{step.title}</h3>
@@ -414,7 +427,7 @@ export default function HomePage() {
                   
                   {index < 2 && (
                     <div className="hidden md:block absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 z-10">
-                      <div className="w-8 h-[2px] bg-gradient-to-r from-[#C2A633]/50 to-[#C2A633]/20" />
+                      <div className="w-8 h-[1px] bg-gradient-to-r from-[#C2A633]/30 to-[#C2A633]/10" />
                     </div>
                   )}
                 </motion.div>
@@ -427,7 +440,7 @@ export default function HomePage() {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 1 }}
-              className="border border-white/10 bg-black/40 backdrop-blur-sm p-6 sm:p-10 md:p-14"
+              className="border border-white/[0.06] p-6 sm:p-10 md:p-14"
             >
               <ShieldedPoolVisualization />
               
@@ -437,7 +450,7 @@ export default function HomePage() {
                   <p className="font-mono text-xs tracking-widest text-[#C2A633] mb-3 text-center">SHIELD</p>
                   <div className="flex flex-wrap justify-center gap-2">
                     {['A', 'B', 'C', 'D'].map((wallet) => (
-                      <div key={wallet} className="px-3 py-2 border border-white/15 bg-black/50">
+                      <div key={wallet} className="px-3 py-2 border border-white/10">
                         <div className="flex items-center gap-2">
                           <div className="w-6 h-6 rounded bg-[#C2A633]/15 border border-[#C2A633]/40 flex items-center justify-center">
                             <span className="font-mono text-[10px] font-bold text-[#C2A633]">{wallet}</span>
@@ -491,29 +504,31 @@ export default function HomePage() {
                 </div>
               </div>
 
-              <div className="mt-10 text-center space-y-3">
-                <p className="font-mono text-xs sm:text-sm text-muted-foreground max-w-3xl mx-auto leading-relaxed">
+              <div className="mt-8 text-center space-y-2">
+                <p className="font-mono text-xs sm:text-sm text-muted-foreground/85 max-w-3xl mx-auto leading-loose">
                   Shielded notes are cryptographic commitments stored in a Merkle tree. Zero-knowledge proofs 
                   verify transactions without revealing sender, recipient, or amount — ensuring complete 
                   unlinkability between addresses.
                 </p>
-                <p className="font-mono text-[10px] text-muted-foreground/60 max-w-2xl mx-auto">
+                <p className="font-mono text-[10px] text-muted-foreground/50 max-w-2xl mx-auto leading-relaxed">
                   Each spend nullifies a unique hash to prevent double-spending while maintaining full anonymity within the shielded pool.
                 </p>
               </div>
             </motion.div>
           </div>
+          
         </section>
 
         {/* Privacy Features Section */}
-        <section id="privacy" className="relative py-24 px-6 md:px-12 border-t border-white/10">
-          <div className="max-w-7xl mx-auto">
+        <section id="privacy" className="relative py-24 px-6 md:px-12">
+          
+          <div className="max-w-6xl mx-auto relative">
             <motion.div
-              initial={{ opacity: 0, y: 40 }}
+              initial={{ opacity: 0, y: 30 }}
               whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
+              viewport={{ once: true, margin: "-50px" }}
               transition={{ duration: 1 }}
-              className="mb-16"
+              className="mb-16 text-center md:text-left"
             >
               <p className="font-mono text-xs tracking-[0.3em] text-[#C2A633] mb-4">PRIVACY FEATURES</p>
               <h2 className="font-sans text-3xl sm:text-4xl md:text-6xl lg:text-7xl font-light tracking-tight mb-4 md:mb-6">
@@ -521,18 +536,39 @@ export default function HomePage() {
                 <br />
                 <span className="italic">Hidden</span>
               </h2>
-              <p className="font-mono text-xs sm:text-sm text-muted-foreground max-w-xl">
+              <p className="font-mono text-xs sm:text-sm text-muted-foreground max-w-xl mx-auto md:mx-0">
                 Unlike transparent blockchains, shielded transactions reveal nothing about 
                 who sent what to whom.
               </p>
             </motion.div>
 
+            {/* Cards with distinct icons per concept */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
               {[
-                { title: "Sender Address", desc: "Your wallet never appears in transaction data" },
-                { title: "Recipient Address", desc: "Recipients receive via encrypted memos" },
-                { title: "Transaction Amount", desc: "Amounts are cryptographically hidden" },
-                { title: "Transaction Link", desc: "No connection between sender and recipient" },
+                { 
+                  title: "Sender Address", 
+                  desc: "Your wallet never appears in transaction data",
+                  // Key icon - represents hidden identity
+                  icon: <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" />
+                },
+                { 
+                  title: "Recipient Address", 
+                  desc: "Recipients receive via encrypted memos",
+                  // Encrypted envelope icon
+                  icon: <><path d="M22 7L13.03 12.7a1.94 1.94 0 0 1-2.06 0L2 7" /><rect x="2" y="4" width="20" height="16" rx="2" /><path d="M12 11v4" /><circle cx="12" cy="17" r="1" /></>
+                },
+                { 
+                  title: "Transaction Amount", 
+                  desc: "Amounts are cryptographically hidden",
+                  // Stacked layers icon
+                  icon: <><path d="M12 2L2 7l10 5 10-5-10-5z" /><path d="M2 17l10 5 10-5" /><path d="M2 12l10 5 10-5" /></>
+                },
+                { 
+                  title: "Transaction Link", 
+                  desc: "No connection between sender and recipient",
+                  // Broken chain icon
+                  icon: <><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" /><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" /><line x1="8" y1="2" x2="8" y2="5" /><line x1="2" y1="8" x2="5" y2="8" /><line x1="16" y1="19" x2="16" y2="22" /><line x1="19" y1="16" x2="22" y2="16" /></>
+                },
               ].map((item, i) => (
                 <motion.div
                   key={item.title}
@@ -540,11 +576,11 @@ export default function HomePage() {
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true }}
                   transition={{ duration: 0.6, delay: i * 0.1 }}
-                  className="border border-white/10 bg-black/30 p-6 flex items-start gap-4"
+                  className="border border-white/[0.06] p-6 flex items-start gap-4"
                 >
                   <div className="w-10 h-10 border border-[#C2A633]/30 flex items-center justify-center flex-shrink-0">
-                    <svg viewBox="0 0 24 24" className="w-5 h-5 text-[#C2A633]" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M12 2L2 7l10 5 10-5-10-5z M2 17l10 5 10-5 M2 12l10 5 10-5" />
+                    <svg viewBox="0 0 24 24" className="w-5 h-5 text-[#C2A633]" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                      {item.icon}
                     </svg>
                   </div>
                   <div>
@@ -555,60 +591,36 @@ export default function HomePage() {
               ))}
             </div>
 
-            {/* Security Reminder */}
+            {/* Security Reminder - desaturated, warning-tone background */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.8 }}
-              className="border-l-2 border-[#C2A633] bg-[#C2A633]/5 p-6"
+              className="border-l-2 border-[#C2A633]/40 p-6"
             >
               <div className="flex items-start gap-4">
-                <div className="w-10 h-10 border border-[#C2A633]/50 flex items-center justify-center flex-shrink-0">
-                  <svg viewBox="0 0 24 24" className="w-5 h-5 text-[#C2A633]" fill="none" stroke="currentColor" strokeWidth="2">
+                <div className="w-10 h-10 border border-[#C2A633]/40 flex items-center justify-center flex-shrink-0">
+                  <svg viewBox="0 0 24 24" className="w-5 h-5 text-[#C2A633]/80" fill="none" stroke="currentColor" strokeWidth="1.5">
                     <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
                   </svg>
                 </div>
                 <div>
-                  <h3 className="font-mono text-sm font-bold text-[#C2A633] mb-2">Security Reminder</h3>
+                  <h3 className="font-mono text-sm font-bold text-[#C2A633]/90 mb-2">Security Reminder</h3>
                   <p className="font-mono text-xs text-muted-foreground leading-relaxed">
-                    DogenadoCash is a decentralized, non-custodial protocol. We never have access to your 
+                    zDoge.cash is a decentralized, non-custodial protocol. We never have access to your 
                     funds or private keys. You are solely responsible for keeping your wallet secure. 
                     Always backup your shielded wallet before transactions.
                   </p>
-                  <div className="flex gap-3 mt-4">
+                  <div className="flex flex-wrap gap-3 mt-4">
                     {['DECENTRALIZED', 'NON-CUSTODIAL', 'ZK-PRIVATE'].map((tag) => (
-                      <span key={tag} className="px-3 py-1 border border-[#C2A633]/30 text-[#C2A633] font-mono text-[10px] tracking-wider">
+                      <span key={tag} className="px-3 py-1 border border-[#C2A633]/25 text-[#C2A633]/80 font-mono text-[10px] tracking-wider">
                         {tag}
                       </span>
                     ))}
                   </div>
                 </div>
               </div>
-            </motion.div>
-          </div>
-        </section>
-
-        {/* CTA Section */}
-        <section className="relative py-24 px-6 md:px-12 border-t border-white/10 bg-gradient-to-t from-[#C2A633]/5 to-transparent">
-          <div className="max-w-3xl mx-auto text-center">
-            <motion.div
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 1 }}
-            >
-              <h2 className="font-sans text-3xl sm:text-4xl md:text-5xl font-light tracking-tight mb-6">
-                Ready for <span className="italic text-[#C2A633]">Private DOGE</span>?
-              </h2>
-              <p className="font-mono text-sm text-muted-foreground mb-8 max-w-xl mx-auto">
-                Start shielding your DOGE today. No KYC, no sign-up, fully decentralized.
-              </p>
-              <Link href="/shield">
-                <button className="px-10 py-4 bg-[#C2A633] text-black font-mono text-sm tracking-wider font-bold hover:bg-[#C2A633]/90 transition-all duration-300 hover:scale-105">
-                  LAUNCH APP
-                </button>
-              </Link>
             </motion.div>
           </div>
         </section>

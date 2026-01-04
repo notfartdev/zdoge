@@ -220,7 +220,7 @@ export function ShieldedWallet() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement("a")
     a.href = url
-    a.download = "dogenado-shielded-backup.txt"
+    a.download = "zdoge-shielded-backup.txt"
     a.click()
     URL.revokeObjectURL(url)
     

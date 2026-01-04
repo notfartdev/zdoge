@@ -1,13 +1,11 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { DashboardNav } from "@/components/dashboard-nav"
 import { ShieldedHeader, useShieldedState } from "@/components/shielded/shielded-header"
 import { TransferInterface } from "@/components/shielded/transfer-interface"
-import { getNotes } from "@/lib/shielded/shielded-service"
 import { Card } from "@/components/ui/card"
 import { Send } from "lucide-react"
-import Link from "next/link"
 
 export default function SendPage() {
   const { notes, refresh } = useShieldedState()
@@ -37,11 +35,6 @@ export default function SendPage() {
         <Card className="p-6">
           <TransferInterface key={key} notes={notes} onSuccess={handleSuccess} />
         </Card>
-        
-        <div className="mt-6 flex gap-4 text-sm">
-          <Link href="/shield" className="text-primary hover:underline">← Shield more</Link>
-          <Link href="/unshield" className="text-primary hover:underline">→ Unshield to public</Link>
-        </div>
       </main>
     </div>
   )

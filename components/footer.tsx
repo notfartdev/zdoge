@@ -1,8 +1,9 @@
 "use client"
 
-import { FileText, Globe } from "lucide-react"
+import { useState, useEffect } from "react"
+import { ChevronUp } from "lucide-react"
 
-// X/Twitter icon component
+// Social icons
 function XIcon({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="currentColor">
@@ -11,57 +12,129 @@ function XIcon({ className }: { className?: string }) {
   )
 }
 
-export function Footer() {
+function DiscordIcon({ className }: { className?: string }) {
   return (
-    <footer className="relative border-t border-[#C2A633]/20">
-      <div className="px-4 sm:px-6 md:px-8 lg:px-12 py-4 sm:py-6">
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 sm:gap-6">
-          {/* Logo */}
-          <div className="flex items-center gap-2 sm:gap-3">
-            <img src="/dogenadologo.png" alt="DogenadoCash" className="w-6 h-6 sm:w-8 sm:h-8" />
-            <span className="font-mono text-[10px] sm:text-xs tracking-widest text-foreground">DOGENADOCASH</span>
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189z" />
+    </svg>
+  )
+}
+
+function MediumIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M13.54 12a6.8 6.8 0 01-6.77 6.82A6.8 6.8 0 010 12a6.8 6.8 0 016.77-6.82A6.8 6.8 0 0113.54 12zM20.96 12c0 3.54-1.51 6.42-3.38 6.42-1.87 0-3.39-2.88-3.39-6.42s1.52-6.42 3.39-6.42 3.38 2.88 3.38 6.42M24 12c0 3.17-.53 5.75-1.19 5.75-.66 0-1.19-2.58-1.19-5.75s.53-5.75 1.19-5.75C23.47 6.25 24 8.83 24 12z" />
+    </svg>
+  )
+}
+
+export function Footer() {
+  const [showScrollTop, setShowScrollTop] = useState(false)
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setShowScrollTop(window.scrollY > 300)
+    }
+    window.addEventListener("scroll", handleScroll)
+    return () => window.removeEventListener("scroll", handleScroll)
+  }, [])
+
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: "smooth" })
+  }
+
+  return (
+    <footer className="relative border-t border-white/10 bg-[#0a0f0f]">
+      <div className="max-w-7xl mx-auto px-6 md:px-12 py-12 md:py-16">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-10 md:gap-8">
+          {/* Logo & Copyright */}
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              <img src="/zdoge-logo.png" alt="zDoge.cash" className="w-8 h-8 rounded-full" />
+              <span className="font-mono text-sm tracking-widest text-[#C2A633]">zDOGE</span>
+            </div>
+            <div className="font-mono text-xs text-muted-foreground/60 space-y-1">
+              <p>Copyright © {new Date().getFullYear()} zDoge</p>
+              <p>All rights reserved.</p>
+            </div>
           </div>
 
-          {/* Icon Links */}
-          <div className="flex items-center gap-4 sm:gap-6 flex-wrap justify-center">
-            <a
-              href="https://docs.dogenado.cash"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1.5 sm:gap-2 text-muted-foreground hover:text-[#C2A633] transition-colors duration-300 min-h-[44px] min-w-[44px] justify-center"
-              title="Documentation"
-            >
-              <FileText className="w-4 h-4 sm:w-5 sm:h-5" />
-              <span className="font-mono text-[10px] sm:text-xs tracking-widest">Docs</span>
-            </a>
-            <a
-              href="https://x.com/DogenadoCash"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1.5 sm:gap-2 text-muted-foreground hover:text-[#C2A633] transition-colors duration-300 min-h-[44px] min-w-[44px] justify-center"
-              title="X (Twitter)"
-            >
-              <XIcon className="w-4 h-4 sm:w-5 sm:h-5" />
-              <span className="font-mono text-[10px] sm:text-xs tracking-widest">X</span>
-            </a>
-            <a
-              href="https://dogeos.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1.5 sm:gap-2 text-muted-foreground hover:text-[#C2A633] transition-colors duration-300 min-h-[44px] min-w-[44px] justify-center"
-              title="DogeOS Website"
-            >
-              <Globe className="w-4 h-4 sm:w-5 sm:h-5" />
-              <span className="font-mono text-[10px] sm:text-xs tracking-widest">DogeOS</span>
-            </a>
+          {/* Company Links */}
+          <div className="space-y-4">
+            <h3 className="font-mono text-sm font-bold text-[#C2A633] italic">Company</h3>
+            <div className="grid grid-cols-2 gap-x-8 gap-y-3">
+              <a
+                href="https://docs.zdoge.cash"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-mono text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Docs
+              </a>
+              <a
+                href="/terms"
+                className="font-mono text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Terms of Service
+              </a>
+              <span className="font-mono text-xs text-muted-foreground/50">
+                API <span className="text-[10px]">(Coming Soon)</span>
+              </span>
+              <a
+                href="/privacy"
+                className="font-mono text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Privacy Policy
+              </a>
+            </div>
           </div>
 
-          {/* Copyright */}
-          <p className="font-mono text-[10px] sm:text-xs tracking-widest text-muted-foreground/50 text-center sm:text-left">
-            © {new Date().getFullYear()}
-          </p>
+          {/* Socials */}
+          <div className="space-y-4">
+            <h3 className="font-mono text-sm font-bold text-[#C2A633] italic">Socials</h3>
+            <div className="space-y-3">
+              <a
+                href="https://x.com/zDogeCash"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-3 font-mono text-xs text-muted-foreground hover:text-foreground transition-colors group"
+              >
+                <XIcon className="w-4 h-4 group-hover:text-[#C2A633] transition-colors" />
+                Twitter
+              </a>
+              <a
+                href="https://discord.gg/zdoge"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-3 font-mono text-xs text-muted-foreground hover:text-foreground transition-colors group"
+              >
+                <DiscordIcon className="w-4 h-4 group-hover:text-[#C2A633] transition-colors" />
+                Discord
+              </a>
+              <a
+                href="https://medium.com/@zdogecash"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-3 font-mono text-xs text-muted-foreground hover:text-foreground transition-colors group"
+              >
+                <MediumIcon className="w-4 h-4 group-hover:text-[#C2A633] transition-colors" />
+                Medium
+              </a>
+            </div>
+          </div>
         </div>
       </div>
+
+      {/* Scroll to Top Button */}
+      {showScrollTop && (
+        <button
+          onClick={scrollToTop}
+          className="fixed bottom-6 right-6 w-12 h-12 rounded-full bg-[#C2A633] text-black flex items-center justify-center shadow-lg hover:bg-[#C2A633]/90 transition-all duration-300 hover:scale-110 z-50"
+          aria-label="Scroll to top"
+        >
+          <ChevronUp className="w-5 h-5" />
+        </button>
+      )}
     </footer>
   )
 }

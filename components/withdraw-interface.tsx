@@ -127,7 +127,7 @@ export function WithdrawInterface() {
 
   const validateNote = async (): Promise<Note | null> => {
     if (!isValidNoteFormat(noteInput)) {
-      setError("Invalid note format. Expected: dogenado-1-<pool>-<secret>-<nullifier>")
+      setError("Invalid note format. Expected: zdoge-1-<pool>-<secret>-<nullifier>")
       return null
     }
 
@@ -452,7 +452,7 @@ export function WithdrawInterface() {
               setError("")
               setParsedNote(null)
             }}
-            placeholder="dogenado-1-usdc100-abc123...def456..."
+            placeholder="zdoge-1-usdc100-abc123...def456..."
             disabled={isVerified || (txStatus !== "idle" && txStatus !== "verified")}
             className="font-mono text-xs bg-black border-[#C2A633]/20 text-white min-h-[80px] resize-none"
           />

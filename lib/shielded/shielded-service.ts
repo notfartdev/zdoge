@@ -143,7 +143,7 @@ export async function initializeShieldedWallet(
     console.log('[ShieldedWallet] Using stored signature');
   } else if (signMessage) {
     // Request new signature from wallet
-    const message = `Dogenado Shielded Wallet\n\nSign this message to create your shielded identity.\n\nThis signature is used to derive your private spending key.\nIt will be the same on any device where you sign with this wallet.\n\nWallet: ${walletAddress}\nVersion: 1`;
+    const message = `zDoge.cash Shielded Wallet\n\nSign this message to create your shielded identity.\n\nThis signature is used to derive your private spending key.\nIt will be the same on any device where you sign with this wallet.\n\nWallet: ${walletAddress}\nVersion: 1`;
     
     signature = await signMessage(message);
     

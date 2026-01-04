@@ -33,14 +33,24 @@ const publicClient = createPublicClient({
   transport: http(),
 })
 
+// Token logo URLs - using Trust Wallet token list and CoinGecko
+const TOKEN_LOGOS: Record<string, string> = {
+  DOGE: "https://assets.coingecko.com/coins/images/5/large/dogecoin.png",
+  USDC: "https://assets.coingecko.com/coins/images/6319/large/usdc.png",
+  USDT: "https://assets.coingecko.com/coins/images/325/large/Tether.png",
+  USD1: "https://assets.coingecko.com/coins/images/54977/standard/USD1_1000x1000_transparent.png",
+  WETH: "https://assets.coingecko.com/coins/images/2518/large/weth.png",
+  LBTC: "https://assets.coingecko.com/coins/images/1/large/bitcoin.png",
+}
+
 // All supported tokens for shielded pool
 const SHIELDED_TOKENS = [
-  { symbol: 'DOGE', name: 'Dogecoin', address: '0x0000000000000000000000000000000000000000' as `0x${string}`, isNative: true, icon: '🐕' },
-  { symbol: 'USDC', name: 'USD Coin', address: tokens.USDC.address, isNative: false, icon: '💵' },
-  { symbol: 'USDT', name: 'Tether USD', address: tokens.USDT.address, isNative: false, icon: '💴' },
-  { symbol: 'USD1', name: 'USD1', address: tokens.USD1.address, isNative: false, icon: '💰' },
-  { symbol: 'WETH', name: 'Wrapped ETH', address: tokens.WETH.address, isNative: false, icon: '⟠' },
-  { symbol: 'LBTC', name: 'Liquid BTC', address: tokens.LBTC.address, isNative: false, icon: '₿' },
+  { symbol: 'DOGE', name: 'Dogecoin', address: '0x0000000000000000000000000000000000000000' as `0x${string}`, isNative: true },
+  { symbol: 'USDC', name: 'USD Coin', address: tokens.USDC.address, isNative: false },
+  { symbol: 'USDT', name: 'Tether USD', address: tokens.USDT.address, isNative: false },
+  { symbol: 'USD1', name: 'USD1', address: tokens.USD1.address, isNative: false },
+  { symbol: 'WETH', name: 'Wrapped ETH', address: tokens.WETH.address, isNative: false },
+  { symbol: 'LBTC', name: 'Liquid BTC', address: tokens.LBTC.address, isNative: false },
 ] as const
 
 type ShieldedToken = typeof SHIELDED_TOKENS[number]['symbol']
@@ -339,7 +349,7 @@ export function ShieldInterface({ onSuccess, publicBalance = "0", tokenBalances 
     const url = URL.createObjectURL(blob)
     const a = document.createElement("a")
     a.href = url
-    a.download = `dogenado-${selectedToken}-note-${Date.now()}.txt`
+    a.download = `zdoge-${selectedToken}-note-${Date.now()}.txt`
     a.click()
     URL.revokeObjectURL(url)
   }
@@ -384,7 +394,11 @@ export function ShieldInterface({ onSuccess, publicBalance = "0", tokenBalances 
                     <SelectItem key={token.symbol} value={token.symbol}>
                       <div className="flex items-center justify-between w-full gap-4">
                         <div className="flex items-center gap-2">
-                          <span>{token.icon}</span>
+                          <img 
+                            src={TOKEN_LOGOS[token.symbol]} 
+                            alt={token.symbol} 
+                            className="w-5 h-5 rounded-full"
+                          />
                           <span>{token.symbol}</span>
                         </div>
                         <span className={`text-xs ${hasBalance ? 'text-green-500' : 'text-muted-foreground'}`}>
@@ -423,12 +437,15 @@ export function ShieldInterface({ onSuccess, publicBalance = "0", tokenBalances 
           {/* Info Box */}
           {parseFloat(tokenBalance) > 0 && (
             <div className="p-3 rounded-lg bg-primary/5 border border-primary/20">
-              <p className="text-sm text-muted-foreground">
-                {selectedTokenInfo.icon} <strong>Shielding {selectedToken}:</strong>{' '}
-                {selectedTokenInfo.isNative 
-                  ? "Your DOGE will be privately stored in the shielded pool."
-                  : `After approval, your ${selectedToken} will be shielded.`
-                }
+              <p className="text-sm text-muted-foreground flex items-center gap-2">
+                <img src={TOKEN_LOGOS[selectedToken]} alt={selectedToken} className="w-4 h-4 rounded-full inline" />
+                <span>
+                  <strong>Shielding {selectedToken}:</strong>{' '}
+                  {selectedTokenInfo.isNative 
+                    ? "Your DOGE will be privately stored in the shielded pool."
+                    : `After approval, your ${selectedToken} will be shielded.`
+                  }
+                </span>
               </p>
             </div>
           )}
