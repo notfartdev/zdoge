@@ -732,6 +732,32 @@ export function clearNotes(): void {
   }
 }
 
+/**
+ * Add a discovered note (from auto-discovery)
+ * Returns true if note was added, false if already exists
+ */
+export function addDiscoveredNote(note: ShieldedNote): boolean {
+  // Check if we already have this note
+  const exists = walletState.notes.some(n => n.commitment === note.commitment);
+  if (exists) {
+    console.log('[ShieldedWallet] Note already exists, skipping');
+    return false;
+  }
+  
+  // Verify the note belongs to us
+  if (walletState.identity && note.ownerPubkey !== walletState.identity.shieldedAddress) {
+    console.warn('[ShieldedWallet] Note owner mismatch, skipping');
+    return false;
+  }
+  
+  // Add to wallet
+  walletState.notes.push(note);
+  saveNotesToStorage(walletState.notes);
+  
+  console.log(`[ShieldedWallet] Added discovered note: ${Number(note.amount) / 1e18} ${note.token || 'DOGE'} at leafIndex ${note.leafIndex}`);
+  return true;
+}
+
 // ============ Storage Helpers ============
 
 function saveIdentityToStorage(identity: ShieldedIdentity): void {

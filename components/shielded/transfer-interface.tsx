@@ -72,6 +72,36 @@ export function TransferInterface({ notes, onSuccess }: TransferInterfaceProps) 
     return { fee, received: amount - fee }
   }
   
+  // Calculate maximum sendable amount so that amount + fee = note balance exactly
+  // Solves: max + max(max * feePercent, minFee) = noteAmount
+  const calculateMaxSendable = (noteAmount: bigint, relayer: RelayerInfo | null): bigint => {
+    if (!relayer) return noteAmount
+    
+    const minFee = BigInt(Math.floor(parseFloat(relayer.minFee) * 1e18))
+    
+    // Can't send anything if note is less than min fee
+    if (noteAmount <= minFee) return 0n
+    
+    // Calculate max if percentage fee applies
+    // max + max * feePercent = noteAmount
+    // max * (1 + feePercent) = noteAmount
+    // max = noteAmount / (1 + feePercent)
+    // Using integer math: max = noteAmount * 10000 / (10000 + feePercent*100)
+    const feePercentScaled = BigInt(Math.floor(relayer.feePercent * 100))
+    const maxWithPercentFee = (noteAmount * 10000n) / (10000n + feePercentScaled)
+    
+    // Check if percentage fee at this max is >= minFee
+    const percentFeeAtMax = (maxWithPercentFee * feePercentScaled) / 10000n
+    
+    if (percentFeeAtMax >= minFee) {
+      // Percentage fee applies, use calculated max
+      return maxWithPercentFee
+    } else {
+      // Min fee applies: max = noteAmount - minFee
+      return noteAmount - minFee
+    }
+  }
+  
   const handleTransfer = async () => {
     setErrorMessage(null)
     
@@ -332,43 +362,19 @@ export function TransferInterface({ notes, onSuccess }: TransferInterfaceProps) 
                   className="h-auto p-0 text-xs"
                   onClick={() => {
                     const note = spendableNotes[parseInt(selectedNoteIndex)]
-                    // Calculate max sendable amount accounting for fee
-                    // max + fee(max) = note.amount
-                    // max * (1 + feePercent) = note.amount
-                    // max = note.amount / (1 + feePercent)
-                    let maxSendable: bigint
-                    if (relayerInfo) {
-                      const feeMultiplier = 1 + relayerInfo.feePercent / 100
-                      maxSendable = BigInt(Math.floor(Number(note.amount) / feeMultiplier))
-                      // Also ensure fee >= minFee
-                      const minFee = BigInt(Math.floor(parseFloat(relayerInfo.minFee) * 1e18))
-                      if (note.amount > minFee) {
-                        const maxWithMinFee = note.amount - minFee
-                        if (maxWithMinFee < maxSendable) {
-                          maxSendable = maxWithMinFee
-                        }
-                      }
-                    } else {
-                      maxSendable = note.amount
-                    }
-                    setAmount(formatWeiToAmount(maxSendable).toFixed(4))
+                    const maxSendable = calculateMaxSendable(note.amount, relayerInfo)
+                    // Round DOWN to 4 decimals to never exceed note balance
+                    const maxDoge = Math.floor(formatWeiToAmount(maxSendable) * 10000) / 10000
+                    setAmount(maxDoge.toFixed(4))
                   }}
                 >
                   Max: {(() => {
-                    const note = spendableNotes[parseInt(selectedNoteIndex)]
-                    if (relayerInfo) {
-                      const feeMultiplier = 1 + relayerInfo.feePercent / 100
-                      let maxSendable = BigInt(Math.floor(Number(note.amount) / feeMultiplier))
-                      const minFee = BigInt(Math.floor(parseFloat(relayerInfo.minFee) * 1e18))
-                      if (note.amount > minFee) {
-                        const maxWithMinFee = note.amount - minFee
-                        if (maxWithMinFee < maxSendable) {
-                          maxSendable = maxWithMinFee
-                        }
-                      }
-                      return formatWeiToAmount(maxSendable).toFixed(4)
-                    }
-                    return formatWeiToAmount(note.amount).toFixed(4)
+                    const maxWei = calculateMaxSendable(
+                      spendableNotes[parseInt(selectedNoteIndex)].amount,
+                      relayerInfo
+                    )
+                    // Round DOWN to ensure it never exceeds
+                    return (Math.floor(formatWeiToAmount(maxWei) * 10000) / 10000).toFixed(4)
                   })()}
                 </Button>
               )}

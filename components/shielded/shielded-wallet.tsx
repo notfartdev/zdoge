@@ -18,7 +18,8 @@ import {
   RefreshCw,
   Key,
   ArrowLeftRight,
-  Lock
+  Lock,
+  Radio
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { useWallet } from "@/lib/wallet-context"
@@ -32,8 +33,15 @@ import {
   clearNotes,
   initializeStealthKeys,
   getStealthReceiveAddress,
+  addDiscoveredNote,
   type ShieldedWalletState,
 } from "@/lib/shielded/shielded-service"
+import {
+  startAutoDiscovery,
+  stopAutoDiscovery,
+  isAutoDiscoveryRunning,
+  forceScan,
+} from "@/lib/shielded/auto-discovery"
 import { shieldedPool } from "@/lib/dogeos-config"
 import { shortenAddress } from "@/lib/shielded/shielded-address"
 import { formatWeiToAmount } from "@/lib/shielded/shielded-note"
@@ -97,6 +105,7 @@ export function ShieldedWallet() {
     if (!mounted || !wallet?.isConnected || !wallet?.address) {
       setWalletState(null)
       setIsInitialized(false)
+      stopAutoDiscovery() // Stop scanning when disconnected
       return
     }
     
@@ -124,8 +133,29 @@ export function ShieldedWallet() {
         const addr = getStealthReceiveAddress()
         setStealthAddress(addr)
         
-        setWalletState(getWalletState())
+        const state = getWalletState()
+        setWalletState(state)
         setIsInitialized(true)
+        
+        // Start auto-discovery for incoming transfers
+        if (state.identity) {
+          startAutoDiscovery(
+            shieldedPool.address,
+            state.identity,
+            getNotes(),
+            (discoveredNote) => {
+              // New note discovered! Add it and refresh UI
+              const added = addDiscoveredNote(discoveredNote)
+              if (added) {
+                refreshState()
+                toast({
+                  title: "💰 Incoming Transfer!",
+                  description: `Received ${(Number(discoveredNote.amount) / 1e18).toFixed(4)} ${discoveredNote.token || 'DOGE'}`,
+                })
+              }
+            }
+          )
+        }
         
         toast({
           title: "Shielded Wallet Ready",
@@ -153,6 +183,11 @@ export function ShieldedWallet() {
       }
     }
     init()
+    
+    // Cleanup: stop auto-discovery when component unmounts
+    return () => {
+      stopAutoDiscovery()
+    }
   }, [mounted, wallet?.isConnected, wallet?.address])
   
   // Refresh wallet state
@@ -318,7 +353,15 @@ export function ShieldedWallet() {
                 <Shield className="h-6 w-6 text-primary" />
               </div>
               <div>
-                <CardTitle>Shielded Wallet</CardTitle>
+                <CardTitle className="flex items-center gap-2">
+                  Shielded Wallet
+                  {isAutoDiscoveryRunning() && (
+                    <span className="flex items-center gap-1 text-xs font-normal text-green-500">
+                      <Radio className="h-3 w-3 animate-pulse" />
+                      Auto-sync
+                    </span>
+                  )}
+                </CardTitle>
                 <CardDescription>Private DOGE transactions</CardDescription>
               </div>
             </div>
