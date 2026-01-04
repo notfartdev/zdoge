@@ -6,9 +6,10 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 
 const navLinks = [
-  { label: "Mix", href: "#mix" },
-  { label: "How It Works", href: "#how-it-works" },
-  { label: "Privacy Tips", href: "#privacy" },
+  { label: "Shield", href: "/shield" },
+  { label: "Send", href: "/send" },
+  { label: "Swap", href: "/swap" },
+  { label: "Unshield", href: "/unshield" },
 ]
 
 export function Navbar() {
@@ -24,14 +25,6 @@ export function Navbar() {
     window.addEventListener("scroll", handleScroll)
     return () => window.removeEventListener("scroll", handleScroll)
   }, [])
-
-  const scrollToSection = (href: string) => {
-    setIsMenuOpen(false)
-    const element = document.querySelector(href)
-    if (element) {
-      element.scrollIntoView({ behavior: "smooth" })
-    }
-  }
 
   return (
     <>
@@ -49,13 +42,28 @@ export function Navbar() {
             <span className="font-mono text-xs sm:text-sm tracking-widest text-foreground">DOGENADO</span>
           </Link>
 
-          {/* Desktop Navigation - Removed per design */}
+          {/* Desktop Navigation */}
+          <div className="hidden md:flex items-center gap-8">
+            {navLinks.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                className={`font-mono text-xs tracking-wider transition-colors ${
+                  pathname === link.href 
+                    ? "text-[#C2A633] font-bold" 
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {link.label.toUpperCase()}
+              </Link>
+            ))}
+          </div>
 
           <div className="hidden md:flex items-center gap-3">
             {isHomePage ? (
-              <Link href="/dashboard">
+              <Link href="/shield">
                 <button className="px-6 py-2 bg-[#C2A633] text-black font-mono text-xs tracking-wider font-bold hover:bg-[#C2A633]/90 transition-colors">
-                  LAUNCH MIXER
+                  LAUNCH APP
                 </button>
               </Link>
             ) : (
@@ -102,36 +110,32 @@ export function Navbar() {
             className="fixed inset-0 z-40 bg-background/95 backdrop-blur-lg md:hidden"
           >
             <nav className="flex flex-col items-center justify-center h-full gap-8">
-              {isHomePage ? (
-                <>
-                  {navLinks.map((link, index) => (
-                    <motion.button
-                      key={link.label}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: 20 }}
-                      transition={{ delay: index * 0.1 }}
-                      onClick={() => scrollToSection(link.href)}
-                      className="group text-4xl font-sans tracking-tight text-foreground"
-                    >
-                      <span className="text-[#C2A633] font-mono text-sm mr-2">0{index + 1}</span>
-                      {link.label}
-                    </motion.button>
-                  ))}
-                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.4 }}>
-                    <Link href="/dashboard">
-                      <button className="px-6 sm:px-8 py-3 sm:py-4 bg-[#C2A633] text-black font-mono text-xs sm:text-sm tracking-wider font-bold min-h-[44px]">
-                        LAUNCH MIXER
-                      </button>
-                    </Link>
-                  </motion.div>
-                </>
-              ) : (
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-                  <Link href="/">
-                    <button className="text-4xl font-sans tracking-tight text-foreground">
-                      <span className="text-[#C2A633] font-mono text-sm mr-2">01</span>
-                      Back to Home
+              {navLinks.map((link, index) => (
+                <motion.div
+                  key={link.label}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 20 }}
+                  transition={{ delay: index * 0.1 }}
+                >
+                  <Link
+                    href={link.href}
+                    onClick={() => setIsMenuOpen(false)}
+                    className={`group text-4xl font-sans tracking-tight ${
+                      pathname === link.href ? "text-[#C2A633]" : "text-foreground"
+                    }`}
+                  >
+                    <span className="text-[#C2A633] font-mono text-sm mr-2">0{index + 1}</span>
+                    {link.label}
+                  </Link>
+                </motion.div>
+              ))}
+              
+              {isHomePage && (
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }}>
+                  <Link href="/shield" onClick={() => setIsMenuOpen(false)}>
+                    <button className="px-6 sm:px-8 py-3 sm:py-4 bg-[#C2A633] text-black font-mono text-xs sm:text-sm tracking-wider font-bold min-h-[44px]">
+                      LAUNCH APP
                     </button>
                   </Link>
                 </motion.div>
