@@ -10,6 +10,7 @@ import { Send } from "lucide-react"
 export default function SendPage() {
   const { notes, refresh } = useShieldedState()
   const [key, setKey] = useState(0)
+  const [selectedToken, setSelectedToken] = useState<string>("DOGE")
   
   const handleSuccess = () => {
     refresh()
@@ -26,14 +27,20 @@ export default function SendPage() {
             Private Transfer
           </h1>
           <p className="text-sm sm:text-base text-muted-foreground">
-            Send shielded DOGE to another private address. Fully anonymous, gas-free.
+            Send shielded tokens to another private address. Fully anonymous, gas-free.
           </p>
         </div>
         
-        <ShieldedHeader onStateChange={refresh} />
+        <ShieldedHeader onStateChange={refresh} selectedToken={selectedToken} />
         
         <Card className="p-6">
-          <TransferInterface key={key} notes={notes} onSuccess={handleSuccess} />
+          <TransferInterface 
+            key={key} 
+            notes={notes} 
+            onSuccess={handleSuccess}
+            selectedToken={selectedToken}
+            onTokenChange={setSelectedToken}
+          />
         </Card>
       </main>
     </div>

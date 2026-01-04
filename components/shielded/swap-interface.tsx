@@ -25,12 +25,19 @@ import { getIdentity, getNotes, completeUnshield } from "@/lib/shielded/shielded
 interface SwapInterfaceProps {
   notes: ShieldedNote[]
   onSuccess?: () => void
+  onInputTokenChange?: (token: string) => void
 }
 
-export function SwapInterface({ notes, onSuccess }: SwapInterfaceProps) {
+export function SwapInterface({ notes, onSuccess, onInputTokenChange }: SwapInterfaceProps) {
   const { toast } = useToast()
   
   const [inputToken, setInputToken] = useState<SwapToken>("DOGE")
+  
+  // Notify parent when input token changes
+  const handleInputTokenChange = (token: SwapToken) => {
+    setInputToken(token)
+    onInputTokenChange?.(token)
+  }
   const [outputToken, setOutputToken] = useState<SwapToken>("USDC")
   const [inputAmount, setInputAmount] = useState("")
   const [quote, setQuote] = useState<SwapQuote | null>(null)
@@ -70,7 +77,7 @@ export function SwapInterface({ notes, onSuccess }: SwapInterfaceProps) {
   // Swap tokens
   const handleSwapTokens = () => {
     const temp = inputToken
-    setInputToken(outputToken)
+    handleInputTokenChange(outputToken)
     setOutputToken(temp)
     setInputAmount("")
     setQuote(null)
@@ -210,7 +217,7 @@ export function SwapInterface({ notes, onSuccess }: SwapInterfaceProps) {
                 onChange={(e) => setInputAmount(e.target.value)}
                 className="text-xl"
               />
-              <Select value={inputToken} onValueChange={(v) => setInputToken(v as SwapToken)}>
+              <Select value={inputToken} onValueChange={(v) => handleInputTokenChange(v as SwapToken)}>
                 <SelectTrigger className="w-32">
                   <SelectValue />
                 </SelectTrigger>

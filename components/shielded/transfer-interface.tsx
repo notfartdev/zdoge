@@ -26,9 +26,11 @@ interface RelayerInfo {
 interface TransferInterfaceProps {
   notes: ShieldedNote[]
   onSuccess?: () => void
+  selectedToken?: string
+  onTokenChange?: (token: string) => void
 }
 
-export function TransferInterface({ notes, onSuccess }: TransferInterfaceProps) {
+export function TransferInterface({ notes, onSuccess, selectedToken = "DOGE", onTokenChange }: TransferInterfaceProps) {
   const { toast } = useToast()
   
   const [recipientAddress, setRecipientAddress] = useState("")

@@ -10,6 +10,7 @@ import { ArrowLeftRight } from "lucide-react"
 export default function SwapPage() {
   const { notes, refresh } = useShieldedState()
   const [key, setKey] = useState(0)
+  const [selectedToken, setSelectedToken] = useState<string>("DOGE")
   
   const handleSuccess = () => {
     refresh()
@@ -30,10 +31,15 @@ export default function SwapPage() {
           </p>
         </div>
         
-        <ShieldedHeader onStateChange={refresh} />
+        <ShieldedHeader onStateChange={refresh} selectedToken={selectedToken} />
         
         <Card className="p-6">
-          <SwapInterface key={key} notes={notes} onSuccess={handleSuccess} />
+          <SwapInterface 
+            key={key} 
+            notes={notes} 
+            onSuccess={handleSuccess}
+            onInputTokenChange={setSelectedToken}
+          />
         </Card>
       </main>
     </div>

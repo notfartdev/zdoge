@@ -10,6 +10,7 @@ import { LogOut } from "lucide-react"
 export default function UnshieldPage() {
   const { notes, refresh } = useShieldedState()
   const [key, setKey] = useState(0)
+  const [selectedToken, setSelectedToken] = useState<string>("DOGE")
   
   const handleSuccess = () => {
     refresh()
@@ -26,14 +27,20 @@ export default function UnshieldPage() {
             Unshield to Public
           </h1>
           <p className="text-sm sm:text-base text-muted-foreground">
-            Convert shielded DOGE back to your public wallet. Gas-free via relayer.
+            Convert shielded tokens back to your public wallet. Gas-free via relayer.
           </p>
         </div>
         
-        <ShieldedHeader onStateChange={refresh} />
+        <ShieldedHeader onStateChange={refresh} selectedToken={selectedToken} />
         
         <Card className="p-6">
-          <UnshieldInterface key={key} notes={notes} onSuccess={handleSuccess} />
+          <UnshieldInterface 
+            key={key} 
+            notes={notes} 
+            onSuccess={handleSuccess}
+            selectedToken={selectedToken}
+            onTokenChange={setSelectedToken}
+          />
         </Card>
       </main>
     </div>

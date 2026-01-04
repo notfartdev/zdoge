@@ -25,9 +25,11 @@ interface RelayerInfo {
 interface UnshieldInterfaceProps {
   notes: ShieldedNote[]
   onSuccess?: () => void
+  selectedToken?: string
+  onTokenChange?: (token: string) => void
 }
 
-export function UnshieldInterface({ notes, onSuccess }: UnshieldInterfaceProps) {
+export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", onTokenChange }: UnshieldInterfaceProps) {
   const { wallet } = useWallet()
   const { toast } = useToast()
   
