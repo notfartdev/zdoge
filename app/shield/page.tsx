@@ -1,16 +1,23 @@
 "use client"
 
-import { useState } from "react"
+import { useState, Suspense } from "react"
+import { useSearchParams } from "next/navigation"
 import { DashboardNav } from "@/components/dashboard-nav"
 import { ShieldedHeader, useShieldedState } from "@/components/shielded/shielded-header"
 import { ShieldInterface } from "@/components/shielded/shield-interface"
 import { Card } from "@/components/ui/card"
-import { ShieldPlus } from "lucide-react"
+import { ShieldPlus, Loader2 } from "lucide-react"
 
-export default function ShieldPage() {
+function ShieldPageContent() {
   const { refresh } = useShieldedState()
   const [key, setKey] = useState(0)
-  const [selectedToken, setSelectedToken] = useState<string>("DOGE")
+  const searchParams = useSearchParams()
+  const [selectedToken, setSelectedToken] = useState<string>(() => {
+    // Get token from URL params if present, otherwise default to DOGE
+    const tokenParam = searchParams.get('token')
+    const validTokens = ['DOGE', 'USDC', 'USDT', 'USD1', 'WETH', 'LBTC']
+    return (tokenParam && validTokens.includes(tokenParam.toUpperCase())) ? tokenParam.toUpperCase() : "DOGE"
+  })
   
   const handleSuccess = () => {
     refresh()
@@ -32,7 +39,7 @@ export default function ShieldPage() {
           </p>
         </div>
         
-        <ShieldedHeader onStateChange={refresh} selectedToken={selectedToken} />
+        <ShieldedHeader onStateChange={refresh} selectedToken={selectedToken} onTokenChange={setSelectedToken} />
         
         <Card className="p-6">
           <ShieldInterface 
@@ -44,5 +51,19 @@ export default function ShieldPage() {
         </Card>
       </main>
     </div>
+  )
+}
+
+export default function ShieldPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-background flex items-center justify-center">
+          <Loader2 className="h-8 w-8 text-primary animate-spin" />
+        </div>
+      }
+    >
+      <ShieldPageContent />
+    </Suspense>
   )
 }

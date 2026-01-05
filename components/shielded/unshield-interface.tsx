@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Progress } from "@/components/ui/progress"
 import { Loader2, LogOut, AlertCircle, Check, Shield, ShieldOff, Info, Coins, Layers } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { ShieldedNote, formatWeiToAmount } from "@/lib/shielded/shielded-note"
@@ -13,6 +14,8 @@ import { addTransaction, initTransactionHistory } from "@/lib/shielded/transacti
 import { useWallet } from "@/lib/wallet-context"
 import { shieldedPool } from "@/lib/dogeos-config"
 import { getUSDValue, formatUSD } from "@/lib/price-service"
+import Link from "next/link"
+import { ShieldPlus } from "lucide-react"
 
 const SHIELDED_POOL_ADDRESS = shieldedPool.address
 const RELAYER_URL = process.env.NEXT_PUBLIC_INDEXER_URL || 'https://dogenadocash.onrender.com'
@@ -55,9 +58,9 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
   const [usdValue, setUsdValue] = useState<string | null>(null)
   
   const spendableNotes = useMemo(() => 
-    notes.filter(n => n.leafIndex !== undefined && n.amount > 0n)
+    notes.filter(n => n.leafIndex !== undefined && n.amount > 0n && (n.token || 'DOGE') === selectedToken)
       .sort((a, b) => Number(b.amount - a.amount)),
-    [notes]
+    [notes, selectedToken]
   )
   
   const totalBalance = useMemo(() => 
@@ -244,7 +247,7 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
     }
     setWithdrawnAmount(totalReceived.toFixed(4))
     setStatus("success")
-    toast({ title: "🎉 Consolidation Complete!", description: `Received ${totalReceived.toFixed(4)} DOGE. Now re-shield to create one big note!` })
+    toast({ title: "🎉 Consolidation Complete!", description: `Received ${totalReceived.toFixed(4)} ${selectedToken}. Now re-shield to create one big note!` })
     onSuccess?.()
   }
   
@@ -307,7 +310,7 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
       })
       
       setStatus("success")
-      toast({ title: "Unshield Successful!", description: `Received ${receivedAmount} DOGE` })
+      toast({ title: "Unshield Successful!", description: `Received ${receivedAmount} ${selectedToken}` })
       onSuccess?.()
     } catch (error: any) {
       setStatus("error")
@@ -338,9 +341,17 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
   
   if (spendableNotes.length === 0) {
     return (
-      <div className="text-center py-8">
-        <p className="text-muted-foreground">No shielded notes to unshield</p>
-        <p className="text-sm text-muted-foreground mt-2">Shield some DOGE first</p>
+      <div className="text-center py-8 space-y-4">
+        <div>
+          <p className="text-muted-foreground">No shielded notes to unshield</p>
+          <p className="text-sm text-muted-foreground mt-2">Shield some {selectedToken} first</p>
+        </div>
+        <Link href={`/shield?token=${selectedToken}`}>
+          <Button className="mt-4">
+            <ShieldPlus className="h-4 w-4 mr-2" />
+            Shield {selectedToken}
+          </Button>
+        </Link>
       </div>
     )
   }
@@ -352,7 +363,7 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
     <div className="space-y-4">
       <div>
         <h3 className="text-lg font-medium">Send to Public Address</h3>
-        <p className="text-sm text-muted-foreground">Send shielded DOGE to any public wallet</p>
+        <p className="text-sm text-muted-foreground">Unshield your shielded DOGE to any public wallet address</p>
       </div>
       
       <div className="p-4 rounded-lg bg-gradient-to-r from-primary/10 to-transparent border">
@@ -383,12 +394,12 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
                 <span className="text-xs bg-green-500/20 text-green-500 px-2 py-0.5 rounded-full">Recommended</span>
               </h4>
               <p className="text-sm text-muted-foreground mt-1">
-                Unshield all available notes to your wallet
+                Unshield all available notes directly to your connected wallet
               </p>
               <div className="mt-2 text-sm">
                 <div className="flex items-center gap-2">
                   <span className="text-muted-foreground">You'll receive:</span>
-                  <span className="font-medium text-green-500">~{formatWeiToAmount(totalReceivableAfterFees).toFixed(4)} DOGE</span>
+                  <span className="font-medium text-green-500">~{formatWeiToAmount(totalReceivableAfterFees).toFixed(4)} {selectedToken}</span>
                 </div>
                 {usdValue && (
                   <div className="text-muted-foreground mt-1">
@@ -428,9 +439,10 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <Label htmlFor="recipient">Recipient Address</Label>
-              <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={fillConnectedAddress}>Use connected wallet</Button>
+              <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={fillConnectedAddress}>Use my wallet</Button>
             </div>
-            <Input id="recipient" placeholder="0x..." value={recipientAddress} onChange={(e) => setRecipientAddress(e.target.value)} />
+            <Input id="recipient" placeholder="0x... (any wallet address)" value={recipientAddress} onChange={(e) => setRecipientAddress(e.target.value)} />
+            <p className="text-xs text-muted-foreground">You can send unshield to any public wallet address</p>
           </div>
           {amount && relayerInfo && (
             <div className="p-3 rounded-lg bg-muted/50 space-y-1">
@@ -466,28 +478,56 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
           <div className="w-full bg-muted rounded-full h-2">
             <div className="bg-primary h-2 rounded-full transition-all" style={{ width: `${(consolidateProgress.current / consolidateProgress.total) * 100}%` }} />
           </div>
-          <p className="text-sm text-green-500">Received so far: {consolidateProgress.totalReceived.toFixed(4)} DOGE</p>
+          <p className="text-sm text-green-500">Received so far: {consolidateProgress.totalReceived.toFixed(4)} {selectedToken}</p>
         </div>
       )}
       
       {status === "proving" && (
         <div className="flex flex-col items-center py-8 space-y-4">
           <Loader2 className="h-8 w-8 animate-spin" />
-          <p className="text-muted-foreground">Generating zero-knowledge proof...</p>
+          <div className="w-full max-w-xs space-y-2">
+            <Progress value={33} className="h-2" />
+            <p className="text-sm text-muted-foreground text-center">Generating zero-knowledge proof...</p>
+            <p className="text-xs text-muted-foreground text-center">This may take 10-30 seconds</p>
+          </div>
         </div>
       )}
       
       {status === "relaying" && (
         <div className="flex flex-col items-center py-8 space-y-4">
           <Loader2 className="h-8 w-8 animate-spin" />
-          <p className="text-muted-foreground">Relayer submitting transaction...</p>
+          <div className="w-full max-w-xs space-y-2">
+            <Progress value={66} className="h-2" />
+            <p className="text-sm text-muted-foreground text-center">Submitting transaction...</p>
+            <p className="text-xs text-muted-foreground text-center">Your wallet never signs - complete privacy!</p>
+          </div>
         </div>
       )}
       
       {status === "success" && (
-        <div className="space-y-4">
-          <Alert><Check className="h-4 w-4 text-green-500" /><AlertDescription>Successfully unshielded {withdrawnAmount} DOGE!{fee && <span className="text-muted-foreground"> (Fee: {fee} DOGE)</span>}</AlertDescription></Alert>
-          {txHash && <div className="text-sm"><span className="text-muted-foreground">Transaction: </span><a href={`https://blockscout.testnet.dogeos.com/tx/${txHash}`} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{txHash.slice(0, 10)}...{txHash.slice(-8)}</a></div>}
+        <div className="space-y-4" ref={(el) => {
+          if (el) {
+            setTimeout(() => el.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100)
+          }
+        }}>
+          <Alert className="border-green-500/50 bg-green-500/10">
+            <Check className="h-4 w-4 text-green-500" />
+            <AlertDescription className="flex flex-col gap-2">
+              <div>
+                <strong>Unshield Successful!</strong> Received {withdrawnAmount} {selectedToken}{fee && <span className="text-muted-foreground"> (Fee: {fee} {selectedToken})</span>}
+              </div>
+              {txHash && (
+                <a 
+                  href={`https://blockscout.testnet.dogeos.com/tx/${txHash}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary hover:underline text-sm font-mono flex items-center gap-1 mt-1"
+                >
+                  View transaction on Blockscout →
+                </a>
+              )}
+            </AlertDescription>
+          </Alert>
           {consolidateTxHashes.length > 0 && (
             <div className="text-sm space-y-1">
               <span className="text-muted-foreground">Transactions ({consolidateTxHashes.length}):</span>
@@ -502,7 +542,7 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
             <p className="font-medium text-green-500">🎉 Zero Gas Paid</p>
           </div>
           {consolidateTxHashes.length > 0 && (
-            <Alert className="border-primary bg-primary/10"><Info className="h-4 w-4 text-primary" /><AlertDescription><strong>Next step:</strong> Go to <strong>Shield</strong> tab and re-shield {withdrawnAmount} DOGE!</AlertDescription></Alert>
+            <Alert className="border-primary bg-primary/10"><Info className="h-4 w-4 text-primary" /><AlertDescription><strong>Next step:</strong> Go to <strong>Shield</strong> tab and re-shield {withdrawnAmount} {selectedToken}!</AlertDescription></Alert>
           )}
           <Button className="w-full" onClick={reset}>{consolidateTxHashes.length > 0 ? 'Done' : 'Unshield More'}</Button>
         </div>

@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { 
   Shield, Copy, Check, Eye, EyeOff, Wallet, Lock
 } from "lucide-react"
@@ -47,10 +48,11 @@ const TOKEN_CONFIG: Record<string, { name: string; logo: string; address?: strin
 interface ShieldedHeaderProps {
   onStateChange?: () => void
   selectedToken?: string
+  onTokenChange?: (token: string) => void
   compact?: boolean // Use smaller header on secondary pages
 }
 
-export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", compact = false }: ShieldedHeaderProps) {
+export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", onTokenChange, compact = false }: ShieldedHeaderProps) {
   const { toast } = useToast()
   const { wallet, signMessage } = useWallet()
   const [mounted, setMounted] = useState(false)
@@ -205,29 +207,6 @@ export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", compact 
   
   return (
     <Card className={`${compact ? 'p-4' : 'p-6'} mb-6 bg-card/50 backdrop-blur border-primary/20`}>
-      <div className={`flex items-center justify-between ${compact ? 'mb-3' : 'mb-4'}`}>
-        <div className="flex items-center gap-3">
-          {!compact && (
-            <div className="p-2 rounded-full bg-primary/10">
-              <Shield className="h-5 w-5 text-primary opacity-85" strokeWidth={1.75} />
-            </div>
-          )}
-          <div>
-            {compact ? (
-              <p className="text-xs font-mono tracking-wider text-muted-foreground flex items-center gap-2">
-                <Shield className="h-3.5 w-3.5 text-primary opacity-85" strokeWidth={1.75} />
-                Shielded Wallet
-              </p>
-            ) : (
-              <>
-                <h2 className="text-lg font-bold">Shielded Wallet</h2>
-                <p className="text-sm text-muted-foreground">Private token transactions</p>
-              </>
-            )}
-          </div>
-        </div>
-        
-      </div>
       
       <div className={`grid grid-cols-1 md:grid-cols-2 gap-3 ${compact ? '' : 'mb-4'}`}>
         <div className={`${compact ? 'p-3' : 'p-4'} rounded-lg bg-muted/30 border`}>
@@ -235,14 +214,45 @@ export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", compact 
             <Wallet className="h-3.5 w-3.5 opacity-85" strokeWidth={1.75} />
             Public Balance
           </div>
-          <div className={`${compact ? 'text-lg' : 'text-2xl'} font-bold flex items-center gap-2`}>
-            <img 
-              src={tokenConfig.logo} 
-              alt={selectedToken} 
-              className={`${compact ? 'w-5 h-5' : 'w-6 h-6'} rounded-full`}
-            />
-            {publicBalance} {selectedToken}
-          </div>
+          {onTokenChange ? (
+            <Select value={selectedToken} onValueChange={onTokenChange}>
+              <SelectTrigger className="h-auto py-0 px-0 border-0 bg-transparent hover:bg-transparent shadow-none focus:ring-0 focus:ring-offset-0 w-fit">
+                <SelectValue>
+                  <div className={`${compact ? 'text-lg' : 'text-2xl'} font-bold flex items-center gap-2`}>
+                    <img 
+                      src={tokenConfig.logo} 
+                      alt={selectedToken} 
+                      className={`${compact ? 'w-5 h-5' : 'w-6 h-6'} rounded-full`}
+                    />
+                    {publicBalance} {selectedToken}
+                  </div>
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {Object.entries(TOKEN_CONFIG).map(([symbol, config]) => (
+                  <SelectItem key={symbol} value={symbol}>
+                    <div className="flex items-center gap-2">
+                      <img 
+                        src={config.logo} 
+                        alt={symbol} 
+                        className="w-5 h-5 rounded-full"
+                      />
+                      <span>{symbol}</span>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <div className={`${compact ? 'text-lg' : 'text-2xl'} font-bold flex items-center gap-2`}>
+              <img 
+                src={tokenConfig.logo} 
+                alt={selectedToken} 
+                className={`${compact ? 'w-5 h-5' : 'w-6 h-6'} rounded-full`}
+              />
+              {publicBalance} {selectedToken}
+            </div>
+          )}
           {!compact && <div className="text-xs text-muted-foreground">Available to shield</div>}
         </div>
         
@@ -309,3 +319,4 @@ export function useShieldedState() {
   
   return { notes, balance, refresh }
 }
+

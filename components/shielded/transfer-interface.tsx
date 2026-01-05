@@ -14,6 +14,8 @@ import { prepareTransfer, completeTransfer, getNotes, getShieldedBalancePerToken
 import { addTransaction, initTransactionHistory } from "@/lib/shielded/transaction-history"
 import { useWallet } from "@/lib/wallet-context"
 import { shieldedPool } from "@/lib/dogeos-config"
+import Link from "next/link"
+import { ShieldPlus } from "lucide-react"
 
 const SHIELDED_POOL_ADDRESS = shieldedPool.address
 const RELAYER_URL = process.env.NEXT_PUBLIC_INDEXER_URL || 'https://dogenadocash.onrender.com'
@@ -320,11 +322,19 @@ export function TransferInterface({ notes, onSuccess, selectedToken = "DOGE", on
   
   if (spendableNotes.length === 0) {
     return (
-      <div className="text-center py-8">
-        <p className="text-muted-foreground">No shielded notes to transfer</p>
-        <p className="text-sm text-muted-foreground mt-2">
-          Shield some tokens first to enable transfers
-        </p>
+      <div className="text-center py-8 space-y-4">
+        <div>
+          <p className="text-muted-foreground">No shielded notes to transfer</p>
+          <p className="text-sm text-muted-foreground mt-2">
+            Shield some {selectedToken} first to enable transfers
+          </p>
+        </div>
+        <Link href={`/shield?token=${selectedToken}`}>
+          <Button className="mt-4">
+            <ShieldPlus className="h-4 w-4 mr-2" />
+            Shield {selectedToken}
+          </Button>
+        </Link>
       </div>
     )
   }

@@ -31,7 +31,7 @@ export default function SwapPage() {
           </p>
         </div>
         
-        <ShieldedHeader onStateChange={refresh} selectedToken={selectedToken} compact />
+        <ShieldedHeader onStateChange={refresh} selectedToken={selectedToken} onTokenChange={setSelectedToken} compact />
         
         <Card className="p-6">
           <SwapInterface 

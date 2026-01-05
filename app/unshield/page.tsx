@@ -9,12 +9,10 @@ import { LogOut } from "lucide-react"
 
 export default function UnshieldPage() {
   const { notes, refresh } = useShieldedState()
-  const [key, setKey] = useState(0)
   const [selectedToken, setSelectedToken] = useState<string>("DOGE")
   
   const handleSuccess = () => {
     refresh()
-    setKey(k => k + 1)
   }
 
   return (
@@ -31,11 +29,10 @@ export default function UnshieldPage() {
           </p>
         </div>
         
-        <ShieldedHeader onStateChange={refresh} selectedToken={selectedToken} compact />
+        <ShieldedHeader onStateChange={refresh} selectedToken={selectedToken} onTokenChange={setSelectedToken} compact />
         
         <Card className="p-6">
           <UnshieldInterface 
-            key={key} 
             notes={notes} 
             onSuccess={handleSuccess}
             selectedToken={selectedToken}

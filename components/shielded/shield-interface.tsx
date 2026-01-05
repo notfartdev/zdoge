@@ -6,12 +6,14 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Progress } from "@/components/ui/progress"
 import { 
   Loader2, 
   AlertCircle, 
   Check, 
   ShieldPlus,
-  Coins
+  Coins,
+  Info
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { useWallet } from "@/lib/wallet-context"
@@ -399,39 +401,6 @@ export function ShieldInterface({ onSuccess, selectedToken: externalToken, onTok
       
       {status === "idle" && (
         <div className="space-y-4">
-          {/* Token Selector with Balances */}
-          <div className="space-y-2">
-            <Label>Select Token</Label>
-            <Select value={selectedToken} onValueChange={(v) => handleTokenChange(v as ShieldedToken)}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {SHIELDED_TOKENS.map((token) => {
-                  const bal = allTokenBalances[token.symbol] || "0"
-                  const hasBalance = parseFloat(bal) > 0
-                  return (
-                    <SelectItem key={token.symbol} value={token.symbol}>
-                      <div className="flex items-center justify-between w-full gap-4">
-                        <div className="flex items-center gap-2">
-                          <img 
-                            src={TOKEN_LOGOS[token.symbol]} 
-                            alt={token.symbol} 
-                            className="w-5 h-5 rounded-full"
-                          />
-                          <span>{token.symbol}</span>
-                        </div>
-                        <span className={`text-xs ${hasBalance ? 'text-green-500' : 'text-muted-foreground'}`}>
-                          {bal}
-                        </span>
-                      </div>
-                    </SelectItem>
-                  )
-                })}
-              </SelectContent>
-            </Select>
-          </div>
-          
           {/* Amount Input */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
@@ -490,9 +459,10 @@ export function ShieldInterface({ onSuccess, selectedToken: externalToken, onTok
               Confirm the approval transaction in MetaMask
             </p>
           </div>
-          <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/30">
-            <p className="text-xs text-blue-600 dark:text-blue-400">
-              ℹ️ <strong>Two-step process:</strong> ERC20 tokens require an approval first, then the shield transaction.
+          <div className="p-3 rounded-lg bg-primary/10 border border-primary/20">
+            <p className="text-xs text-muted-foreground flex items-start gap-2">
+              <Info className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
+              <span><strong>Two-step process:</strong> {selectedToken} requires an approval first, then the shield transaction.</span>
             </p>
           </div>
         </div>
@@ -501,9 +471,13 @@ export function ShieldInterface({ onSuccess, selectedToken: externalToken, onTok
       {status === "preparing" && (
         <div className="flex flex-col items-center py-8 space-y-4">
           <Loader2 className="h-8 w-8 animate-spin" />
-          <p className="text-muted-foreground">
-            {selectedTokenInfo.isNative ? "Preparing shield..." : "Step 2/2: Preparing shield..."}
-          </p>
+          <div className="w-full max-w-xs space-y-2">
+            <Progress value={33} className="h-2" />
+            <p className="text-sm text-muted-foreground text-center">
+              {selectedTokenInfo.isNative ? "Preparing shield..." : "Step 2/2: Preparing shield..."}
+            </p>
+            <p className="text-xs text-muted-foreground text-center">Creating your private note...</p>
+          </div>
         </div>
       )}
       
@@ -511,9 +485,13 @@ export function ShieldInterface({ onSuccess, selectedToken: externalToken, onTok
         <div className="space-y-4">
           <div className="flex flex-col items-center py-8 space-y-4">
             <Loader2 className="h-8 w-8 animate-spin" />
-            <p className="text-muted-foreground">
-              {selectedTokenInfo.isNative ? "Waiting for confirmation..." : "Step 2/2: Shielding tokens..."}
-            </p>
+            <div className="w-full max-w-xs space-y-2">
+              <Progress value={66} className="h-2" />
+              <p className="text-sm text-muted-foreground text-center">
+                {selectedTokenInfo.isNative ? "Waiting for confirmation..." : "Step 2/2: Shielding tokens..."}
+              </p>
+              <p className="text-xs text-muted-foreground text-center">Confirm the transaction in your wallet</p>
+            </div>
           </div>
           <Button 
             variant="outline" 

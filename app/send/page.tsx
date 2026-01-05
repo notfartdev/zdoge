@@ -9,7 +9,6 @@ import { Send } from "lucide-react"
 
 export default function SendPage() {
   const { notes, refresh } = useShieldedState()
-  const [key, setKey] = useState(0)
   const [selectedToken, setSelectedToken] = useState<string>("DOGE")
   
   const handleSuccess = () => {
@@ -30,11 +29,10 @@ export default function SendPage() {
           </p>
         </div>
         
-        <ShieldedHeader onStateChange={refresh} selectedToken={selectedToken} compact />
+        <ShieldedHeader onStateChange={refresh} selectedToken={selectedToken} onTokenChange={setSelectedToken} compact />
         
         <Card className="p-6">
           <TransferInterface 
-            key={key} 
             notes={notes} 
             onSuccess={handleSuccess}
             selectedToken={selectedToken}
