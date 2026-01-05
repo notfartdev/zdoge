@@ -562,21 +562,6 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
               </div>
             </div>
           </div>
-          <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/20">
-            <p className="text-sm font-medium text-green-400">🎉 Zero Gas Paid</p>
-          </div>
-          {consolidateTxHashes.length > 0 && (
-            <div className="p-4 rounded-lg bg-primary/10 border border-primary/30">
-              <div className="flex items-start gap-3">
-                <Info className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
-                <div className="flex-1">
-                  <p className="text-sm text-primary/90">
-                    <strong>Next step:</strong> Go to <strong>Shield</strong> tab and re-shield {withdrawnAmount} {selectedToken}!
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
           <Button className="w-full" onClick={reset}>{consolidateTxHashes.length > 0 ? 'Done' : 'Unshield More'}</Button>
         </div>
       )}
