@@ -37,7 +37,7 @@ export function HelpModal() {
         </button>
       </DialogTrigger>
       <DialogContent 
-        className="max-w-md bg-black/40 backdrop-blur-xl border border-white/10 rounded-lg p-6 shadow-2xl" 
+        className="max-w-md bg-background/80 backdrop-blur-xl border border-white/10 rounded-lg p-6 shadow-2xl" 
         showCloseButton={false}
       >
         <div className="flex items-center justify-between mb-6">
