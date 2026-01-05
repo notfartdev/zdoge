@@ -1,10 +1,15 @@
 import type React from "react"
 import type { Metadata, Viewport } from "next"
-import { Playfair_Display, Geist_Mono, Inter } from "next/font/google"
+import { Inter, Playfair_Display, Geist_Mono } from "next/font/google"
 import "./globals.css"
 import { WalletProvider } from "@/lib/wallet-context"
 import { TokenProvider } from "@/lib/token-context"
 import { Toaster } from "@/components/ui/toaster"
+
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+})
 
 const playfair = Playfair_Display({
   subsets: ["latin"],
@@ -14,12 +19,6 @@ const playfair = Playfair_Display({
 const geistMono = Geist_Mono({
   subsets: ["latin"],
   variable: "--font-geist-mono",
-})
-
-const inter = Inter({
-  subsets: ["latin"],
-  variable: "--font-inter",
-  weight: ["400", "500", "600"],
 })
 
 export const metadata: Metadata = {
@@ -43,7 +42,7 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" className={`${playfair.variable} ${geistMono.variable} ${inter.variable}`}>
+    <html lang="en" className={`${inter.variable} ${playfair.variable} ${geistMono.variable}`}>
       <body className="font-sans antialiased overflow-x-hidden" suppressHydrationWarning>
         <div className="noise-overlay" />
         <WalletProvider>

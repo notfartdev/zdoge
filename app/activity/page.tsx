@@ -50,7 +50,7 @@ export default function ActivityPage() {
     }
 
     initTransactionHistory(wallet.address).then(() => {
-      loadTransactions()
+    loadTransactions()
     }).catch(err => {
       console.warn('[Activity] Failed to init transaction history:', err)
       loadTransactions() // Still load from local storage

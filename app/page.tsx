@@ -302,27 +302,39 @@ export default function HomePage() {
           }} 
         />
         
-        {/* Hero Section - Zcash-style editorial layout */}
-        <section className="relative min-h-screen flex items-center px-6 md:px-12 lg:px-16 overflow-hidden">
+        {/* Hero Section - Zcash-style layout with breathing room */}
+        <section className="relative min-h-[110vh] flex items-center px-6 md:px-12 pb-[20vh] overflow-hidden">
           
-          {/* Subtle background gradient */}
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_600px_500px_at_30%_50%,_rgba(194,166,51,0.02)_0%,_transparent_60%)]" />
+          {/* Center vignette - calmed, symmetrical, centered */}
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_450px_350px_at_50%_50%,_rgba(194,166,51,0.03)_0%,_transparent_55%)]" />
           
-          {/* Hero content - left-aligned, editorial style */}
-          <div className="relative z-10 max-w-7xl mx-auto w-full">
+          {/* Faint oversized Doge silhouette - moved higher to hug the wordmark */}
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none -translate-y-[8vh]">
+            <img 
+              src="/zdoge-logo.png" 
+              alt="" 
+              className="w-[500px] h-[500px] md:w-[700px] md:h-[700px] opacity-[0.03] blur-sm select-none"
+              aria-hidden="true"
+            />
+          </div>
+          
+          {/* Hero content - Zcash-style typography and positioning */}
+          <div className="relative z-10 w-full max-w-5xl" style={{ paddingTop: 'clamp(4rem, 10vh, 8rem)' }}>
             <motion.div
-              initial={{ opacity: 0, y: 20 }}
+              initial={{ opacity: 0, y: 30 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
-              className="max-w-[14ch]"
             >
-              {/* Main headline - Canela-style serif */}
+              {/* Headline - Canela serif, editorial style */}
               <h1 
-                className="mb-6 font-serif text-[clamp(3.75rem,6vw,5.5rem)] font-semibold leading-[1.05]"
-                style={{ 
+                className="mb-6 text-white/95"
+                style={{
+                  fontFamily: 'var(--font-serif)',
+                  fontWeight: 600,
+                  fontSize: 'clamp(3.75rem, 6vw, 5.5rem)',
+                  lineHeight: 1.05,
                   letterSpacing: '-0.015em',
-                  fontFamily: 'var(--font-playfair), "Playfair Display", "Tiempos Headline", "Noe Display", "Georgia", serif',
-                  color: '#f5f5f0' // Warm white instead of pure white
+                  maxWidth: '14ch',
                 }}
               >
                 zDoge is encrypted
@@ -330,51 +342,55 @@ export default function HomePage() {
                 electronic cash.
               </h1>
               
-              {/* Description - regular weight, no tracking tricks */}
+              {/* Description - Canela regular, restrained */}
               <motion.p 
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                transition={{ delay: 0.2, duration: 0.8 }}
-                className="mb-10 font-serif text-lg md:text-xl leading-relaxed"
-                style={{ 
-                  fontFamily: 'var(--font-playfair), "Playfair Display", "Georgia", serif',
+                transition={{ delay: 0.3, duration: 1 }}
+                className="mb-10 text-white/70"
+                style={{
+                  fontFamily: 'var(--font-serif)',
                   fontWeight: 400,
-                  color: 'rgba(245, 245, 240, 0.7)' // Warm white at 70% opacity
+                  fontSize: '1.125rem',
+                  lineHeight: 1.6,
+                  letterSpacing: 0,
+                  maxWidth: '42ch',
                 }}
               >
                 The first cryptocurrency to develop zero-knowledge encryption
-                for private peer-to-peer payments.
+                for private peer-to-peer payments on DogeOS.
               </motion.p>
               
-              {/* CTA Buttons - sans-serif contrast */}
+              {/* CTA Buttons - Sans-serif, intentional contrast */}
               <motion.div 
-                initial={{ opacity: 0, y: 10 }}
+                initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.4, duration: 0.8 }}
+                transition={{ delay: 0.5, duration: 0.8 }}
                 className="flex flex-col sm:flex-row gap-4"
               >
                 <Link href="/shield">
                   <button 
-                    className="px-6 py-3 bg-white text-black font-medium text-sm uppercase transition-opacity hover:opacity-90"
-                    style={{ 
-                      fontFamily: 'var(--font-inter), "Inter", system-ui, sans-serif',
+                    className="px-6 py-3 bg-white text-black transition-colors duration-200 hover:bg-white/90"
+                    style={{
+                      fontFamily: 'var(--font-inter), var(--font-sans)',
                       fontWeight: 500,
                       fontSize: '0.875rem',
-                      letterSpacing: '0.12em'
+                      letterSpacing: '0.12em',
+                      textTransform: 'uppercase',
                     }}
                   >
                     Use zDoge
                   </button>
                 </Link>
-                
                 <Link href="/docs">
                   <button 
-                    className="px-6 py-3 bg-transparent border border-white text-white font-medium text-sm uppercase transition-opacity hover:opacity-70"
-                    style={{ 
-                      fontFamily: 'var(--font-inter), "Inter", system-ui, sans-serif',
+                    className="px-6 py-3 bg-transparent border border-white/30 text-white/90 transition-colors duration-200 hover:bg-white/5"
+                    style={{
+                      fontFamily: 'var(--font-inter), var(--font-sans)',
                       fontWeight: 500,
                       fontSize: '0.875rem',
-                      letterSpacing: '0.12em'
+                      letterSpacing: '0.12em',
+                      textTransform: 'uppercase',
                     }}
                   >
                     Learn zDoge
