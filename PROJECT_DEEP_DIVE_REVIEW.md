@@ -3,12 +3,9 @@
 
 ## 📋 Executive Summary
 
-**Dogenado** is a comprehensive privacy-preserving token mixer for the DogeOS blockchain, featuring **two distinct privacy systems**:
+**Dogenado** is a privacy-preserving shielded transaction system for the DogeOS blockchain, implementing a **Zcash-style variable-amount private payment system**.
 
-1. **Fixed-Denomination Mixer** (Tornado Cash-style) - Original system
-2. **Variable-Amount Shielded System** (Zcash-style) - Recently implemented
-
-Both systems are **fully deployed and operational** on DogeOS Testnet (Chikyū).
+The system is **fully deployed and operational** on DogeOS Testnet (Chikyū).
 
 ---
 
@@ -20,27 +17,27 @@ Both systems are **fully deployed and operational** on DogeOS Testnet (Chikyū).
 ┌─────────────────────────────────────────────────────────────────┐
 │                    FRONTEND (Next.js 16)                        │
 │  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────┐ │
-│  │  Mixer System    │  │ Shielded System  │  │  Dashboard   │ │
-│  │  (Fixed Amounts)│  │ (Variable Amount)│  │  & Activity  │ │
+│  │ Shielded System  │  │ Shielded System  │  │  Dashboard   │ │
+│  │ (Variable Amount)│  │ (Variable Amount)│  │  & Activity  │ │
 │  └──────────────────┘  └──────────────────┘  └──────────────┘ │
 └─────────────────────────────────────────────────────────────────┘
-                            │              │
-                            ▼              ▼
+                            │
+                            ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │              SMART CONTRACTS (Solidity)                          │
-│  ┌──────────────────┐  ┌──────────────────┐                    │
-│  │ MixerPoolV2      │  │ ShieldedPool     │                    │
-│  │ MixerPoolNative  │  │ MultiToken       │                    │
-│  └──────────────────┘  └──────────────────┘                    │
+│  ┌──────────────────┐                                          │
+│  │ ShieldedPool     │                                          │
+│  │ MultiToken       │                                          │
+│  └──────────────────┘                                          │
 └─────────────────────────────────────────────────────────────────┘
-                            │              │
-                            ▼              ▼
+                            │
+                            ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │              BACKEND (Node.js/Express)                          │
-│  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────┐ │
-│  │  Indexer         │  │ Shielded Indexer │  │  Relayer     │ │
-│  │  (Merkle Tree)   │  │ (Auto-Discovery) │  │  (Gas Payer) │ │
-│  └──────────────────┘  └──────────────────┘  └──────────────┘ │
+│  ┌──────────────────┐  ┌──────────────┐                        │
+│  │ Shielded Indexer │  │  Relayer     │                        │
+│  │ (Auto-Discovery) │  │  (Gas Payer) │                        │
+│  └──────────────────┘  └──────────────┘                        │
 │  ┌────────────────────────────────────────────────────────────┐ │
 │  │  PostgreSQL Database (Transaction History & State)         │ │
 │  └────────────────────────────────────────────────────────────┘ │
@@ -49,12 +46,12 @@ Both systems are **fully deployed and operational** on DogeOS Testnet (Chikyū).
                             ▼              ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │              ZK CIRCUITS (Circom/snarkjs)                        │
-│  ┌──────────────────┐  ┌──────────────────┐                    │
-│  │ withdraw.circom  │  │ shield.circom    │                    │
-│  │ (Mixer)          │  │ transfer.circom  │                    │
-│  │                  │  │ unshield.circom  │                    │
-│  │                  │  │ swap.circom      │                    │
-│  └──────────────────┘  └──────────────────┘                    │
+│  ┌──────────────────┐                                          │
+│  │ shield.circom    │                                          │
+│  │ transfer.circom  │                                          │
+│  │ unshield.circom  │                                          │
+│  │ swap.circom      │                                          │
+│  └──────────────────┘                                          │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -66,26 +63,7 @@ Both systems are **fully deployed and operational** on DogeOS Testnet (Chikyū).
 
 **Location:** `/app`, `/components`, `/lib`
 
-#### Mixer System (Original)
-- ✅ **Deposit Interface** (`components/deposit-interface.tsx`)
-  - Multi-token support (DOGE, USDC, USDT, USD1, WETH, LBTC)
-  - Fixed denomination pools (1, 10, 100, 1000)
-  - Note generation and storage
-  - Transaction signing and submission
-
-- ✅ **Withdraw Interface** (`components/withdraw-interface.tsx`)
-  - Note parsing and validation
-  - ZK proof generation (client-side)
-  - Direct or relayer submission
-  - Scheduled withdrawals
-
-- ✅ **Dashboard** (`app/dashboard/page.tsx`)
-  - Wallet connection
-  - Account management
-  - Inbox system
-  - Statistics display
-
-#### Shielded System (New)
+#### Shielded System
 - ✅ **Shield Interface** (`components/shielded/shield-interface.tsx`)
   - Variable amount deposits
   - Balance validation
@@ -130,26 +108,7 @@ Both systems are **fully deployed and operational** on DogeOS Testnet (Chikyū).
 
 **Location:** `/contracts/src`
 
-#### Mixer Contracts (Fixed-Denomination)
-- ✅ **MixerPoolV2.sol** - ERC20 token mixer
-  - Fixed denomination deposits
-  - ZK proof withdrawals
-  - Scheduled withdrawals
-  - Merkle tree management
-
-- ✅ **MixerPoolNative.sol** - Native DOGE mixer
-  - Accepts native DOGE directly
-  - No wrapping required
-
-- ✅ **MerkleTreeWithHistory.sol** - Merkle tree with root history
-  - 20-level depth (~1M leaves)
-  - Historical root tracking
-  - MiMC hashing
-
-- ✅ **Hasher.sol** - MiMC Sponge implementation
-- ✅ **Verifier.sol** - Groth16 proof verifier
-
-#### Shielded Contracts (Variable-Amount)
+#### Shielded Contracts
 - ✅ **ShieldedPoolMultiToken.sol** - Main shielded pool
   - Shield (t→z)
   - Transfer (z→z)
@@ -164,11 +123,6 @@ Both systems are **fully deployed and operational** on DogeOS Testnet (Chikyū).
 - ✅ **SwapVerifier.sol** - Swap proof verifier
 
 #### Deployment Status
-**Mixer System:**
-- Hasher: `0x1931f2D78930f5c3b0ce65d27F56F35Fa4fdA67D`
-- Verifier: `0xE8Ef2495F741467D746E27548BF71948A0554Ad6`
-- Multiple pools per token (1, 10, 100, 1000)
-
 **Shielded System:**
 - ShieldedPool: `0xc5F64faee07A6EFE235C12378101D62e370c0cD5` ✅ Deployed
 
@@ -179,12 +133,6 @@ Both systems are **fully deployed and operational** on DogeOS Testnet (Chikyū).
 ### 3. Backend Services
 
 **Location:** `/backend/src`
-
-#### Indexer (`src/indexer/`)
-- ✅ Watches blockchain events
-- ✅ Maintains Merkle tree state
-- ✅ Syncs historical events
-- ✅ Provides API for Merkle paths
 
 #### Shielded Indexer (`src/shielded/shielded-indexer.ts`)
 - ✅ Indexes ShieldedPool events
@@ -206,13 +154,6 @@ Both systems are **fully deployed and operational** on DogeOS Testnet (Chikyū).
 
 #### API Endpoints
 
-**Mixer System:**
-- `GET /api/pools` - List all pools
-- `GET /api/pool/:address` - Pool info
-- `GET /api/pool/:address/root` - Merkle root
-- `GET /api/pool/:address/path/:leafIndex` - Merkle path
-- `POST /api/relay` - Submit withdrawal
-
 **Shielded System:**
 - `GET /api/shielded/pool/:address/root` - Shielded root
 - `GET /api/shielded/pool/:address/path/:leafIndex` - Shielded path
@@ -229,12 +170,6 @@ Both systems are **fully deployed and operational** on DogeOS Testnet (Chikyū).
 ### 4. ZK Circuits
 
 **Location:** `/circuits`
-
-#### Mixer Circuit
-- ✅ `withdraw.circom` - Withdrawal proof
-  - Merkle membership
-  - Nullifier derivation
-  - Public input binding
 
 #### Shielded Circuits
 - ✅ `shield.circom` - Shield proof (~5K constraints)
@@ -257,14 +192,7 @@ Both systems are **fully deployed and operational** on DogeOS Testnet (Chikyū).
 
 ### Fully Functional Features
 
-1. **Mixer System (Fixed-Denomination)**
-   - ✅ Deposit to any pool
-   - ✅ Withdraw with ZK proof
-   - ✅ Scheduled withdrawals
-   - ✅ Multi-token support
-   - ✅ Relayer service
-
-2. **Shielded System (Variable-Amount)**
+1. **Shielded System (Variable-Amount)**
    - ✅ Shield (deposit public → shielded)
    - ✅ Transfer (shielded → shielded)
    - ✅ Unshield (shielded → public)
@@ -458,10 +386,9 @@ Both systems are **fully deployed and operational** on DogeOS Testnet (Chikyū).
 
 ## 🎯 Summary
 
-**Dogenado is a fully functional, production-ready privacy mixer with two complementary systems:**
+**Dogenado is a fully functional, production-ready shielded transaction system:**
 
-1. **Mixer System** - Fixed-denomination privacy (Tornado Cash-style)
-2. **Shielded System** - Variable-amount private payments (Zcash-style)
+1. **Shielded System** - Variable-amount private payments (Zcash-style)
 
 **Current Status:**
 - ✅ All systems deployed and operational
