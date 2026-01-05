@@ -356,15 +356,25 @@ export default function HomePage() {
                 {/* Buttons - side by side */}
                 <div className="flex flex-col sm:flex-row items-center gap-4">
                   <Link href="/shield">
-                    <button className="group relative px-8 sm:px-12 py-3 sm:py-3.5 bg-[#C2A633] text-black/90 font-serif text-sm sm:text-base tracking-wide transition-colors duration-300 hover:text-black">
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.98 }}
+                      transition={{ type: "spring", stiffness: 400, damping: 17 }}
+                      className="relative px-8 sm:px-12 py-3 sm:py-3.5 bg-[#C2A633] text-black/90 font-serif text-sm sm:text-base font-medium tracking-wide transition-all duration-300 hover:bg-[#D4B844] hover:shadow-lg hover:shadow-[#C2A633]/20"
+                    >
                       Launch zDoge
-                    </button>
+                    </motion.button>
                   </Link>
                   
                   <Link href="https://docs.zdoge.cash" target="_blank" rel="noopener noreferrer">
-                    <button className="group relative px-8 sm:px-12 py-3 sm:py-3.5 border border-white/20 text-white/90 font-serif text-sm sm:text-base tracking-wide transition-all duration-300 hover:bg-white/10 hover:border-white/40">
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.98 }}
+                      transition={{ type: "spring", stiffness: 400, damping: 17 }}
+                      className="relative px-8 sm:px-12 py-3 sm:py-3.5 border border-white/20 text-white/90 font-serif text-sm sm:text-base font-medium tracking-wide transition-all duration-300 hover:bg-white/10 hover:border-white/40 hover:shadow-lg hover:shadow-white/10"
+                    >
                       Learn zDoge
-                    </button>
+                    </motion.button>
                   </Link>
                 </div>
                 
