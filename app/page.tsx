@@ -356,13 +356,13 @@ export default function HomePage() {
                 {/* Buttons - side by side */}
                 <div className="flex flex-col sm:flex-row items-center gap-4">
                   <Link href="/shield">
-                    <button className="group relative px-8 sm:px-12 py-3 sm:py-3.5 bg-[#C2A633] text-black/90 font-mono text-xs sm:text-sm tracking-[0.1em] sm:tracking-[0.2em] transition-colors duration-300 hover:text-black">
+                    <button className="group relative px-8 sm:px-12 py-3 sm:py-3.5 bg-[#C2A633] text-black/90 font-serif text-sm sm:text-base tracking-wide transition-colors duration-300 hover:text-black">
                       Launch zDoge
                     </button>
                   </Link>
                   
                   <Link href="https://docs.zdoge.cash" target="_blank" rel="noopener noreferrer">
-                    <button className="group relative px-8 sm:px-12 py-3 sm:py-3.5 border border-white/20 text-white/90 font-mono text-xs sm:text-sm tracking-[0.1em] sm:tracking-[0.2em] transition-all duration-300 hover:bg-white/10 hover:border-white/40">
+                    <button className="group relative px-8 sm:px-12 py-3 sm:py-3.5 border border-white/20 text-white/90 font-serif text-sm sm:text-base tracking-wide transition-all duration-300 hover:bg-white/10 hover:border-white/40">
                       Learn zDoge
                     </button>
                   </Link>
