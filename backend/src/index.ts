@@ -1198,6 +1198,85 @@ app.get('/api/network', apiLimiter, (req, res) => {
   });
 });
 
+// ============ Temporary Migration Endpoint ============
+// TODO: Remove this endpoint after migration is complete
+
+app.post('/api/admin/migrate-shielded-transactions', apiLimiter, async (req, res) => {
+  try {
+    if (!db.isDatabaseAvailable()) {
+      return res.status(503).json({ error: 'Database not available' });
+    }
+
+    console.log('[Migration] Running shielded_transactions table migration...');
+
+    // Create table
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS shielded_transactions (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        wallet_address VARCHAR(42) NOT NULL,
+        tx_id VARCHAR(128) NOT NULL,
+        tx_type VARCHAR(20) NOT NULL,
+        tx_hash VARCHAR(66) NOT NULL,
+        timestamp BIGINT NOT NULL,
+        token VARCHAR(20) NOT NULL,
+        amount TEXT NOT NULL,
+        amount_wei TEXT NOT NULL,
+        status VARCHAR(20) NOT NULL DEFAULT 'pending',
+        block_number INTEGER,
+        transaction_data JSONB,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        UNIQUE(wallet_address, tx_id)
+      );
+    `);
+
+    // Create indexes
+    await db.query(`CREATE INDEX IF NOT EXISTS idx_shielded_tx_wallet ON shielded_transactions(wallet_address);`);
+    await db.query(`CREATE INDEX IF NOT EXISTS idx_shielded_tx_type ON shielded_transactions(tx_type);`);
+    await db.query(`CREATE INDEX IF NOT EXISTS idx_shielded_tx_timestamp ON shielded_transactions(timestamp DESC);`);
+    await db.query(`CREATE INDEX IF NOT EXISTS idx_shielded_tx_status ON shielded_transactions(status);`);
+    await db.query(`CREATE INDEX IF NOT EXISTS idx_shielded_tx_hash ON shielded_transactions(tx_hash);`);
+
+    // Create trigger (if function exists)
+    await db.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_trigger 
+          WHERE tgname = 'update_shielded_transactions_updated_at'
+        ) THEN
+          CREATE TRIGGER update_shielded_transactions_updated_at
+            BEFORE UPDATE ON shielded_transactions
+            FOR EACH ROW 
+            EXECUTE FUNCTION update_updated_at_column();
+        END IF;
+      END $$;
+    `);
+
+    // Verify
+    const result = await db.query(`
+      SELECT table_name 
+      FROM information_schema.tables 
+      WHERE table_schema = 'public' 
+      AND table_name = 'shielded_transactions'
+    `);
+
+    if (result.rows.length > 0) {
+      console.log('[Migration] ✅ shielded_transactions table created successfully');
+      res.json({ 
+        success: true, 
+        message: 'Migration complete. shielded_transactions table created.',
+        tableExists: true 
+      });
+    } else {
+      res.status(500).json({ error: 'Table creation failed verification' });
+    }
+  } catch (error: any) {
+    console.error('[Migration] Error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ============ Shielded Transaction History Routes ============
 
 // Get shielded transactions for a wallet

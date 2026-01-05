@@ -10,6 +10,7 @@
     "start": "node dist/index.js",
     "dev": "tsc --watch",
     "db:init": "node dist/database/init.js",
+    "migrate:tx-history": "node scripts/run-migration.js",
     "test": "vitest"
   },
   "dependencies": {
