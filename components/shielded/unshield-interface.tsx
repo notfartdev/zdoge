@@ -501,7 +501,7 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
           <div className="w-full max-w-xs space-y-2">
             <Progress value={66} className="h-2" />
             <p className="text-sm text-muted-foreground text-center">Submitting transaction...</p>
-            <p className="text-xs text-muted-foreground text-center">Your wallet never signs - complete privacy!</p>
+            <p className="text-xs text-muted-foreground text-center">Your wallet never signs!</p>
           </div>
         </div>
       )}
