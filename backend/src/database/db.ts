@@ -591,7 +591,7 @@ export async function getShieldedTransactionsForWallet(
   walletAddress: string,
   limit: number = 500
 ): Promise<ShieldedTransactionRecord[]> {
-  const result = await query<ShieldedTransactionRecord & { transaction_data: string }>(
+  const result = await query<ShieldedTransactionRecord & { transaction_data: any }>(
     `SELECT * FROM shielded_transactions 
      WHERE wallet_address = $1 
      ORDER BY timestamp DESC 
@@ -599,10 +599,10 @@ export async function getShieldedTransactionsForWallet(
     [walletAddress.toLowerCase(), limit]
   );
   
-  // Parse JSONB fields
+  // JSONB fields are already parsed as objects by pg library
   return result.rows.map(row => ({
     ...row,
-    transaction_data: row.transaction_data ? JSON.parse(row.transaction_data) : null,
+    transaction_data: row.transaction_data || null,
   }));
 }
 
