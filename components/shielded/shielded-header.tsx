@@ -145,10 +145,23 @@ export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", onTokenC
             shieldedPool.address,
             identity,
             getNotes(),
-            (discoveredNote) => {
+            (discoveredNote, txHash) => {
               // New note discovered! Add it and refresh UI
               const added = addDiscoveredNote(discoveredNote)
               if (added) {
+                // Add to transaction history
+                if (txHash && wallet?.address) {
+                  addTransaction({
+                    type: 'transfer',
+                    txHash: txHash,
+                    timestamp: Math.floor(Date.now() / 1000),
+                    token: discoveredNote.token || 'DOGE',
+                    amount: formatWeiToAmount(discoveredNote.amount).toFixed(4),
+                    status: 'completed',
+                  }).catch(err => {
+                    console.warn('[ShieldedHeader] Failed to add transaction to history:', err)
+                  })
+                }
                 refreshState()
                 toast({
                   title: "💰 Incoming Transfer!",
