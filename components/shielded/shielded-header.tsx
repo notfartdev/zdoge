@@ -17,9 +17,14 @@ import {
   getShieldedBalancePerToken,
   getNotes,
   getIdentity,
+  addDiscoveredNote,
   type ShieldedWalletState,
 } from "@/lib/shielded/shielded-service"
-// Auto-discovery is handled in shielded-wallet.tsx, not here
+import {
+  startAutoDiscovery,
+  stopAutoDiscovery,
+  isAutoDiscoveryRunning,
+} from "@/lib/shielded/auto-discovery"
 import { shieldedPool, tokens, ERC20ABI } from "@/lib/dogeos-config"
 import { shortenAddress } from "@/lib/shielded/shielded-address"
 import { formatWeiToAmount } from "@/lib/shielded/shielded-note"
@@ -134,8 +139,23 @@ export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", onTokenC
           setIsInitialized(true)
           refreshState()
           
-          // Auto-discovery is handled in shielded-wallet.tsx, not here
-          // This prevents callback conflicts
+          // Start auto-discovery for incoming transfers
+          startAutoDiscovery(
+            shieldedPool.address,
+            identity,
+            getNotes(),
+            (discoveredNote) => {
+              // New note discovered! Add it and refresh UI
+              const added = addDiscoveredNote(discoveredNote)
+              if (added) {
+                refreshState()
+                toast({
+                  title: "💰 Incoming Transfer!",
+                  description: `Received ${formatWeiToAmount(discoveredNote.amount).toFixed(4)} ${discoveredNote.token || 'DOGE'}`,
+                })
+              }
+            }
+          )
         }
       } catch (error) {
         console.error("Failed to initialize shielded wallet:", error)
@@ -144,7 +164,9 @@ export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", onTokenC
     
     init()
     
-    // Auto-discovery cleanup is handled in shielded-wallet.tsx
+    return () => {
+      stopAutoDiscovery()
+    }
   }, [mounted, wallet?.isConnected, wallet?.address])
   
   const refreshState = () => {
@@ -185,8 +207,7 @@ export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", onTokenC
   const shieldedBalance = walletState ? getShieldedBalancePerToken() : {}
   const allNotes = walletState ? getNotes() : []
   const tokenNotes = allNotes.filter(note => (note.token || 'DOGE') === selectedToken)
-  // Auto-discovery status is handled in shielded-wallet.tsx
-  const isAutoDiscovery = false
+  const isAutoDiscovery = isAutoDiscoveryRunning()
   
   return (
     <Card className={`${compact ? 'p-4' : 'p-6'} mb-6 bg-card/50 backdrop-blur border-primary/20`}>
