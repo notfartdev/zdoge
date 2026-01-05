@@ -157,6 +157,7 @@ export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", onTokenC
                     timestamp: Math.floor(Date.now() / 1000),
                     token: discoveredNote.token || 'DOGE',
                     amount: formatWeiToAmount(discoveredNote.amount).toFixed(4),
+                    amountWei: discoveredNote.amount.toString(),
                     status: 'completed',
                   }).catch(err => {
                     console.warn('[ShieldedHeader] Failed to add transaction to history:', err)

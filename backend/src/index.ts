@@ -1336,6 +1336,22 @@ app.post('/api/wallet/:address/shielded-transactions', apiLimiter, async (req, r
       const dbTransactions = transactions.map((tx: any) => {
         const txId = `${tx.txHash}-${tx.type}`;
         
+        // Calculate amountWei if not provided (convert from amount string)
+        let amountWei = tx.amountWei;
+        if (!amountWei && tx.amount) {
+          // Try to parse amount and convert to wei (assuming 18 decimals for most tokens)
+          try {
+            const amountNum = parseFloat(tx.amount);
+            amountWei = Math.floor(amountNum * 1e18).toString();
+          } catch (e) {
+            console.warn(`[API] Could not calculate amountWei for tx ${txId}, using 0`);
+            amountWei = '0';
+          }
+        }
+        if (!amountWei) {
+          amountWei = '0';
+        }
+        
         // Extract flexible fields into transaction_data
         const transactionData: any = {};
         if (tx.commitment) transactionData.commitment = tx.commitment;
@@ -1355,10 +1371,10 @@ app.post('/api/wallet/:address/shielded-transactions', apiLimiter, async (req, r
           tx_type: tx.type,
           tx_hash: tx.txHash,
           timestamp: tx.timestamp,
-          token: tx.token,
-          amount: tx.amount,
-          amount_wei: tx.amountWei,
-          status: tx.status,
+          token: tx.token || 'DOGE',
+          amount: tx.amount || '0',
+          amount_wei: amountWei,
+          status: tx.status || 'completed',
           block_number: tx.blockNumber,
           transaction_data: Object.keys(transactionData).length > 0 ? transactionData : null,
         };
@@ -1379,8 +1395,12 @@ app.post('/api/wallet/:address/shielded-transactions', apiLimiter, async (req, r
       });
     }
   } catch (error: any) {
-    console.error('[API] Error syncing shielded transactions:', error.message);
-    res.status(500).json({ error: error.message });
+    console.error('[API] Error syncing shielded transactions:', error);
+    console.error('[API] Error stack:', error.stack);
+    res.status(500).json({ 
+      error: error.message || 'Internal server error',
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 });
 

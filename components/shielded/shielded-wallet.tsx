@@ -156,6 +156,7 @@ export function ShieldedWallet() {
                     timestamp: Math.floor(Date.now() / 1000),
                     token: discoveredNote.token || 'DOGE',
                     amount: (Number(discoveredNote.amount) / 1e18).toFixed(4),
+                    amountWei: discoveredNote.amount.toString(),
                     status: 'completed',
                   }).catch(err => {
                     console.warn('[ShieldedWallet] Failed to add transaction to history:', err)
