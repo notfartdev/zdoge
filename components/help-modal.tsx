@@ -36,7 +36,10 @@ export function HelpModal() {
           <HelpCircle className="w-5 h-5" strokeWidth={1.5} />
         </button>
       </DialogTrigger>
-      <DialogContent className="max-w-md bg-black border border-white/10 rounded-lg p-6 shadow-xl" showCloseButton={false}>
+      <DialogContent 
+        className="max-w-md bg-black/40 backdrop-blur-xl border border-white/10 rounded-lg p-6 shadow-2xl" 
+        showCloseButton={false}
+      >
         <div className="flex items-center justify-between mb-6">
           <DialogTitle className="text-xl font-normal font-serif text-white">
             FAQ
