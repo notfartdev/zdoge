@@ -48,7 +48,7 @@ Transaction has been submitted but not yet confirmed on-chain.
 Transaction has been confirmed on-chain and is final.
 
 **What you'll see:**
-- ✅ Success indicator
+- Success indicator
 - Transaction hash (clickable)
 - Updated balances
 

@@ -111,10 +111,10 @@ You can also submit transactions directly (without relayer) to avoid fees, but y
 ## Privacy Features
 
 Private transfers hide:
-- ✅ **Sender identity** - No on-chain link to your address
-- ✅ **Recipient identity** - Recipient address is hidden
-- ✅ **Transaction amount** - Amount is encrypted
-- ✅ **Transaction link** - No way to link sender and recipient
+- **Sender identity** - No on-chain link to your address
+- **Recipient identity** - Recipient address is hidden
+- **Transaction amount** - Amount is encrypted
+- **Transaction link** - No way to link sender and recipient
 
 ## Troubleshooting
 

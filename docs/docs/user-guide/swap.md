@@ -71,7 +71,7 @@ Click **"Swap"** to begin:
 ### 7. Success!
 
 After swap confirms:
-- ✅ Success message
+- Success message
 - Transaction hash (clickable to explorer)
 - Updated balances (input token decreased, output token increased)
 
@@ -108,10 +108,10 @@ You can also submit transactions directly (without relayer) to avoid fees, but y
 ## Privacy Features
 
 Private swaps hide:
-- ✅ **Input token** - No one knows what you're spending
-- ✅ **Output token** - No one knows what you're receiving
-- ✅ **Amounts** - Both input and output amounts are hidden
-- ✅ **Transaction link** - No way to link swap to your identity
+- **Input token** - No one knows what you're spending
+- **Output token** - No one knows what you're receiving
+- **Amounts** - Both input and output amounts are hidden
+- **Transaction link** - No way to link swap to your identity
 
 ## Use Cases
 

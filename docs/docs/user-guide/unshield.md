@@ -71,7 +71,7 @@ Click **"Unshield"** to begin:
 ### 7. Success!
 
 After unshield confirms:
-- ✅ Success message
+- Success message
 - Transaction hash (clickable to explorer)
 - Updated balances (shielded decreased, public increased)
 
@@ -107,9 +107,9 @@ You can also submit transactions directly (without relayer) to avoid fees, but y
 ## Privacy Considerations
 
 Unshielding reveals:
-- ⚠️ **Recipient address** - Public on-chain
-- ⚠️ **Transaction time** - When unshield occurred
-- ⚠️ **Amount** - How much was unshielded
+- **Recipient address** - Public on-chain
+- **Transaction time** - When unshield occurred
+- **Amount** - How much was unshielded
 
 To maintain privacy:
 - Use fresh recipient addresses

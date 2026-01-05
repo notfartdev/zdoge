@@ -23,9 +23,9 @@ zDoge supports multiple tokens with **variable amounts** - you can shield any am
 
 Unlike traditional mixers with fixed denominations, zDoge supports **any amount**:
 
-- ✅ Shield 1 DOGE or 1000 DOGE
-- ✅ Shield 0.5 USDC or 5000 USDC
-- ✅ Shield any amount you need
+- Shield 1 DOGE or 1000 DOGE
+- Shield 0.5 USDC or 5000 USDC
+- Shield any amount you need
 
 This flexibility makes zDoge suitable for:
 - Small everyday transactions

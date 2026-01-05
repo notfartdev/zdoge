@@ -83,10 +83,10 @@ No manual note sharing required!
 ### How private is zDoge?
 
 All shielded transactions hide:
-- ✅ Sender identity
-- ✅ Recipient identity
-- ✅ Transaction amounts
-- ✅ Transaction links
+- Sender identity
+- Recipient identity
+- Transaction amounts
+- Transaction links
 
 The blockchain only shows that transactions occurred, not who made them or how much was transferred.
 

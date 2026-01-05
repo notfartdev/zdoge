@@ -29,22 +29,31 @@ zDoge implements a **Zcash-style shielded transaction system** that enables:
 
 All transactions use zero-knowledge proofs to prove validity without revealing any details.
 
+```mermaid
+graph TB
+    subgraph Pool["Shielded Transaction Pool"]
+        N1["Note 1<br/>50 DOGE"]
+        N2["Note 2<br/>100 DOGE"]
+        N3["Note 3<br/>25 DOGE"]
+        N4["Note 4<br/>200 DOGE"]
+    end
+    
+    U1["User A"] --> N1
+    U2["User B"] --> N2
+    U3["User C"] --> N3
+    U4["User D"] --> N4
+    
+    style Pool fill:#1a1a1a,stroke:#C2A633,stroke-width:2px
+    style N1 fill:#0d0d0d,stroke:#C2A633,stroke-width:1px
+    style N2 fill:#0d0d0d,stroke:#C2A633,stroke-width:1px
+    style N3 fill:#0d0d0d,stroke:#C2A633,stroke-width:1px
+    style N4 fill:#0d0d0d,stroke:#C2A633,stroke-width:1px
 ```
-┌─────────────────────────────────────────────────────┐
-│              Shielded Transaction Pool               │
-│                                                      │
-│  ┌────────┐  ┌────────┐  ┌────────┐  ┌────────┐    │
-│  │ Note 1 │  │ Note 2 │  │ Note 3 │  │ Note 4 │    │
-│  │ 50 DOGE│  │ 100 DOGE│ │ 25 DOGE│  │ 200 DOGE│    │
-│  └────────┘  └────────┘  └────────┘  └────────┘    │
-│     ↑          ↑          ↑          ↑              │
-│   User A     User B     User C     User D          │
-│                                                      │
-│  All notes are private - amounts hidden              │
-│  Transfers hide sender, recipient, and amount       │
-│  Only the note owner can spend their notes           │
-└─────────────────────────────────────────────────────┘
-```
+
+**Key Properties:**
+- All notes are private - amounts hidden on-chain
+- Transfers hide sender, recipient, and amount
+- Only the note owner can spend their notes
 
 ## Zero-Knowledge Proofs
 

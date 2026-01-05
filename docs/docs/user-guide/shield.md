@@ -77,7 +77,7 @@ You'll see progress indicators:
 ### 7. Success!
 
 After the shield confirms, you'll see:
-- ✅ Success message
+- Success message
 - Transaction hash (clickable to explorer)
 - Updated shielded balance
 

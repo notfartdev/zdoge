@@ -74,18 +74,18 @@ Your IP address can be logged. For maximum privacy:
 
 Your shielded address (zdoge:...) is public and can be shared. However:
 
-- ✅ Sharing your shielded address is safe (can't spend your notes)
-- ⚠️ Don't link your shielded address to your identity publicly
-- ✅ Use different shielded addresses for different purposes (optional)
+- Sharing your shielded address is safe (can't spend your notes)
+- **Important**: Don't link your shielded address to your identity publicly
+- Use different shielded addresses for different purposes (optional)
 
 ### Spending Key Security
 
 Your spending key is the master key:
 
-- ✅ Never share your spending key
-- ✅ Back it up securely (offline, encrypted)
-- ✅ Store multiple copies in secure locations
-- ❌ Never store it online or in cloud storage
+- Never share your spending key
+- Back it up securely (offline, encrypted)
+- Store multiple copies in secure locations
+- **Never** store it online or in cloud storage
 
 ## Metadata Leakage
 
