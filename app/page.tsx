@@ -302,7 +302,7 @@ export default function HomePage() {
           }} 
         />
         
-        {/* Hero Section - Zcash-style layout with breathing room */}
+        {/* Hero Section - owns the full viewport with breathing room */}
         <section className="relative min-h-[110vh] flex items-center justify-center px-6 md:px-12 pb-[20vh] overflow-hidden">
           
           {/* Center vignette - calmed, symmetrical, centered */}
@@ -318,81 +318,70 @@ export default function HomePage() {
             />
           </div>
           
-          {/* Hero content - Zcash-style typography, centered */}
-          <div className="relative z-10 w-full max-w-5xl mx-auto text-center" style={{ paddingTop: 'clamp(4rem, 10vh, 8rem)' }}>
+          {/* Hero content - moved down to follow background gravity */}
+          <div className="relative z-10 max-w-5xl mx-auto text-center translate-y-[6vh] md:translate-y-[8vh]">
             <motion.div
               initial={{ opacity: 0, y: 30 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
             >
-              {/* Headline - DM Serif Display */}
-              <h1 
-                className="mb-6 text-white/95 mx-auto"
-                style={{
-                  fontFamily: 'var(--font-dm-serif), serif',
-                  fontWeight: 400,
-                  fontSize: 'clamp(3.75rem, 6vw, 5.5rem)',
-                  lineHeight: 1.05,
-                  letterSpacing: '-0.015em',
-                }}
-              >
-                zDoge
+              {/* Wordmark - zDOGE with .cash as domain seal */}
+              <h1 className="mb-8 font-serif text-5xl sm:text-6xl md:text-8xl lg:text-9xl font-normal tracking-[-0.02em]">
+                <span className="text-white/90">z</span><span className="text-white">DOGE</span>
+                <span 
+                  className="font-serif italic align-baseline inline-block"
+                  style={{ fontSize: '0.42em', marginLeft: '0.12em', transform: 'translateY(-0.1em)' }}
+                >
+                  <span className="text-[#C2A633]/60">.</span><span className="text-[#C2A633]/90 tracking-[0.02em] ml-[0.03em]">CASH</span>
+                </span>
               </h1>
               
-              {/* Description - Inter Thin */}
+              {/* Subtitle - more breathing room before CTA */}
               <motion.p 
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 0.3, duration: 1 }}
-                className="mb-10 text-white/70 mx-auto"
-                style={{
-                  fontFamily: 'var(--font-inter), sans-serif',
-                  fontWeight: 100,
-                  fontSize: '1.125rem',
-                  lineHeight: 1.6,
-                  letterSpacing: 0,
-                  maxWidth: '42ch',
-                }}
+                className="font-mono text-sm sm:text-base text-white/50 max-w-md mx-auto mb-14 tracking-wide"
               >
-                Shield, transfer, and swap tokens privately on DogeOS
-                using zero-knowledge proofs. Complete privacy, no compromises.
+                Zero-knowledge privacy enabling private transactions on Doge.
               </motion.p>
               
-              {/* CTA Buttons - Sans-serif, intentional contrast */}
+              {/* CTA - more breathing room */}
               <motion.div 
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.5, duration: 0.8 }}
-                className="flex flex-col sm:flex-row gap-4 justify-center"
+                className="flex flex-col items-center gap-6"
               >
                 <Link href="/shield">
-                  <button 
-                    className="px-6 py-3 bg-white text-black transition-colors duration-200 hover:bg-white/90"
-                    style={{
-                      fontFamily: 'var(--font-inter), var(--font-sans)',
-                      fontWeight: 500,
-                      fontSize: '0.875rem',
-                      letterSpacing: '0.12em',
-                      textTransform: 'uppercase',
-                    }}
-                  >
-                    Use zDoge
+                  <button className="group relative px-8 sm:px-12 py-3 sm:py-3.5 bg-[#C2A633] text-black/90 font-mono text-xs sm:text-sm tracking-[0.15em] sm:tracking-[0.25em] font-bold transition-colors duration-300 hover:text-black flex items-center gap-2 sm:gap-3">
+                    <span className="relative z-10">LAUNCH APP</span>
+                    
+                    {/* Arrow icon */}
+                    <svg 
+                      viewBox="0 0 24 24" 
+                      className="w-4 h-4 relative z-10 transition-transform duration-300 group-hover:translate-x-0.5" 
+                      fill="none" 
+                      stroke="currentColor" 
+                      strokeWidth="2.5" 
+                      strokeLinecap="round" 
+                      strokeLinejoin="round"
+                    >
+                      <path d="M5 12h14M12 5l7 7-7 7" />
+                    </svg>
                   </button>
                 </Link>
-                <Link href="/docs">
-                  <button 
-                    className="px-6 py-3 bg-transparent border border-white/30 text-white/90 transition-colors duration-200 hover:bg-white/5"
-                    style={{
-                      fontFamily: 'var(--font-inter), var(--font-sans)',
-                      fontWeight: 500,
-                      fontSize: '0.875rem',
-                      letterSpacing: '0.12em',
-                      textTransform: 'uppercase',
-                    }}
-                  >
-                    Learn zDoge
-                  </button>
-                </Link>
+                
+                {/* Trust line - facts, not slogans */}
+                <motion.p
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.7, duration: 0.8 }}
+                  className="font-mono text-[9px] sm:text-xs text-white/25 tracking-[0.1em] sm:tracking-[0.2em] px-4"
+                >
+                  <span className="hidden sm:inline">NO SIGNUP&nbsp;&nbsp;·&nbsp;&nbsp;NO TRACKING&nbsp;&nbsp;·&nbsp;&nbsp;NON-CUSTODIAL</span>
+                  <span className="sm:hidden">NO SIGNUP · NO TRACKING · NON-CUSTODIAL</span>
+                </motion.p>
               </motion.div>
             </motion.div>
           </div>
