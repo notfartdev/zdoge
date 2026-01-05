@@ -19,11 +19,7 @@ import {
   getIdentity,
   type ShieldedWalletState,
 } from "@/lib/shielded/shielded-service"
-import {
-  startAutoDiscovery,
-  stopAutoDiscovery,
-  isAutoDiscoveryRunning,
-} from "@/lib/shielded/auto-discovery"
+// Auto-discovery is handled in shielded-wallet.tsx, not here
 import { shieldedPool, tokens, ERC20ABI } from "@/lib/dogeos-config"
 import { shortenAddress } from "@/lib/shielded/shielded-address"
 import { formatWeiToAmount } from "@/lib/shielded/shielded-note"
@@ -138,20 +134,8 @@ export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", onTokenC
           setIsInitialized(true)
           refreshState()
           
-          // Start auto-discovery
-          startAutoDiscovery(
-            shieldedPool.address,
-            identity,
-            getNotes(),
-            (note) => {
-              toast({
-                title: "🔔 Incoming Transfer!",
-                description: `Received ${formatWeiToAmount(note.amount).toFixed(4)} DOGE`,
-              })
-              refreshState()
-              onStateChange?.()
-            }
-          )
+          // Auto-discovery is handled in shielded-wallet.tsx, not here
+          // This prevents callback conflicts
         }
       } catch (error) {
         console.error("Failed to initialize shielded wallet:", error)
@@ -160,9 +144,7 @@ export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", onTokenC
     
     init()
     
-    return () => {
-      stopAutoDiscovery()
-    }
+    // Auto-discovery cleanup is handled in shielded-wallet.tsx
   }, [mounted, wallet?.isConnected, wallet?.address])
   
   const refreshState = () => {
@@ -203,7 +185,8 @@ export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", onTokenC
   const shieldedBalance = walletState ? getShieldedBalancePerToken() : {}
   const allNotes = walletState ? getNotes() : []
   const tokenNotes = allNotes.filter(note => (note.token || 'DOGE') === selectedToken)
-  const isAutoDiscovery = isAutoDiscoveryRunning()
+  // Auto-discovery status is handled in shielded-wallet.tsx
+  const isAutoDiscovery = false
   
   return (
     <Card className={`${compact ? 'p-4' : 'p-6'} mb-6 bg-card/50 backdrop-blur border-primary/20`}>

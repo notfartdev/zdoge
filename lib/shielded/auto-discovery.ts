@@ -52,13 +52,16 @@ export function startAutoDiscovery(
   existingNotes: ShieldedNote[],
   onNewNote: (note: ShieldedNote) => void
 ): void {
+  // Always update the callback, even if already running
+  // This ensures the latest callback is always registered
+  onNewNoteCallback = onNewNote;
+  
   if (scanInterval) {
-    console.log('[AutoDiscovery] Already running');
+    console.log('[AutoDiscovery] Already running, callback updated');
     return;
   }
 
   console.log('[AutoDiscovery] Starting auto-discovery for incoming transfers...');
-  onNewNoteCallback = onNewNote;
 
   // Build set of existing commitments to avoid duplicates
   const existingCommitments = new Set(
