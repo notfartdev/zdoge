@@ -3,9 +3,10 @@
 import { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Menu, X, Shield, Send, ArrowLeftRight, ShieldOff, QrCode, Activity, Info, DollarSign } from "lucide-react"
+import { Menu, X, Shield, Send, ArrowLeftRight, ShieldOff, QrCode, Activity } from "lucide-react"
 import { WalletConnectButton } from "./wallet-connect-button"
 import { AccountModal } from "./account-modal"
+import { HelpModal } from "./help-modal"
 
 export function DashboardNav() {
   const pathname = usePathname()
@@ -18,8 +19,6 @@ export function DashboardNav() {
     { href: "/unshield", label: "Unshield", icon: ShieldOff },
     { href: "/receive", label: "Receive", icon: QrCode },
     { href: "/activity", label: "Activity", icon: Activity },
-    { href: "/how-it-works", label: "How It Works", icon: Info },
-    { href: "/fees", label: "Fees", icon: DollarSign },
   ]
 
   return (
@@ -62,8 +61,9 @@ export function DashboardNav() {
             </div>
           </div>
 
-          {/* Right: Wallet & Account */}
+          {/* Right: Help, Wallet & Account */}
           <div className="hidden lg:flex items-center gap-3 flex-shrink-0">
+            <HelpModal />
             <WalletConnectButton />
             <AccountModal />
           </div>
@@ -108,6 +108,9 @@ export function DashboardNav() {
             
             {/* Mobile Actions */}
             <div className="pt-4 border-t border-[#C2A633]/20 space-y-3">
+              <div onClick={() => setMobileMenuOpen(false)}>
+                <HelpModal />
+              </div>
               <WalletConnectButton />
               <div onClick={() => setMobileMenuOpen(false)}>
                 <AccountModal />
