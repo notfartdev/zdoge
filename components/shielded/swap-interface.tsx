@@ -21,6 +21,7 @@ import {
   type SwapQuote,
 } from "@/lib/shielded/shielded-swap-service"
 import { getIdentity, getNotes, completeUnshield } from "@/lib/shielded/shielded-service"
+import { addTransaction } from "@/lib/shielded/transaction-history"
 
 interface SwapInterfaceProps {
   notes: ShieldedNote[]
@@ -148,8 +149,25 @@ export function SwapInterface({ notes, onSuccess, onInputTokenChange }: SwapInte
       // For now: Simulate success
       await new Promise(resolve => setTimeout(resolve, 2000))
       
-      setTxHash("0x" + "1234".repeat(16)) // Mock
+      const mockTxHash = "0x" + "1234".repeat(16) // Mock
+      setTxHash(mockTxHash)
       setStatus("success")
+      
+      // Add to transaction history
+      const inputAmountWei = parseAmountToWei(inputAmount, inputToken)
+      const outputAmountWei = quote.outputAmount
+      addTransaction({
+        type: 'swap',
+        txHash: mockTxHash,
+        timestamp: Math.floor(Date.now() / 1000),
+        token: inputToken,
+        amount: inputAmount,
+        amountWei: inputAmountWei.toString(),
+        inputToken,
+        outputToken,
+        outputAmount: formatWeiToAmount({ amount: outputAmountWei } as any).toFixed(6),
+        status: 'confirmed',
+      })
       
       toast({
         title: "Swap Successful!",
