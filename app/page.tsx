@@ -302,86 +302,84 @@ export default function HomePage() {
           }} 
         />
         
-        {/* Hero Section - owns the full viewport with breathing room */}
-        <section className="relative min-h-[110vh] flex items-center justify-center px-6 md:px-12 pb-[20vh] overflow-hidden">
+        {/* Hero Section - Zcash-style editorial layout */}
+        <section className="relative min-h-screen flex items-center px-6 md:px-12 lg:px-16 overflow-hidden">
           
-          {/* Center vignette - calmed, symmetrical, centered */}
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_450px_350px_at_50%_50%,_rgba(194,166,51,0.03)_0%,_transparent_55%)]" />
+          {/* Subtle background gradient */}
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_600px_500px_at_30%_50%,_rgba(194,166,51,0.02)_0%,_transparent_60%)]" />
           
-          {/* Faint oversized Doge silhouette - moved higher to hug the wordmark */}
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none -translate-y-[8vh]">
-            <img 
-              src="/zdoge-logo.png" 
-              alt="" 
-              className="w-[500px] h-[500px] md:w-[700px] md:h-[700px] opacity-[0.03] blur-sm select-none"
-              aria-hidden="true"
-            />
-          </div>
-          
-          {/* Hero content - moved down to follow background gravity */}
-          <div className="relative z-10 max-w-5xl mx-auto text-center translate-y-[6vh] md:translate-y-[8vh]">
+          {/* Hero content - left-aligned, editorial style */}
+          <div className="relative z-10 max-w-7xl mx-auto w-full">
             <motion.div
-              initial={{ opacity: 0, y: 30 }}
+              initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
+              className="max-w-[14ch]"
             >
-              {/* Wordmark - zDOGE with .cash as domain seal */}
-              <h1 className="mb-8 font-serif text-5xl sm:text-6xl md:text-8xl lg:text-9xl font-normal tracking-[-0.02em]">
-                <span className="text-white/90">z</span><span className="text-white">DOGE</span>
-                <span 
-                  className="font-serif italic align-baseline inline-block"
-                  style={{ fontSize: '0.5em', marginLeft: '0.12em', transform: 'translateY(-0.1em)' }}
-                >
-                  <span className="text-[#C2A633]/60">.</span><span className="text-[#C2A633]/90 tracking-[0.02em] ml-[0.03em]">CASH</span>
-                </span>
+              {/* Main headline - Canela-style serif */}
+              <h1 
+                className="mb-6 font-serif text-[clamp(3.75rem,6vw,5.5rem)] font-semibold leading-[1.05]"
+                style={{ 
+                  letterSpacing: '-0.015em',
+                  fontFamily: 'var(--font-playfair), "Playfair Display", "Tiempos Headline", "Noe Display", "Georgia", serif',
+                  color: '#f5f5f0' // Warm white instead of pure white
+                }}
+              >
+                zDoge is encrypted
+                <br />
+                electronic cash.
               </h1>
               
-              {/* Subtitle - more breathing room before CTA */}
+              {/* Description - regular weight, no tracking tricks */}
               <motion.p 
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                transition={{ delay: 0.3, duration: 1 }}
-                className="font-mono text-sm sm:text-base text-white/50 max-w-md mx-auto mb-14 tracking-wide"
+                transition={{ delay: 0.2, duration: 0.8 }}
+                className="mb-10 font-serif text-lg md:text-xl leading-relaxed"
+                style={{ 
+                  fontFamily: 'var(--font-playfair), "Playfair Display", "Georgia", serif',
+                  fontWeight: 400,
+                  color: 'rgba(245, 245, 240, 0.7)' // Warm white at 70% opacity
+                }}
               >
-                Zero-knowledge privacy for Doge.
+                The first cryptocurrency to develop zero-knowledge encryption
+                for private peer-to-peer payments.
               </motion.p>
               
-              {/* CTA - more breathing room */}
+              {/* CTA Buttons - sans-serif contrast */}
               <motion.div 
-                initial={{ opacity: 0, y: 20 }}
+                initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.5, duration: 0.8 }}
-                className="flex flex-col items-center gap-6"
+                transition={{ delay: 0.4, duration: 0.8 }}
+                className="flex flex-col sm:flex-row gap-4"
               >
                 <Link href="/shield">
-                  <button className="group relative px-8 sm:px-12 py-3 sm:py-3.5 bg-[#C2A633] text-black/90 font-mono text-xs sm:text-sm tracking-[0.15em] sm:tracking-[0.25em] font-bold transition-colors duration-300 hover:text-black flex items-center gap-2 sm:gap-3">
-                    <span className="relative z-10">LAUNCH APP</span>
-                    
-                    {/* Arrow icon */}
-                    <svg 
-                      viewBox="0 0 24 24" 
-                      className="w-4 h-4 relative z-10 transition-transform duration-300 group-hover:translate-x-0.5" 
-                      fill="none" 
-                      stroke="currentColor" 
-                      strokeWidth="2.5" 
-                      strokeLinecap="round" 
-                      strokeLinejoin="round"
-                    >
-                      <path d="M5 12h14M12 5l7 7-7 7" />
-                    </svg>
+                  <button 
+                    className="px-6 py-3 bg-white text-black font-medium text-sm uppercase transition-opacity hover:opacity-90"
+                    style={{ 
+                      fontFamily: 'var(--font-inter), "Inter", system-ui, sans-serif',
+                      fontWeight: 500,
+                      fontSize: '0.875rem',
+                      letterSpacing: '0.12em'
+                    }}
+                  >
+                    Use zDoge
                   </button>
                 </Link>
                 
-                {/* Trust line - facts, not slogans */}
-                <motion.p
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: 0.7, duration: 0.8 }}
-                  className="font-mono text-[9px] sm:text-xs text-white/25 tracking-[0.1em] sm:tracking-[0.2em] px-4"
-                >
-                  <span className="hidden sm:inline">NO SIGNUP&nbsp;&nbsp;·&nbsp;&nbsp;NO TRACKING&nbsp;&nbsp;·&nbsp;&nbsp;NON-CUSTODIAL</span>
-                  <span className="sm:hidden">NO SIGNUP · NO TRACKING · NON-CUSTODIAL</span>
-                </motion.p>
+                <Link href="/docs">
+                  <button 
+                    className="px-6 py-3 bg-transparent border border-white text-white font-medium text-sm uppercase transition-opacity hover:opacity-70"
+                    style={{ 
+                      fontFamily: 'var(--font-inter), "Inter", system-ui, sans-serif',
+                      fontWeight: 500,
+                      fontSize: '0.875rem',
+                      letterSpacing: '0.12em'
+                    }}
+                  >
+                    Learn zDoge
+                  </button>
+                </Link>
               </motion.div>
             </motion.div>
           </div>
