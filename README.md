@@ -1,12 +1,12 @@
 # Dogenado
 
-Privacy pool implementation for the DogeOS blockchain. Enables unlinkable token transfers using zero-knowledge proofs and Merkle tree commitments.
+Privacy-preserving shielded transaction system for the DogeOS blockchain. Enables private token transfers using zero-knowledge proofs and Merkle tree commitments.
 
 ## Overview
 
-Dogenado implements a privacy-preserving token mixer on DogeOS. Users deposit fixed-denomination amounts into pools and later withdraw to arbitrary addresses. The cryptographic design ensures that deposits cannot be linked to withdrawals on-chain.
+Dogenado implements a Zcash-style shielded transaction system on DogeOS. Users can shield tokens (convert public tokens to private shielded notes), transfer tokens privately between shielded addresses, swap tokens within the shielded layer, and unshield tokens back to public addresses.
 
-The system uses Groth16 zero-knowledge proofs to prove membership in the Merkle tree without revealing which commitment corresponds to the withdrawal. This breaks the on-chain link between deposit and withdrawal transactions.
+The system uses Groth16 zero-knowledge proofs to enable private transactions without revealing sender, recipient, or amount on-chain. All transactions are fully private and unlinkable.
 
 ## Architecture
 
@@ -19,28 +19,35 @@ The system consists of four main components:
 
 ### Smart Contracts
 
-- **MixerPoolV2**: ERC20 token mixer with optional scheduled withdrawals
-- **MixerPoolNative**: Native token mixer (accepts native DOGE directly)
+- **ShieldedPoolMultiToken**: Main shielded pool contract for shield/transfer/unshield/swap operations
+- **ShieldVerifier**: Shield proof verifier contract
+- **TransferVerifier**: Transfer proof verifier contract
+- **UnshieldVerifier**: Unshield proof verifier contract
+- **SwapVerifier**: Swap proof verifier contract
 - **MerkleTreeWithHistory**: Merkle tree implementation with historical root tracking
-- **Verifier**: Groth16 proof verifier contract
 - **Hasher**: MiMC hasher for Merkle tree operations
 
 ### Frontend
 
 The frontend handles:
 - Wallet connection and transaction signing
-- Secret note generation and management
+- Shielded identity and key management
+- Shielded note generation and management
 - Zero-knowledge proof generation (client-side)
+- Auto-discovery of incoming transfers
+- Transaction history tracking
 - Merkle path fetching from indexer
 - Transaction submission (direct or via relayer)
 
 ### Backend
 
 The backend provides:
-- Event indexing from blockchain
-- Merkle tree state synchronization
-- REST API for pool information and Merkle paths
-- Optional relayer service for withdrawal transactions
+- Event indexing from blockchain (Shield, Transfer, Unshield, Swap events)
+- Shielded Merkle tree state synchronization
+- Auto-discovery support via encrypted memos
+- REST API for shielded pool information and Merkle paths
+- Transaction history persistence (PostgreSQL)
+- Optional relayer service for gasless transactions
 
 ## Network Configuration
 
@@ -54,14 +61,14 @@ The backend provides:
 
 ### Supported Tokens
 
-The system supports multiple token types with fixed denomination pools:
+The system supports multiple token types with variable amounts (any amount can be shielded):
 
-- Native DOGE: 1, 10, 100, 1000 DOGE
-- USDC: 1, 10, 100, 1000 USDC (18 decimals on DogeOS)
-- USDT: 1, 10, 100, 1000 USDT (18 decimals on DogeOS)
-- USD1: 1, 10, 100, 1000 USD1
-- WETH: 0.01, 0.1, 1, 10 WETH
-- LBTC: 0.001, 0.01, 0.1, 1 LBTC
+- Native DOGE
+- USDC (18 decimals on DogeOS)
+- USDT (18 decimals on DogeOS)
+- USD1
+- WETH
+- LBTC
 
 Token addresses are configured in `lib/dogeos-config.ts` for the frontend and `backend/src/config.ts` for the backend.
 
@@ -224,22 +231,32 @@ The backend should be deployed as a persistent service (Render, Railway, or simi
 
 ## How It Works
 
-### Deposit Flow
+### Shield Flow (Public → Private)
 
-1. User selects token and denomination
-2. Frontend generates a secret note containing random values
-3. Commitment hash is computed from the note components
+1. User connects wallet and generates shielded identity
+2. User selects token and amount (any amount)
+3. Frontend generates a shielded note with commitment
 4. User approves token spending (ERC20) or sends native value (native DOGE)
-5. Deposit transaction is submitted with the commitment
+5. Shield transaction is submitted with the commitment
 6. Contract adds commitment to Merkle tree
-7. User must securely store the secret note
+7. Note is stored locally and synced to backend
 
-### Withdrawal Flow
+### Transfer Flow (Private → Private)
 
-1. User provides secret note and recipient address
-2. Frontend fetches current Merkle root and path from indexer
-3. Zero-knowledge proof is generated client-side using the note and Merkle path
-4. Proof is submitted to contract (directly or via relayer)
+1. User selects a shielded note to spend
+2. User enters recipient's shielded address
+3. Frontend generates encrypted memo for auto-discovery
+4. Zero-knowledge proof is generated client-side
+5. Transfer transaction is submitted (directly or via relayer)
+6. Recipient's wallet auto-discovers the incoming transfer via encrypted memo
+7. Recipient's balance updates automatically
+
+### Unshield Flow (Private → Public)
+
+1. User selects a shielded note to unshield
+2. User enters recipient public address
+3. Zero-knowledge proof is generated client-side
+4. Unshield transaction is submitted (directly or via relayer)
 5. Contract verifies proof and transfers funds to recipient
 6. Nullifier is recorded to prevent double-spending
 
