@@ -1212,7 +1212,7 @@ app.post('/api/admin/migrate-shielded-transactions', apiLimiter, async (req, res
     // Create table
     await db.query(`
       CREATE TABLE IF NOT EXISTS shielded_transactions (
-        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         wallet_address VARCHAR(42) NOT NULL,
         tx_id VARCHAR(128) NOT NULL,
         tx_type VARCHAR(20) NOT NULL,
