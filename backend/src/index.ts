@@ -1237,20 +1237,24 @@ app.post('/api/admin/migrate-shielded-transactions', apiLimiter, async (req, res
     await db.query(`CREATE INDEX IF NOT EXISTS idx_shielded_tx_status ON shielded_transactions(status);`);
     await db.query(`CREATE INDEX IF NOT EXISTS idx_shielded_tx_hash ON shielded_transactions(tx_hash);`);
 
-    // Create trigger (if function exists)
+    // Create trigger function if it doesn't exist
     await db.query(`
-      DO $$
+      CREATE OR REPLACE FUNCTION update_updated_at_column()
+      RETURNS TRIGGER AS $$
       BEGIN
-        IF NOT EXISTS (
-          SELECT 1 FROM pg_trigger 
-          WHERE tgname = 'update_shielded_transactions_updated_at'
-        ) THEN
-          CREATE TRIGGER update_shielded_transactions_updated_at
-            BEFORE UPDATE ON shielded_transactions
-            FOR EACH ROW 
-            EXECUTE FUNCTION update_updated_at_column();
-        END IF;
-      END $$;
+        NEW.updated_at = NOW();
+        RETURN NEW;
+      END;
+      $$ language 'plpgsql';
+    `);
+
+    // Create trigger
+    await db.query(`
+      DROP TRIGGER IF EXISTS update_shielded_transactions_updated_at ON shielded_transactions;
+      CREATE TRIGGER update_shielded_transactions_updated_at
+        BEFORE UPDATE ON shielded_transactions
+        FOR EACH ROW 
+        EXECUTE FUNCTION update_updated_at_column();
     `);
 
     // Verify
