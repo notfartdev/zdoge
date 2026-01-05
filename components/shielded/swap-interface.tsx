@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Card } from "@/components/ui/card"
-import { Loader2, ArrowDownUp, AlertCircle, Check, RefreshCw } from "lucide-react"
+import { Loader2, ArrowDownUp, AlertCircle, Check, RefreshCw, ExternalLink } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { ShieldedNote, formatWeiToAmount, parseAmountToWei } from "@/lib/shielded/shielded-note"
 import { 
@@ -324,26 +324,34 @@ export function SwapInterface({ notes, onSuccess, onInputTokenChange }: SwapInte
       
       {status === "success" && (
         <div className="space-y-4">
-          <Alert>
-            <Check className="h-4 w-4 text-green-500" />
-            <AlertDescription>
-              Swap successful! Your shielded balance has been updated.
-            </AlertDescription>
-          </Alert>
-          
-          {txHash && (
-            <div className="text-sm">
-              <span className="text-muted-foreground">Transaction: </span>
-              <a 
-                href={`https://blockscout.testnet.dogeos.com/tx/${txHash}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-primary hover:underline"
-              >
-                {txHash.slice(0, 10)}...{txHash.slice(-8)}
-              </a>
+          <div className="p-5 rounded-lg bg-green-500/10 border border-green-500/30">
+            <div className="flex items-start gap-3">
+              <div className="flex-shrink-0 w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center">
+                <Check className="h-5 w-5 text-green-400" strokeWidth={2.5} />
+              </div>
+              <div className="flex-1 space-y-3">
+                <div>
+                  <h4 className="text-base font-semibold text-green-300 mb-1.5">
+                    Swap Successful!
+                  </h4>
+                  <p className="text-sm text-green-400/90 leading-relaxed">
+                    Your shielded balance has been updated. The swap completed successfully.
+                  </p>
+                </div>
+                {txHash && (
+                  <a 
+                    href={`https://blockscout.testnet.dogeos.com/tx/${txHash}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 text-sm text-green-300 hover:text-green-200 transition-colors group"
+                  >
+                    <span className="font-medium">View transaction on Blockscout</span>
+                    <ExternalLink className="h-4 w-4 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                  </a>
+                )}
+              </div>
             </div>
-          )}
+          </div>
           
           <Button className="w-full" onClick={reset}>
             Make Another Swap
@@ -353,12 +361,19 @@ export function SwapInterface({ notes, onSuccess, onInputTokenChange }: SwapInte
       
       {status === "error" && (
         <div className="space-y-4">
-          <Alert variant="destructive">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
-              Swap failed. Your shielded tokens are safe.
-            </AlertDescription>
-          </Alert>
+          <div className="p-4 rounded-lg bg-orange-500/10 border border-orange-500/30">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="h-5 w-5 text-orange-400 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-orange-300 mb-1">
+                  Swap Failed
+                </p>
+                <p className="text-sm text-orange-400/90">
+                  Swap failed. Your shielded tokens are safe.
+                </p>
+              </div>
+            </div>
+          </div>
           
           <Button className="w-full" onClick={reset}>
             Try Again

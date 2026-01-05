@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Progress } from "@/components/ui/progress"
-import { Loader2, LogOut, AlertCircle, Check, Shield, ShieldOff, Info, Coins, Layers } from "lucide-react"
+import { Loader2, LogOut, AlertCircle, Check, Shield, ShieldOff, Info, Coins, Layers, ExternalLink } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { ShieldedNote, formatWeiToAmount } from "@/lib/shielded/shielded-note"
 import { prepareUnshield, completeUnshield, getNotes } from "@/lib/shielded/shielded-service"
@@ -510,39 +510,70 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
             setTimeout(() => el.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100)
           }
         }}>
-          <Alert className="border-green-500/50 bg-green-500/10">
-            <Check className="h-4 w-4 text-green-500" />
-            <AlertDescription className="flex flex-col gap-2">
-              <div>
-                <strong>Unshield Successful!</strong> Received {withdrawnAmount} {selectedToken}{fee && <span className="text-muted-foreground"> (Fee: {fee} {selectedToken})</span>}
+          <div className="p-5 rounded-lg bg-green-500/10 border border-green-500/30">
+            <div className="flex items-start gap-3">
+              <div className="flex-shrink-0 w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center">
+                <Check className="h-5 w-5 text-green-400" strokeWidth={2.5} />
               </div>
-              {txHash && (
-                <a 
-                  href={`https://blockscout.testnet.dogeos.com/tx/${txHash}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-primary hover:underline text-sm font-mono flex items-center gap-1 mt-1"
-                >
-                  View transaction on Blockscout →
-                </a>
-              )}
-            </AlertDescription>
-          </Alert>
-          {consolidateTxHashes.length > 0 && (
-            <div className="text-sm space-y-1">
-              <span className="text-muted-foreground">Transactions ({consolidateTxHashes.length}):</span>
-              <div className="max-h-24 overflow-y-auto space-y-1">
-                {consolidateTxHashes.map((hash, i) => (
-                  <a key={hash} href={`https://blockscout.testnet.dogeos.com/tx/${hash}`} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline block text-xs">{i + 1}. {hash.slice(0, 10)}...{hash.slice(-8)}</a>
-                ))}
+              <div className="flex-1 space-y-3">
+                <div>
+                  <h4 className="text-base font-semibold text-green-300 mb-1.5">
+                    Unshield Successful!
+                  </h4>
+                  <p className="text-sm text-green-400/90 leading-relaxed">
+                    Received {withdrawnAmount} {selectedToken}
+                    {fee && <span className="text-green-400/70"> (Fee: {fee} {selectedToken})</span>}
+                  </p>
+                </div>
+                {txHash && (
+                  <a 
+                    href={`https://blockscout.testnet.dogeos.com/tx/${txHash}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 text-sm text-green-300 hover:text-green-200 transition-colors group"
+                  >
+                    <span className="font-medium">View transaction on Blockscout</span>
+                    <ExternalLink className="h-4 w-4 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                  </a>
+                )}
+                {consolidateTxHashes.length > 0 && (
+                  <div className="pt-3 border-t border-green-500/20 space-y-2">
+                    <p className="text-xs font-medium text-green-400/70">
+                      Consolidation Transactions ({consolidateTxHashes.length}):
+                    </p>
+                    <div className="max-h-32 overflow-y-auto space-y-1.5">
+                      {consolidateTxHashes.map((hash, i) => (
+                        <a 
+                          key={hash} 
+                          href={`https://blockscout.testnet.dogeos.com/tx/${hash}`} 
+                          target="_blank" 
+                          rel="noopener noreferrer" 
+                          className="inline-flex items-center gap-2 text-xs text-green-300 hover:text-green-200 transition-colors group"
+                        >
+                          <span className="font-mono">{i + 1}. {hash.slice(0, 10)}...{hash.slice(-8)}</span>
+                          <ExternalLink className="h-3 w-3 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all" />
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
-          )}
-          <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/20 text-sm">
-            <p className="font-medium text-green-500">🎉 Zero Gas Paid</p>
+          </div>
+          <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/20">
+            <p className="text-sm font-medium text-green-400">🎉 Zero Gas Paid</p>
           </div>
           {consolidateTxHashes.length > 0 && (
-            <Alert className="border-primary bg-primary/10"><Info className="h-4 w-4 text-primary" /><AlertDescription><strong>Next step:</strong> Go to <strong>Shield</strong> tab and re-shield {withdrawnAmount} {selectedToken}!</AlertDescription></Alert>
+            <div className="p-4 rounded-lg bg-primary/10 border border-primary/30">
+              <div className="flex items-start gap-3">
+                <Info className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <p className="text-sm text-primary/90">
+                    <strong>Next step:</strong> Go to <strong>Shield</strong> tab and re-shield {withdrawnAmount} {selectedToken}!
+                  </p>
+                </div>
+              </div>
+            </div>
           )}
           <Button className="w-full" onClick={reset}>{consolidateTxHashes.length > 0 ? 'Done' : 'Unshield More'}</Button>
         </div>
@@ -550,7 +581,19 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
       
       {status === "error" && (
         <div className="space-y-4">
-          <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertDescription>{errorMessage || "Unshield failed."}</AlertDescription></Alert>
+          <div className="p-4 rounded-lg bg-orange-500/10 border border-orange-500/30">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="h-5 w-5 text-orange-400 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-orange-300 mb-1">
+                  Unshield Failed
+                </p>
+                <p className="text-sm text-orange-400/90">
+                  {errorMessage || "Unshield failed. Your funds are safe."}
+                </p>
+              </div>
+            </div>
+          </div>
           <Button className="w-full" onClick={reset}>Try Again</Button>
         </div>
       )}

@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Progress } from "@/components/ui/progress"
-import { Loader2, Send, AlertCircle, Check, Shield } from "lucide-react"
+import { Loader2, Send, AlertCircle, Check, Shield, ExternalLink } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { ShieldedNote, formatWeiToAmount } from "@/lib/shielded/shielded-note"
 import { isValidShieldedAddress } from "@/lib/shielded/shielded-address"
@@ -489,42 +489,52 @@ export function TransferInterface({ notes, onSuccess, selectedToken = "DOGE", on
             setTimeout(() => el.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100)
           }
         }}>
-          <Alert className="border-green-500/50 bg-green-500/10">
-            <Check className="h-4 w-4 text-green-500" />
-            <AlertDescription className="flex flex-col gap-2">
-              <div>
-                <strong>Transfer Successful!</strong> {transactionDetails?.amountSent} {selectedToken} sent privately.
+          <div className="p-5 rounded-lg bg-green-500/10 border border-green-500/30">
+            <div className="flex items-start gap-3">
+              <div className="flex-shrink-0 w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center">
+                <Check className="h-5 w-5 text-green-400" strokeWidth={2.5} />
               </div>
-              {transactionDetails && (
-                <div className="text-xs space-y-1 mt-1 pt-2 border-t border-green-500/20">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Amount sent:</span>
-                    <span>{formatWeiToAmount(BigInt(Math.floor(transactionDetails.amountSent * 1e18))).toFixed(4)} {selectedToken}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Note consumed:</span>
-                    <span>{formatWeiToAmount(transactionDetails.noteConsumed).toFixed(4)} {selectedToken}</span>
-                  </div>
-                  {transactionDetails.changeReceived > 0n && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Change received:</span>
-                      <span className="text-green-500">{formatWeiToAmount(transactionDetails.changeReceived).toFixed(4)} {selectedToken}</span>
-                    </div>
-                  )}
+              <div className="flex-1 space-y-3">
+                <div>
+                  <h4 className="text-base font-semibold text-green-300 mb-1.5">
+                    Transfer Successful!
+                  </h4>
+                  <p className="text-sm text-green-400/90 leading-relaxed">
+                    {transactionDetails?.amountSent} {selectedToken} sent privately to recipient.
+                  </p>
                 </div>
-              )}
-              {txHash && (
-                <a
-                  href={`https://blockscout.testnet.dogeos.com/tx/${txHash}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-primary hover:underline text-sm font-mono flex items-center gap-1 mt-1"
-                >
-                  View transaction on Blockscout →
-                </a>
-              )}
-            </AlertDescription>
-          </Alert>
+                {transactionDetails && (
+                  <div className="pt-3 border-t border-green-500/20 space-y-2">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-green-400/70">Amount sent:</span>
+                      <span className="text-green-300 font-medium">{formatWeiToAmount(BigInt(Math.floor(transactionDetails.amountSent * 1e18))).toFixed(4)} {selectedToken}</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-green-400/70">Note consumed:</span>
+                      <span className="text-green-300 font-medium">{formatWeiToAmount(transactionDetails.noteConsumed).toFixed(4)} {selectedToken}</span>
+                    </div>
+                    {transactionDetails.changeReceived > 0n && (
+                      <div className="flex justify-between text-xs">
+                        <span className="text-green-400/70">Change received:</span>
+                        <span className="text-green-300 font-medium">{formatWeiToAmount(transactionDetails.changeReceived).toFixed(4)} {selectedToken}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {txHash && (
+                  <a
+                    href={`https://blockscout.testnet.dogeos.com/tx/${txHash}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 text-sm text-green-300 hover:text-green-200 transition-colors group"
+                  >
+                    <span className="font-medium">View transaction on Blockscout</span>
+                    <ExternalLink className="h-4 w-4 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                  </a>
+                )}
+              </div>
+            </div>
+          </div>
           
           <Button className="w-full" onClick={reset}>
             Send Another Transfer
@@ -534,27 +544,38 @@ export function TransferInterface({ notes, onSuccess, selectedToken = "DOGE", on
       
       {status === "error" && (
         <div className="space-y-4">
-          <Alert variant="destructive">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
-              Transfer failed. Your funds are safe.
-              {errorMessage && <p className="mt-1 text-xs">{errorMessage}</p>}
-            </AlertDescription>
-          </Alert>
+          <div className="p-4 rounded-lg bg-orange-500/10 border border-orange-500/30">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="h-5 w-5 text-orange-400 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-orange-300 mb-1">
+                  Transfer Failed
+                </p>
+                <p className="text-sm text-orange-400/90">
+                  Transfer failed. Your funds are safe.
+                  {errorMessage && <span className="block mt-1 text-xs">{errorMessage}</span>}
+                </p>
+              </div>
+            </div>
+          </div>
           
           {errorMessage?.includes('ownership mismatch') && (
-            <Alert className="border-yellow-500 bg-yellow-500/10">
-              <AlertCircle className="h-4 w-4 text-yellow-500" />
-              <AlertDescription className="text-yellow-200">
-                <strong>How to fix:</strong>
-                <ol className="list-decimal list-inside mt-2 space-y-1 text-xs">
-                  <li>Scroll down to "Shielded Notes"</li>
-                  <li>Click the × button to clear notes</li>
-                  <li>Shield new DOGE (creates notes with correct identity)</li>
-                  <li>Try transfer again</li>
-                </ol>
-              </AlertDescription>
-            </Alert>
+            <div className="p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/30">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="h-5 w-5 text-yellow-400 flex-shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-yellow-300 mb-2">
+                    How to fix:
+                  </p>
+                  <ol className="list-decimal list-inside space-y-1 text-xs text-yellow-400/90">
+                    <li>Scroll down to "Shielded Notes"</li>
+                    <li>Click the × button to clear notes</li>
+                    <li>Shield new DOGE (creates notes with correct identity)</li>
+                    <li>Try transfer again</li>
+                  </ol>
+                </div>
+              </div>
+            </div>
           )}
           
           <Button className="w-full" onClick={reset}>

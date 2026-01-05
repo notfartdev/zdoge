@@ -13,7 +13,8 @@ import {
   Check, 
   ShieldPlus,
   Coins,
-  Info
+  Info,
+  ExternalLink
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { useWallet } from "@/lib/wallet-context"
@@ -90,6 +91,7 @@ export function ShieldInterface({ onSuccess, selectedToken: externalToken, onTok
   const [leafIndex, setLeafIndex] = useState<number | null>(null)
   const [pendingNote, setPendingNote] = useState<ShieldedNote | null>(null)
   const [allTokenBalances, setAllTokenBalances] = useState<Record<string, string>>({})
+  const [amountError, setAmountError] = useState<string | null>(null)
   
   // Prevent duplicate submissions
   const isSubmittingRef = useRef(false)
@@ -99,6 +101,37 @@ export function ShieldInterface({ onSuccess, selectedToken: externalToken, onTok
   
   // Current selected token balance
   const tokenBalance = allTokenBalances[selectedToken] || "0"
+  const tokenBalanceNum = parseFloat(tokenBalance)
+  
+  // Validate amount input
+  const handleAmountChange = (value: string) => {
+    setAmount(value)
+    setAmountError(null)
+    
+    if (!value || value === "") {
+      return
+    }
+    
+    const numValue = parseFloat(value)
+    if (isNaN(numValue) || numValue <= 0) {
+      setAmountError("Amount must be greater than 0")
+      return
+    }
+    
+    const maxAmount = selectedTokenInfo.isNative 
+      ? Math.max(0, tokenBalanceNum - 0.001) // Leave 0.001 for gas
+      : tokenBalanceNum
+    
+    if (numValue > maxAmount) {
+      setAmountError(`Amount exceeds available balance (max: ${maxAmount.toFixed(4)} ${selectedToken})`)
+      return
+    }
+    
+    if (numValue > tokenBalanceNum) {
+      setAmountError(`Amount exceeds balance (${tokenBalance} ${selectedToken})`)
+      return
+    }
+  }
   
   // Fetch ALL token balances when wallet changes
   useEffect(() => {
@@ -188,7 +221,32 @@ export function ShieldInterface({ onSuccess, selectedToken: externalToken, onTok
     if (isNaN(amountNum) || amountNum <= 0) {
       toast({
         title: "Invalid Amount",
-        description: "Please enter a valid amount",
+        description: "Please enter a valid amount greater than 0",
+        variant: "destructive",
+      })
+      return
+    }
+    
+    // Validate balance
+    const maxAmount = selectedTokenInfo.isNative 
+      ? Math.max(0, tokenBalanceNum - 0.001) // Leave 0.001 DOGE for gas
+      : tokenBalanceNum
+    
+    if (amountNum > maxAmount) {
+      toast({
+        title: "Insufficient Balance",
+        description: selectedTokenInfo.isNative
+          ? `Insufficient ${selectedToken} balance. You need at least 0.001 ${selectedToken} for gas fees.`
+          : `Amount exceeds available balance. You have ${tokenBalance} ${selectedToken}.`,
+        variant: "destructive",
+      })
+      return
+    }
+    
+    if (tokenBalanceNum <= 0 || amountNum > tokenBalanceNum) {
+      toast({
+        title: "Insufficient Balance",
+        description: `You don't have enough ${selectedToken}. Your balance: ${tokenBalance} ${selectedToken}`,
         variant: "destructive",
       })
       return
@@ -384,6 +442,7 @@ export function ShieldInterface({ onSuccess, selectedToken: externalToken, onTok
     setTxHash(null)
     setLeafIndex(null)
     setPendingNote(null)
+    setAmountError(null)
     isSubmittingRef.current = false
   }
   
@@ -401,68 +460,105 @@ export function ShieldInterface({ onSuccess, selectedToken: externalToken, onTok
       
       {status === "idle" && (
         <div className="space-y-4">
-          {/* Amount Input */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="amount">Amount ({selectedToken})</Label>
-              <Button
-                variant="link"
-                size="sm"
-                className="h-auto p-0 text-xs"
-                onClick={handleShieldAll}
-              >
-                Max: {tokenBalance} {selectedToken}
-              </Button>
-            </div>
-            <Input
-              id="amount"
-              type="number"
-              placeholder="100"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-            />
-          </div>
-          
-          {/* Info Box */}
-          {parseFloat(tokenBalance) > 0 && (
-            <div className="p-3 rounded-lg bg-primary/5 border border-primary/20">
-              <p className="text-sm text-muted-foreground flex items-center gap-2">
-                <img src={TOKEN_LOGOS[selectedToken]} alt={selectedToken} className="w-4 h-4 rounded-full inline" />
-                <span>
-                  <strong>Shielding {selectedToken}:</strong>{' '}
-                  {selectedTokenInfo.isNative 
-                    ? "Your DOGE will be privately stored in the shielded pool."
-                    : `After approval, your ${selectedToken} will be shielded.`
-                  }
-                </span>
+          {/* Empty State - No Balance */}
+          {tokenBalanceNum <= 0 ? (
+            <div className="p-6 rounded-lg bg-muted/30 border border-muted text-center">
+              <Coins className="h-12 w-12 text-muted-foreground mx-auto mb-3 opacity-50" />
+              <h4 className="font-medium mb-1">No {selectedToken} Balance</h4>
+              <p className="text-sm text-muted-foreground mb-4">
+                You need {selectedToken} in your wallet to shield tokens.
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Connect a wallet with {selectedToken} balance to get started.
               </p>
             </div>
+          ) : (
+            <>
+              {/* Amount Input */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="amount">Amount ({selectedToken})</Label>
+                  <Button
+                    variant="link"
+                    size="sm"
+                    className="h-auto p-0 text-xs"
+                    onClick={handleShieldAll}
+                    disabled={tokenBalanceNum <= (selectedTokenInfo.isNative ? 0.001 : 0)}
+                  >
+                    Max: {tokenBalance} {selectedToken}
+                  </Button>
+                </div>
+                <Input
+                  id="amount"
+                  type="number"
+                  step="any"
+                  min="0"
+                  placeholder="0.0"
+                  value={amount}
+                  onChange={(e) => handleAmountChange(e.target.value)}
+                  className={amountError ? "border-orange-500/60 dark:border-orange-500/70 focus-visible:ring-orange-500/30 focus-visible:border-orange-500/80" : ""}
+                />
+                {amountError && (
+                  <div className="p-2.5 rounded-md bg-orange-500/10 border border-orange-500/20">
+                    <p className="text-xs text-orange-400 flex items-center gap-1.5 font-medium">
+                      <AlertCircle className="h-3.5 w-3.5 text-orange-400 flex-shrink-0" />
+                      <span>{amountError}</span>
+                    </p>
+                  </div>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Available: {tokenBalance} {selectedToken}
+                  {selectedTokenInfo.isNative && tokenBalanceNum > 0.001 && (
+                    <span className="ml-1">(0.001 reserved for gas)</span>
+                  )}
+                </p>
+              </div>
+              
+              {/* Info Box */}
+              <div className="p-3 rounded-lg bg-primary/5 border border-primary/20">
+                <p className="text-sm text-muted-foreground flex items-center gap-2">
+                  <img src={TOKEN_LOGOS[selectedToken]} alt={selectedToken} className="w-4 h-4 rounded-full inline" />
+                  <span>
+                    <strong>Shielding {selectedToken}:</strong>{' '}
+                    {selectedTokenInfo.isNative 
+                      ? "Your DOGE will be privately stored in the shielded pool."
+                      : `After approval, your ${selectedToken} will be shielded.`
+                    }
+                  </span>
+                </p>
+              </div>
+              
+              <Button 
+                className="w-full" 
+                onClick={handleShield}
+                disabled={!wallet?.isConnected || status !== "idle" || !amount || parseFloat(amount) <= 0 || !!amountError}
+              >
+                <ShieldPlus className="h-4 w-4 mr-2" />
+                Shield {selectedToken}
+              </Button>
+            </>
           )}
-          
-          <Button 
-            className="w-full" 
-            onClick={handleShield}
-            disabled={!wallet?.isConnected || status !== "idle"}
-          >
-            <ShieldPlus className="h-4 w-4 mr-2" />
-            Shield {selectedToken}
-          </Button>
         </div>
       )}
       
       {status === "approving" && (
         <div className="space-y-4">
           <div className="flex flex-col items-center py-8 space-y-4">
-            <Loader2 className="h-8 w-8 animate-spin" />
-            <p className="text-muted-foreground">Step 1/2: Approving {selectedToken}...</p>
-            <p className="text-xs text-muted-foreground">
-              Confirm the approval transaction in MetaMask
-            </p>
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <div className="w-full max-w-xs space-y-2">
+              <Progress value={25} className="h-2" />
+              <p className="text-sm font-medium text-foreground text-center">
+                Step 1 of 2: Approving {selectedToken}
+              </p>
+              <p className="text-xs text-muted-foreground text-center">
+                Please confirm the approval transaction in your wallet
+              </p>
+            </div>
           </div>
           <div className="p-3 rounded-lg bg-primary/10 border border-primary/20">
             <p className="text-xs text-muted-foreground flex items-start gap-2">
               <Info className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
-              <span><strong>Two-step process:</strong> {selectedToken} requires an approval first, then the shield transaction.</span>
+              <span><strong>Two-step process:</strong> {selectedToken} requires an approval first, then the shield transaction. This allows the contract to access your tokens.</span>
             </p>
           </div>
         </div>
@@ -470,13 +566,15 @@ export function ShieldInterface({ onSuccess, selectedToken: externalToken, onTok
       
       {status === "preparing" && (
         <div className="flex flex-col items-center py-8 space-y-4">
-          <Loader2 className="h-8 w-8 animate-spin" />
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
           <div className="w-full max-w-xs space-y-2">
-            <Progress value={33} className="h-2" />
-            <p className="text-sm text-muted-foreground text-center">
-              {selectedTokenInfo.isNative ? "Preparing shield..." : "Step 2/2: Preparing shield..."}
+            <Progress value={selectedTokenInfo.isNative ? 50 : 60} className="h-2" />
+            <p className="text-sm font-medium text-foreground text-center">
+              {selectedTokenInfo.isNative ? "Preparing shield transaction" : "Step 2 of 2: Preparing shield"}
             </p>
-            <p className="text-xs text-muted-foreground text-center">Creating your private note...</p>
+            <p className="text-xs text-muted-foreground text-center">
+              Generating your private note and preparing the transaction...
+            </p>
           </div>
         </div>
       )}
@@ -484,13 +582,15 @@ export function ShieldInterface({ onSuccess, selectedToken: externalToken, onTok
       {status === "confirming" && (
         <div className="space-y-4">
           <div className="flex flex-col items-center py-8 space-y-4">
-            <Loader2 className="h-8 w-8 animate-spin" />
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
             <div className="w-full max-w-xs space-y-2">
-              <Progress value={66} className="h-2" />
-              <p className="text-sm text-muted-foreground text-center">
-                {selectedTokenInfo.isNative ? "Waiting for confirmation..." : "Step 2/2: Shielding tokens..."}
+              <Progress value={selectedTokenInfo.isNative ? 75 : 85} className="h-2" />
+              <p className="text-sm font-medium text-foreground text-center">
+                {selectedTokenInfo.isNative ? "Waiting for transaction confirmation" : "Step 2 of 2: Shielding tokens"}
               </p>
-              <p className="text-xs text-muted-foreground text-center">Confirm the transaction in your wallet</p>
+              <p className="text-xs text-muted-foreground text-center">
+                Confirm the transaction in your wallet to complete the shield
+              </p>
             </div>
           </div>
           <Button 
@@ -498,7 +598,7 @@ export function ShieldInterface({ onSuccess, selectedToken: externalToken, onTok
             className="w-full" 
             onClick={reset}
           >
-            Cancel and try again
+            Cancel
           </Button>
         </div>
       )}
@@ -509,24 +609,34 @@ export function ShieldInterface({ onSuccess, selectedToken: externalToken, onTok
             setTimeout(() => el.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100)
           }
         }}>
-          <Alert className="border-green-500/50 bg-green-500/10">
-            <Check className="h-4 w-4 text-green-500" />
-            <AlertDescription className="flex flex-col gap-2">
-              <div>
-                <strong>Shield Successful!</strong> {amount} {selectedToken} is now shielded. Your funds are now private.
+          <div className="p-5 rounded-lg bg-green-500/10 border border-green-500/30">
+            <div className="flex items-start gap-3">
+              <div className="flex-shrink-0 w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center">
+                <Check className="h-5 w-5 text-green-400" strokeWidth={2.5} />
               </div>
-              {txHash && (
-                <a 
-                  href={`https://blockscout.testnet.dogeos.com/tx/${txHash}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-primary hover:underline text-sm font-mono flex items-center gap-1 mt-1"
-                >
-                  View transaction on Blockscout →
-                </a>
-              )}
-            </AlertDescription>
-          </Alert>
+              <div className="flex-1 space-y-3">
+                <div>
+                  <h4 className="text-base font-semibold text-green-300 mb-1.5">
+                    Shield Successful!
+                  </h4>
+                  <p className="text-sm text-green-400/90 leading-relaxed">
+                    {amount} {selectedToken} has been successfully shielded. Your funds are now private and protected.
+                  </p>
+                </div>
+                {txHash && (
+                  <a 
+                    href={`https://blockscout.testnet.dogeos.com/tx/${txHash}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 text-sm text-green-300 hover:text-green-200 transition-colors group"
+                  >
+                    <span className="font-medium">View transaction on Blockscout</span>
+                    <ExternalLink className="h-4 w-4 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                  </a>
+                )}
+              </div>
+            </div>
+          </div>
           
           <Button className="w-full" onClick={reset}>
             Shield More Tokens
@@ -536,12 +646,19 @@ export function ShieldInterface({ onSuccess, selectedToken: externalToken, onTok
       
       {status === "error" && (
         <div className="space-y-4">
-          <Alert variant="destructive">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
-              Shield transaction failed. Your funds are safe.
-            </AlertDescription>
-          </Alert>
+          <div className="p-4 rounded-lg bg-orange-500/10 border border-orange-500/30">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="h-5 w-5 text-orange-400 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-orange-300 mb-1">
+                  Transaction Failed
+                </p>
+                <p className="text-sm text-orange-400/90">
+                  Shield transaction failed. Your funds are safe.
+                </p>
+              </div>
+            </div>
+          </div>
           
           <Button className="w-full" onClick={reset}>
             Try Again
