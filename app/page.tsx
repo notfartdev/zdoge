@@ -303,7 +303,7 @@ export default function HomePage() {
         />
         
         {/* Hero Section - Zcash-style layout with breathing room */}
-        <section className="relative min-h-[110vh] flex items-center px-6 md:px-12 pb-[20vh] overflow-hidden">
+        <section className="relative min-h-[110vh] flex items-center justify-center px-6 md:px-12 pb-[20vh] overflow-hidden">
           
           {/* Center vignette - calmed, symmetrical, centered */}
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_450px_350px_at_50%_50%,_rgba(194,166,51,0.03)_0%,_transparent_55%)]" />
@@ -318,8 +318,8 @@ export default function HomePage() {
             />
           </div>
           
-          {/* Hero content - Zcash-style typography and positioning */}
-          <div className="relative z-10 w-full max-w-5xl" style={{ paddingTop: 'clamp(4rem, 10vh, 8rem)' }}>
+          {/* Hero content - Zcash-style typography, centered */}
+          <div className="relative z-10 w-full max-w-5xl mx-auto text-center" style={{ paddingTop: 'clamp(4rem, 10vh, 8rem)' }}>
             <motion.div
               initial={{ opacity: 0, y: 30 }}
               animate={{ opacity: 1, y: 0 }}
@@ -327,7 +327,7 @@ export default function HomePage() {
             >
               {/* Headline - Canela serif, editorial style */}
               <h1 
-                className="mb-6 text-white/95"
+                className="mb-6 text-white/95 mx-auto"
                 style={{
                   fontFamily: 'var(--font-serif)',
                   fontWeight: 600,
@@ -337,9 +337,9 @@ export default function HomePage() {
                   maxWidth: '14ch',
                 }}
               >
-                zDoge is encrypted
+                Private DOGE
                 <br />
-                electronic cash.
+                transactions.
               </h1>
               
               {/* Description - Canela regular, restrained */}
@@ -347,7 +347,7 @@ export default function HomePage() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 0.3, duration: 1 }}
-                className="mb-10 text-white/70"
+                className="mb-10 text-white/70 mx-auto"
                 style={{
                   fontFamily: 'var(--font-serif)',
                   fontWeight: 400,
@@ -357,8 +357,8 @@ export default function HomePage() {
                   maxWidth: '42ch',
                 }}
               >
-                The first cryptocurrency to develop zero-knowledge encryption
-                for private peer-to-peer payments on DogeOS.
+                Shield, transfer, and swap tokens privately on DogeOS
+                using zero-knowledge proofs. Complete privacy, no compromises.
               </motion.p>
               
               {/* CTA Buttons - Sans-serif, intentional contrast */}
@@ -366,7 +366,7 @@ export default function HomePage() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.5, duration: 0.8 }}
-                className="flex flex-col sm:flex-row gap-4"
+                className="flex flex-col sm:flex-row gap-4 justify-center"
               >
                 <Link href="/shield">
                   <button 
