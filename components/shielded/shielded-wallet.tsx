@@ -316,8 +316,8 @@ export function ShieldedWallet() {
             <Wallet className="h-8 w-8 text-muted-foreground" />
           </div>
           <div className="text-center">
-            <h3 className="text-lg font-medium mb-1">Connect Your Wallet</h3>
-            <p className="text-sm text-muted-foreground">
+            <h3 className="text-lg font-medium mb-1 font-mono">Connect Your Wallet</h3>
+            <p className="text-sm text-muted-foreground font-mono">
               Connect your wallet to access shielded transactions
             </p>
           </div>

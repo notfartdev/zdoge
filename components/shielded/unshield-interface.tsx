@@ -345,8 +345,8 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
     return (
       <div className="text-center py-8 space-y-4">
         <div>
-          <p className="text-muted-foreground">No shielded notes to unshield</p>
-          <p className="text-sm text-muted-foreground mt-2">Shield some {selectedToken} first</p>
+          <p className="text-muted-foreground font-mono">No shielded notes to unshield</p>
+          <p className="text-sm text-muted-foreground mt-2 font-mono">Shield some {selectedToken} first</p>
         </div>
         <Link href={`/shield?token=${selectedToken}`}>
           <Button className="mt-4">
@@ -364,7 +364,7 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
   return (
     <div className="space-y-4">
       <div>
-        <h3 className="text-lg font-medium">Send to Public Address</h3>
+        <h3 className="text-lg font-medium font-mono">Send to Public Address</h3>
         <p className="text-sm text-muted-foreground">Unshield your shielded DOGE to any public wallet address</p>
       </div>
       

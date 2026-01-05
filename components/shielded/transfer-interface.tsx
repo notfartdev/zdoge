@@ -324,8 +324,8 @@ export function TransferInterface({ notes, onSuccess, selectedToken = "DOGE", on
     return (
       <div className="text-center py-8 space-y-4">
         <div>
-          <p className="text-muted-foreground">No shielded notes to transfer</p>
-          <p className="text-sm text-muted-foreground mt-2">
+          <p className="text-muted-foreground font-mono">No shielded notes to transfer</p>
+          <p className="text-sm text-muted-foreground mt-2 font-mono">
             Shield some {selectedToken} first to enable transfers
           </p>
         </div>
@@ -342,8 +342,8 @@ export function TransferInterface({ notes, onSuccess, selectedToken = "DOGE", on
   return (
     <div className="space-y-4">
       <div>
-        <h3 className="text-lg font-medium">Private Transfer</h3>
-        <p className="text-sm text-muted-foreground">
+        <h3 className="text-lg font-medium font-mono">Private Transfer</h3>
+        <p className="text-sm text-muted-foreground font-mono">
           Send shielded tokens to another shielded address privately
         </p>
       </div>

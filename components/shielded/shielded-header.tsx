@@ -209,9 +209,8 @@ export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", onTokenC
     return (
       <Card className="p-6 mb-6 bg-card/50 backdrop-blur border-primary/20">
         <div className="text-center py-8">
-          <Shield className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-          <h3 className="text-lg font-semibold mb-2">Connect Your Wallet</h3>
-          <p className="text-sm text-muted-foreground">
+          <h3 className="text-lg font-semibold mb-2 font-mono">Connect Your Wallet</h3>
+          <p className="text-sm text-muted-foreground font-mono">
             Connect your wallet to access your shielded balance
           </p>
         </div>
