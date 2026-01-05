@@ -50,25 +50,35 @@ export function CustomCursor() {
     <>
       {/* Main cursor dot */}
       <motion.div
-        className="fixed top-0 left-0 w-3 h-3 bg-white rounded-full pointer-events-none z-[10000] mix-blend-difference"
+        className="fixed top-0 left-0 w-2 h-2 bg-white rounded-full pointer-events-none z-[10000] mix-blend-difference"
         animate={{
-          x: position.x - 6,
-          y: position.y - 6,
-          scale: isHovering ? 0 : 5,
+          x: position.x - 4,
+          y: position.y - 4,
+          scale: isHovering ? 0 : 2.5,
           opacity: isVisible ? 1 : 0,
         }}
-        transition={{ type: "spring", stiffness: 500, damping: 28, mass: 0.5 }}
+        transition={{
+          x: { type: "tween", duration: 0, ease: "linear" },
+          y: { type: "tween", duration: 0, ease: "linear" },
+          scale: { type: "spring", stiffness: 600, damping: 30, mass: 0.3 },
+          opacity: { type: "tween", duration: 0.1 },
+        }}
       />
       {/* Hover ring */}
       <motion.div
-        className="fixed top-0 left-0 w-12 h-12 border border-white rounded-full pointer-events-none z-[10000] mix-blend-difference"
+        className="fixed top-0 left-0 w-8 h-8 border border-white rounded-full pointer-events-none z-[10000] mix-blend-difference"
         animate={{
-          x: position.x - 24,
-          y: position.y - 24,
+          x: position.x - 16,
+          y: position.y - 16,
           scale: isHovering ? 1 : 0,
           opacity: isVisible ? 1 : 0,
         }}
-        transition={{ type: "spring", stiffness: 300, damping: 20, mass: 0.8 }}
+        transition={{
+          x: { type: "tween", duration: 0, ease: "linear" },
+          y: { type: "tween", duration: 0, ease: "linear" },
+          scale: { type: "spring", stiffness: 400, damping: 25, mass: 0.3 },
+          opacity: { type: "tween", duration: 0.15 },
+        }}
       />
     </>
   )
