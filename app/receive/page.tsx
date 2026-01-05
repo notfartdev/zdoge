@@ -128,8 +128,9 @@ export default function ReceivePage() {
         <DashboardNav />
         <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 max-w-5xl">
           <Card className="p-12 text-center">
-            <h2 className="text-2xl font-bold mb-2 font-mono">Connect Your Wallet</h2>
-            <p className="text-muted-foreground font-mono">
+            <Wallet className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+            <h2 className="text-2xl font-bold mb-2">Connect Your Wallet</h2>
+            <p className="text-muted-foreground">
               Connect your wallet to view your receive addresses
             </p>
           </Card>
@@ -143,10 +144,11 @@ export default function ReceivePage() {
       <DashboardNav />
       <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 max-w-5xl">
         <div className="mb-6 sm:mb-8">
-          <h1 className="text-2xl sm:text-3xl font-bold mb-2 font-mono">
+          <h1 className="text-2xl sm:text-3xl font-bold mb-2 flex items-center gap-2 sm:gap-3">
+            <QrCode className="h-6 w-6 sm:h-8 sm:w-8 text-primary" />
             Receive Addresses
           </h1>
-          <p className="text-sm sm:text-base text-muted-foreground font-mono">
+          <p className="text-sm sm:text-base text-muted-foreground">
             Share your addresses to receive payments. Use the shielded address for private transactions.
           </p>
         </div>
@@ -159,8 +161,8 @@ export default function ReceivePage() {
                 <Wallet className="h-5 w-5" />
               </div>
               <div>
-                <h2 className="text-lg font-semibold font-mono">Public Address</h2>
-                <p className="text-sm text-muted-foreground font-mono">Receive public DOGE & tokens</p>
+                <h2 className="text-lg font-semibold">Public Address</h2>
+                <p className="text-sm text-muted-foreground">Receive public DOGE & tokens</p>
               </div>
             </div>
 
@@ -217,11 +219,11 @@ export default function ReceivePage() {
                 <Shield className="h-5 w-5 text-primary" />
               </div>
               <div>
-                <h2 className="text-lg font-semibold flex items-center gap-2 font-mono">
+                <h2 className="text-lg font-semibold flex items-center gap-2">
                   Shielded Address
                   <Badge variant="outline" className="text-xs">Private & Permanent</Badge>
                 </h2>
-                <p className="text-sm text-muted-foreground font-mono">
+                <p className="text-sm text-muted-foreground">
                   Receive private shielded tokens • This address never changes
                 </p>
               </div>

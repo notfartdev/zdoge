@@ -197,8 +197,8 @@ export function SwapInterface({ notes, onSuccess, onInputTokenChange }: SwapInte
   if (Object.keys(balances).length === 0 || Object.values(balances).every(b => b === 0n)) {
     return (
       <div className="text-center py-8">
-        <p className="text-muted-foreground font-mono">No shielded tokens to swap</p>
-        <p className="text-sm text-muted-foreground mt-2 font-mono">
+        <p className="text-muted-foreground">No shielded tokens to swap</p>
+        <p className="text-sm text-muted-foreground mt-2">
           Shield some tokens first to enable swapping
         </p>
       </div>
@@ -208,7 +208,7 @@ export function SwapInterface({ notes, onSuccess, onInputTokenChange }: SwapInte
   return (
     <div className="space-y-4">
       <div>
-        <h3 className="text-lg font-medium font-mono">Swap Tokens</h3>
+        <h3 className="text-lg font-medium">Swap Tokens</h3>
         <p className="text-sm text-muted-foreground">
           Swap tokens privately within the shielded layer
         </p>

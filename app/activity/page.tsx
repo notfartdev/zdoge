@@ -128,8 +128,9 @@ export default function ActivityPage() {
         <DashboardNav />
         <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 max-w-5xl">
           <Card className="p-12 text-center">
-            <h2 className="text-2xl font-bold mb-2 font-mono">Connect Your Wallet</h2>
-            <p className="text-muted-foreground font-mono">
+            <Wallet className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+            <h2 className="text-2xl font-bold mb-2">Connect Your Wallet</h2>
+            <p className="text-muted-foreground">
               Connect your wallet to view your transaction history
             </p>
           </Card>
@@ -163,7 +164,8 @@ export default function ActivityPage() {
       <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 max-w-5xl">
         <div className="mb-6 sm:mb-8">
           <div className="flex items-center justify-between mb-2">
-            <h1 className="text-2xl sm:text-3xl font-bold mb-2 font-mono">
+            <h1 className="text-2xl sm:text-3xl font-bold mb-2 flex items-center gap-2 sm:gap-3">
+              <Activity className="h-6 w-6 sm:h-8 sm:w-8 text-primary" />
               Activity
             </h1>
             <Button
@@ -176,7 +178,7 @@ export default function ActivityPage() {
               Refresh
             </Button>
           </div>
-          <p className="text-sm sm:text-base text-muted-foreground font-mono">
+          <p className="text-sm sm:text-base text-muted-foreground">
             View your shielded transaction history
           </p>
         </div>
@@ -210,8 +212,8 @@ export default function ActivityPage() {
         {/* Transaction List */}
         {filteredTransactions.length === 0 ? (
           <Card className="p-12 text-center">
-            <h3 className="text-lg font-bold mb-2 font-mono">No Transactions</h3>
-            <p className="text-sm text-muted-foreground mb-4 font-mono">
+            <h3 className="text-lg font-bold mb-2">No Transactions</h3>
+            <p className="text-sm text-muted-foreground mb-4">
               Your shielded transactions will appear here
             </p>
           </Card>
