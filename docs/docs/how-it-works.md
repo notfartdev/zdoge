@@ -4,9 +4,9 @@ title: How It Works
 sidebar_position: 2
 ---
 
-# How Dogenado Works
+# How zDoge Works
 
-Dogenado uses **zero-knowledge cryptography** to enable private transactions. This page explains the technical concepts behind the protocol.
+zDoge uses **zero-knowledge cryptography** to enable private transactions. This page explains the technical concepts behind the protocol.
 
 ## The Privacy Problem
 
@@ -16,53 +16,58 @@ On public blockchains like DogeOS, all transactions are visible. Anyone can:
 - Analyze your transaction history
 - Link your real-world identity to your wallet
 
-**Dogenado solves this by breaking the on-chain link between sender and receiver.**
+**zDoge solves this by enabling fully private transactions that hide sender, recipient, and amount.**
 
-## Anonymity Pools
+## Shielded Transactions
 
-The core of Dogenado consists of **anonymity pools** - smart contracts that:
+zDoge implements a **Zcash-style shielded transaction system** that enables:
 
-1. Accept fixed-denomination deposits
-2. Store all deposits together in a Merkle tree
-3. Allow withdrawals using zero-knowledge proofs
+1. **Shield (t→z)**: Convert public tokens to private shielded notes
+2. **Transfer (z→z)**: Send tokens privately between shielded addresses
+3. **Swap (z→z)**: Exchange tokens within the shielded layer
+4. **Unshield (z→t)**: Convert shielded notes back to public tokens
+
+All transactions use zero-knowledge proofs to prove validity without revealing any details.
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│                   Anonymity Pool                     │
+│              Shielded Transaction Pool               │
 │                                                      │
-│  ┌─────┐  ┌─────┐  ┌─────┐  ┌─────┐  ┌─────┐       │
-│  │ 100 │  │ 100 │  │ 100 │  │ 100 │  │ 100 │  ...  │
-│  │USDC │  │USDC │  │USDC │  │USDC │  │USDC │       │
-│  └─────┘  └─────┘  └─────┘  └─────┘  └─────┘       │
-│     ↑        ↑        ↑        ↑        ↑          │
-│   User A   User B   User C   User D   User E       │
+│  ┌────────┐  ┌────────┐  ┌────────┐  ┌────────┐    │
+│  │ Note 1 │  │ Note 2 │  │ Note 3 │  │ Note 4 │    │
+│  │ 50 DOGE│  │ 100 DOGE│ │ 25 DOGE│  │ 200 DOGE│    │
+│  └────────┘  └────────┘  └────────┘  └────────┘    │
+│     ↑          ↑          ↑          ↑              │
+│   User A     User B     User C     User D          │
 │                                                      │
-│  Anyone can withdraw 100 USDC with valid proof      │
-│  No way to know which deposit it came from          │
+│  All notes are private - amounts hidden              │
+│  Transfers hide sender, recipient, and amount       │
+│  Only the note owner can spend their notes           │
 └─────────────────────────────────────────────────────┘
 ```
 
 ## Zero-Knowledge Proofs
 
-Dogenado uses **zkSNARKs** (Zero-Knowledge Succinct Non-Interactive Argument of Knowledge) - a cryptographic method that allows you to prove something is true without revealing any information about it.
+zDoge uses **zkSNARKs** (Zero-Knowledge Succinct Non-Interactive Argument of Knowledge) - a cryptographic method that allows you to prove something is true without revealing any information about it.
 
 ### What We Prove
 
-When you withdraw, you prove:
+When you make a shielded transaction, you prove:
 
-1. **You know a secret** that corresponds to a deposit in the pool
-2. **The deposit exists** in the Merkle tree
-3. **You haven't withdrawn before** (nullifier hasn't been used)
+1. **You own a valid note** in the Merkle tree
+2. **The transaction is valid** (value conservation, proper nullifiers)
+3. **You haven't spent this note before** (nullifier hasn't been used)
 
 ### What Stays Hidden
 
 The proof reveals **nothing** about:
+- Which note you're spending
+- The transaction amount
+- The recipient's identity
+- Your identity
+- When the note was created
 
-- Which deposit is yours
-- When you deposited
-- Your original wallet address
-
-## The Deposit Process
+## Shield Process (Public → Private)
 
 ```mermaid
 sequenceDiagram
@@ -70,38 +75,73 @@ sequenceDiagram
     participant Wallet
     participant Contract
     
-    User->>Wallet: Initiate deposit
-    Wallet->>Wallet: Generate random secret + nullifier
-    Wallet->>Wallet: Compute commitment = hash(secret, nullifier)
-    Wallet->>Contract: deposit(commitment, amount)
+    User->>Wallet: Initiate shield
+    Wallet->>Wallet: Generate shielded note
+    Wallet->>Wallet: Compute commitment
+    Wallet->>Contract: shield(commitment, amount)
     Contract->>Contract: Add commitment to Merkle tree
-    Contract->>Wallet: Emit Deposit event
-    Wallet->>User: Return secret note
+    Contract->>Wallet: Emit Shield event
+    Wallet->>User: Note stored locally
 ```
 
 ### Step by Step:
 
-1. **Generate Secrets**: Your browser generates two random values:
-   - **Secret**: Random 31-byte value
-   - **Nullifier**: Random 31-byte value
+1. **Generate Shielded Note**: Your browser generates:
+   - **Amount**: The amount to shield
+   - **Secret**: Random value for the note
+   - **Blinding**: Random value for privacy
+   - **Commitment**: Hash of amount, secret, and blinding
 
-2. **Compute Commitment**: These are hashed together using Pedersen hash:
+2. **Compute Commitment**: The commitment is computed:
    ```
-   commitment = PedersenHash(nullifier, secret)
-   ```
-
-3. **Deposit**: The commitment is stored in the smart contract's Merkle tree
-
-4. **Receive Note**: You get a note containing your secret and nullifier:
-   ```
-   dogenado-usdc100-1-0x[commitment][nullifier][secret]
+   commitment = MiMC(amount, secret, blinding, token)
    ```
 
-:::danger Important
-**SAVE YOUR NOTE SECURELY!** This is the only way to withdraw your funds. If lost, funds are unrecoverable.
-:::
+3. **Shield**: The commitment is stored in the smart contract's Merkle tree
 
-## The Withdrawal Process
+4. **Store Note**: The note is stored locally in your wallet
+
+## Transfer Process (Private → Private)
+
+```mermaid
+sequenceDiagram
+    participant Sender
+    participant Browser
+    participant Contract
+    participant Recipient
+    
+    Sender->>Browser: Enter recipient address + amount
+    Browser->>Browser: Select note to spend
+    Browser->>Browser: Generate encrypted memo
+    Browser->>Browser: Generate ZK proof (30-60 seconds)
+    Browser->>Contract: transfer(proof, commitments, memo)
+    Contract->>Contract: Verify proof
+    Contract->>Contract: Add new commitments to tree
+    Contract->>Contract: Mark nullifier as spent
+    Contract->>Recipient: Auto-discover via encrypted memo
+```
+
+### Step by Step:
+
+1. **Select Note**: Choose a shielded note to spend
+
+2. **Enter Recipient**: Provide recipient's shielded address (zdoge:...)
+
+3. **Generate Encrypted Memo**: Create encrypted memo containing:
+   - Note details for recipient
+   - Ephemeral public key
+   - Encrypted with recipient's shielded address
+
+4. **Generate ZK Proof**: Create a zero-knowledge proof that proves:
+   - You own a valid note in the tree
+   - Value is conserved (input = output1 + output2 + fee)
+   - Nullifier hasn't been used
+
+5. **Submit Transfer**: The proof is submitted to the smart contract
+
+6. **Auto-Discovery**: Recipient's wallet automatically discovers the incoming transfer via encrypted memo
+
+## Unshield Process (Private → Public)
 
 ```mermaid
 sequenceDiagram
@@ -110,12 +150,12 @@ sequenceDiagram
     participant Service
     participant Contract
     
-    User->>Browser: Paste note + recipient address
-    Browser->>Browser: Parse secret + nullifier from note
+    User->>Browser: Select note + recipient address
+    Browser->>Browser: Parse note
     Browser->>Browser: Compute Merkle proof
     Browser->>Browser: Generate ZK proof (30-60 seconds)
     Browser->>Service: Submit proof + recipient
-    Service->>Contract: withdraw(proof, nullifier, recipient)
+    Service->>Contract: unshield(proof, nullifier, recipient)
     Contract->>Contract: Verify proof
     Contract->>Contract: Mark nullifier as spent
     Contract->>User: Transfer tokens to recipient
@@ -123,33 +163,33 @@ sequenceDiagram
 
 ### Step by Step:
 
-1. **Parse Note**: Extract secret and nullifier from your note
+1. **Select Note**: Choose a shielded note to unshield
 
-2. **Compute Merkle Proof**: Find your commitment in the tree and generate a path proof
+2. **Enter Recipient**: Provide public wallet address (0x...)
 
 3. **Generate ZK Proof**: Create a zero-knowledge proof that proves:
-   - You know the secret for a commitment in the tree
+   - You own a valid note in the tree
    - The nullifier hash hasn't been used
 
-4. **Submit Withdrawal**: The proof is submitted to the smart contract
+4. **Submit Unshield**: The proof is submitted to the smart contract
 
 5. **Receive Funds**: Contract verifies the proof and sends tokens to your recipient address
 
 ## The Nullifier System
 
-To prevent double-spending, each deposit has a **nullifier**:
+To prevent double-spending, each note has a **nullifier**:
 
 ```
-nullifierHash = hash(nullifier)
+nullifierHash = MiMC(nullifier, secret)
 ```
 
-When you withdraw:
+When you spend a note:
 1. The nullifier hash is computed
 2. Contract checks if this hash was used before
-3. If unused, withdrawal proceeds and hash is marked as spent
-4. If used, withdrawal is rejected
+3. If unused, transaction proceeds and hash is marked as spent
+4. If used, transaction is rejected
 
-This ensures each deposit can only be withdrawn once, without revealing which deposit it was.
+This ensures each note can only be spent once, without revealing which note it was.
 
 ## Merkle Trees
 
@@ -163,38 +203,35 @@ All commitments are stored in a **Merkle tree** - a data structure that allows e
               H1    H2 H3   H4
               |     |   |    |
              C1    C2  C3   C4
-           (deposits/commitments)
+        (shielded notes/commitments)
 ```
 
-To prove your deposit exists, you only need:
+To prove your note exists, you only need:
 - Your commitment
 - The sibling hashes along the path to the root
 
-This is much more efficient than checking every deposit.
+This is much more efficient than checking every note.
 
-## Timelock Withdrawals (Optional)
+## Encrypted Memos & Auto-Discovery
 
-For enhanced security, Dogenado offers **timelock withdrawals**:
+For private transfers, zDoge uses **encrypted memos** to enable auto-discovery:
 
-| Option | Delay | Use Case |
-|--------|-------|----------|
-| Instant | 0 | Quick access when needed |
-| 1 Hour | 3600s | Balance speed and security |
-| 24 Hours | 86400s | Maximum privacy |
+1. **Encryption**: Sender encrypts note details using recipient's shielded address
+2. **On-Chain Storage**: Encrypted memo is stored in the Transfer event
+3. **Auto-Discovery**: Recipient's wallet scans for new transfers
+4. **Decryption**: Recipient decrypts memo using their spending key
+5. **Note Addition**: New note is automatically added to recipient's wallet
 
-Longer delays increase privacy by:
-- Allowing more deposits to accumulate
-- Making timing analysis harder
-- Reducing correlation between deposit and withdrawal times
+This enables seamless private transfers without manual note sharing.
 
 ## Privacy Considerations
 
 The strength of your privacy depends on:
 
-1. **Anonymity Set Size**: More deposits = better privacy
-2. **Time Between Deposit and Withdrawal**: Longer = better
-3. **Withdrawal Amount**: Using exact deposit amounts
-4. **Recipient Address**: Should be a fresh address
+1. **Anonymity Set Size**: More shielded notes = better privacy
+2. **Time Between Transactions**: Longer = better
+3. **Transaction Patterns**: Vary amounts and timing
+4. **Recipient Addresses**: Use fresh addresses when unshielding
 
 See [Tips for Anonymity](/user-guide/tips-anonymity) for best practices.
 
@@ -205,4 +242,3 @@ See [Tips for Anonymity](/user-guide/tips-anonymity) for best practices.
 - [Technical Architecture](/technical/architecture)
 - [Smart Contracts](/technical/smart-contracts)
 - [Zero-Knowledge Deep Dive](/technical/zero-knowledge)
-

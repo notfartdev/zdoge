@@ -1,102 +1,106 @@
 ---
 id: check-status
-title: Check Note Status
-sidebar_position: 4
+title: Check Transaction Status
+sidebar_position: 6
 ---
 
-# Check Note Status
+# Check Transaction Status
 
-Verify whether a deposit note has been withdrawn without using it.
+View your transaction history and verify the status of your shielded transactions in the Activity page.
 
-## Why Check Status?
+## Viewing Transaction History
 
-Before attempting a withdrawal, you may want to verify:
-- The note is valid
-- The deposit exists in the pool
-- The note hasn't already been spent
+### 1. Navigate to Activity
 
-## How to Check
+Go to the **Activity** section in the dashboard.
 
-### 1. Navigate to Check
+### 2. View All Transactions
 
-Go to **Dashboard → Check** or visit `/dashboard/check`
+The Activity page shows all your shielded transactions:
+- **Shield** - Public → Private conversions
+- **Transfer** - Private → Private sends
+- **Swap** - Token swaps within shielded layer
+- **Unshield** - Private → Public conversions
 
-### 2. Paste Your Note
+### 3. Transaction Details
 
-Enter your complete secret note:
+Each transaction shows:
+- **Type** - Shield, Transfer, Swap, or Unshield
+- **Token** - Token involved
+- **Amount** - Transaction amount
+- **Status** - Pending, Confirmed, or Failed
+- **Timestamp** - When transaction occurred
+- **Transaction Hash** - Clickable link to block explorer
 
-```
-dogenado-weth1-1-0xabc123...
-```
+## Transaction Statuses
 
-### 3. Click Check
+### Pending
 
-The system will verify:
+Transaction has been submitted but not yet confirmed on-chain.
 
-1. **Note Format** - Is it a valid Dogenado note?
-2. **Pool Existence** - Does the pool exist?
-3. **Deposit Verification** - Is the commitment in the Merkle tree?
-4. **Spent Status** - Has the nullifier been used?
+**What to do:**
+- Wait for confirmation (usually 10-30 seconds)
+- Check the transaction hash on the explorer
+- Refresh the page
 
-## Status Results
+### Confirmed
 
-### Valid - Not Withdrawn
+Transaction has been confirmed on-chain and is final.
 
-```
-Status: Active
-──────────────
-Token: WETH
-Amount: 1
-Pool: WETH 1
-Nullifier: Not spent
-Action: Ready to withdraw
-```
+**What you'll see:**
+- ✅ Success indicator
+- Transaction hash (clickable)
+- Updated balances
 
-This note can be used to withdraw funds.
+### Failed
 
-### Already Withdrawn
+Transaction failed for some reason.
 
-```
-Status: Spent
-──────────────
-Token: WETH  
-Amount: 1
-Pool: WETH 1
-Nullifier: Spent
-Action: Cannot withdraw
-```
+**Common causes:**
+- Insufficient gas
+- Relayer out of funds
+- Network congestion
+- Invalid proof
 
-This note has already been used. Funds were withdrawn previously.
+**What to do:**
+- Check the error message
+- Try again
+- Contact support if persistent
 
-### Invalid Note
+## Viewing on Block Explorer
 
-```
-Status: Invalid
-──────────────
-Error: Note format invalid
-Action: Check note and try again
-```
+Click any transaction hash to view it on the block explorer:
+- Transaction details
+- Block number
+- Gas used
+- Event logs
 
-The note format is incorrect or corrupted.
+## Privacy Note
 
-## Technical Details
-
-When you check a note, the following happens:
-
-1. **Parse Note**: Extract pool ID, commitment, nullifier, and secret
-2. **Compute Nullifier Hash**: `hash(nullifier)`
-3. **Query Contract**: Check if nullifier hash exists in spent list
-4. **Return Status**: Report whether note is spent or available
-
-This process doesn't consume the note or create any on-chain transaction.
-
-## Privacy Consideration
-
-:::info No Transaction Required
-Checking a note status doesn't require a wallet connection or blockchain transaction. The check is performed locally and via read-only blockchain queries.
+:::info Transaction History
+Your transaction history is stored locally and synced to the backend. Only you can see your full transaction history. The blockchain only shows that transactions occurred, not who made them.
 :::
+
+## Troubleshooting
+
+### "Transactions not showing"
+
+- Refresh the page
+- Check that you're connected with the correct wallet
+- Ensure backend is accessible
+
+### "Transaction stuck on pending"
+
+- Check the transaction hash on the explorer
+- Network may be congested
+- Wait a few minutes and refresh
+
+### "Missing transactions"
+
+- Check if transaction was successful on explorer
+- Try syncing with backend
+- Contact support if issue persists
 
 ---
 
 **Next:** [Tips for Anonymity](/user-guide/tips-anonymity)
-

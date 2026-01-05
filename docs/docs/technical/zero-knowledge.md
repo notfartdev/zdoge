@@ -6,20 +6,20 @@ sidebar_position: 3
 
 # Zero-Knowledge Proofs
 
-Dogenado uses zkSNARKs (Zero-Knowledge Succinct Non-Interactive Arguments of Knowledge) to enable private withdrawals.
+zDoge uses zkSNARKs (Zero-Knowledge Succinct Non-Interactive Arguments of Knowledge) to enable private transactions.
 
 ## What is a Zero-Knowledge Proof?
 
 A zero-knowledge proof allows you to prove a statement is true without revealing any information about why it's true.
 
 **Example**: 
-- **Statement**: "I know a secret that corresponds to one of the deposits in the pool"
+- **Statement**: "I own a valid shielded note in the Merkle tree"
 - **Proof**: Mathematical proof that this is true
-- **What's hidden**: Which deposit, what the secret is
+- **What's hidden**: Which note, the amount, your identity
 
 ## Groth16 Proving System
 
-Dogenado uses **Groth16**, a zkSNARK system with:
+zDoge uses **Groth16**, a zkSNARK system with:
 
 | Property | Value |
 |----------|-------|
@@ -28,48 +28,61 @@ Dogenado uses **Groth16**, a zkSNARK system with:
 | Proving Time | 30-60 seconds |
 | Security | 128-bit |
 
-## The Withdrawal Circuit
+## The Shielded Circuits
 
-The circuit proves:
+zDoge uses multiple circuits for different transaction types:
 
-1. **Knowledge of preimage**: Prover knows `(secret, nullifier)` such that:
-   ```
-   commitment = hash(nullifier, secret)
-   ```
+### Shield Circuit
 
-2. **Merkle membership**: The commitment exists in the Merkle tree:
-   ```
-   root = MerkleProof(commitment, path)
-   ```
+Proves a commitment is correctly formed:
 
-3. **Nullifier computation**: The nullifier hash is correctly computed:
+1. **Commitment computation**: 
    ```
-   nullifierHash = hash(nullifier)
+   commitment = MiMC(amount, secret, blinding, token)
    ```
 
-### Circuit Inputs
+2. **Public inputs**: Commitment, token address, amount
 
-| Input | Type | Visibility |
-|-------|------|------------|
-| `root` | Field | Public |
-| `nullifierHash` | Field | Public |
-| `recipient` | Address | Public |
-| `secret` | Field | Private |
-| `nullifier` | Field | Private |
-| `pathElements[20]` | Field[] | Private |
-| `pathIndices[20]` | Bits | Private |
+### Transfer Circuit
 
-### Public vs Private Inputs
+Proves ownership and value conservation:
 
-**Public Inputs** (visible on-chain):
-- Merkle root
-- Nullifier hash
-- Recipient address
+1. **Note ownership**: Prover knows secret for a note in the tree
+2. **Value conservation**: input = output1 + output2 + fee
+3. **Nullifier check**: Nullifier hash hasn't been used
+4. **Merkle membership**: Input note exists in tree
 
-**Private Inputs** (never revealed):
-- Secret
-- Nullifier
-- Merkle path
+**Public inputs**: Root, nullifier hash, output commitments, relayer, fee
+
+### Unshield Circuit
+
+Proves ownership for withdrawal:
+
+1. **Note ownership**: Prover knows secret for a note in the tree
+2. **Merkle membership**: Note exists in tree
+3. **Nullifier check**: Nullifier hash hasn't been used
+
+**Public inputs**: Root, nullifier hash, recipient, amount
+
+### Swap Circuit
+
+Proves valid token swap:
+
+1. **Note ownership**: Prover owns input note
+2. **Value conservation**: Proper exchange rate applied
+3. **Nullifier check**: Input nullifier hasn't been used
+4. **Merkle membership**: Input note exists in tree
+
+**Public inputs**: Root, input nullifier hash, output commitment, tokens, amounts
+
+## Circuit Constraints
+
+| Circuit | Constraints | Complexity |
+|---------|-------------|------------|
+| Shield | ~5,000 | Low |
+| Transfer | ~80,000 | High |
+| Unshield | ~40,000 | Medium |
+| Swap | ~50,000 | Medium |
 
 ## How Proofs are Generated
 
@@ -118,7 +131,7 @@ The trusted setup ensures:
 
 ### Our Trusted Setup
 
-Dogenado uses a trusted setup with contributions from multiple sources to ensure security.
+zDoge uses trusted setups with contributions from multiple sources to ensure security.
 
 ## Proof Verification
 
@@ -129,7 +142,7 @@ function verifyProof(
     uint[2] memory a,      // Proof element A
     uint[2][2] memory b,   // Proof element B  
     uint[2] memory c,      // Proof element C
-    uint[2] memory input   // [root, nullifierHash]
+    uint[] memory input     // Public inputs (varies by circuit)
 ) public view returns (bool)
 ```
 
@@ -147,22 +160,14 @@ An invalid proof cannot pass verification (cryptographic guarantee).
 ### Zero-Knowledge
 
 The proof reveals nothing about:
-- Which deposit you're withdrawing
-- Your secret or nullifier
+- Which note you're spending
+- The transaction amount
+- Your identity
 - The Merkle path used
 
 ### Completeness
 
 A valid proof will always verify if the statement is true.
-
-## Circuit Constraints
-
-| Component | Constraints |
-|-----------|-------------|
-| Pedersen Hash | ~1,000 |
-| MiMC Hash (per level) | ~300 |
-| Merkle Tree (20 levels) | ~6,000 |
-| Total | ~7,000 |
 
 ## Performance
 
@@ -182,7 +187,7 @@ A valid proof will always verify if the statement is true.
 | Verify Groth16 | ~220,000 gas |
 | Check nullifier | ~5,000 gas |
 | Transfer tokens | ~50,000 gas |
-| **Total** | **~300,000 gas** |
+| **Total** | **~300,000-500,000 gas** |
 
 ## Further Reading
 
@@ -193,4 +198,3 @@ A valid proof will always verify if the statement is true.
 ---
 
 **Next:** [Merkle Tree](/technical/merkle-tree)
-

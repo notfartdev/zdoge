@@ -6,103 +6,114 @@ sidebar_position: 3
 
 # Frequently Asked Questions
 
-Common questions about using Dogenado.
+Common questions about using zDoge.
 
 ## General
 
-### What is Dogenado?
+### What is zDoge?
 
-Dogenado is a privacy protocol on DogeOS that allows you to deposit tokens and withdraw them to a different address, breaking the on-chain link between the two addresses using zero-knowledge proofs.
+zDoge is a Zcash-style shielded transaction system on DogeOS that enables private token transfers. You can shield tokens (convert public to private), transfer tokens privately between shielded addresses, swap tokens within the shielded layer, and unshield tokens back to public addresses - all with complete privacy.
 
-### Is Dogenado a mixer?
+### Is zDoge a mixer?
 
-Technically, Dogenado uses "anonymity pools" rather than traditional mixing. Funds are never actually mixed together - instead, cryptographic proofs allow withdrawal without revealing which deposit you're claiming.
+No. zDoge is a **shielded transaction system** similar to Zcash. Unlike mixers with fixed denominations, zDoge supports variable amounts and enables private transfers between shielded addresses.
 
 ### Is my money safe?
 
-Dogenado is non-custodial. Your funds are controlled by your secret note. As long as you keep your note secure, only you can withdraw your funds.
+zDoge is non-custodial. Your funds are controlled by your spending key and shielded notes. As long as you keep your spending key secure, only you can spend your notes.
 
-### What happens if I lose my note?
+### What happens if I lose my spending key?
 
-**Your funds are permanently lost.** There is no recovery mechanism. Always store your notes securely in multiple locations.
+**Your funds are permanently lost.** There is no recovery mechanism. Always back up your spending key securely in multiple locations.
 
-## Deposits
+### What's the difference between zDoge and traditional mixers?
 
-### How do I deposit?
+| Feature | Traditional Mixer | zDoge |
+|---------|------------------|-------|
+| Amounts | Fixed denominations | Variable amounts |
+| Transfers | Deposit/Withdraw only | Shield/Transfer/Unshield/Swap |
+| Addresses | Public only | Shielded addresses |
+| Note Sharing | Manual | Auto-discovery via encrypted memos |
+| Use Case | Break tx link | Full private payments |
+
+## Shielded Transactions
+
+### How do I shield tokens?
 
 1. Connect your wallet
-2. Select token and amount
-3. Approve token spending (first time only)
-4. Confirm deposit transaction
-5. **Save your secret note**
+2. Go to Shield section
+3. Select token and enter amount (any amount)
+4. Approve token spending (first time only)
+5. Confirm shield transaction
+6. Note is automatically stored in your wallet
 
-### Why do I need to approve first?
+### How do I transfer privately?
 
-ERC-20 tokens require approval before a contract can spend them. This is a one-time action per token.
+1. Go to Send section
+2. Select token and enter amount
+3. Enter recipient's shielded address (zdoge:...)
+4. Confirm transfer
+5. Recipient automatically receives via auto-discovery
 
-### How long until my deposit is confirmed?
+### How do I unshield tokens?
 
-Typically 10-30 seconds on DogeOS, depending on network conditions.
+1. Go to Unshield section
+2. Select token and enter amount
+3. Enter recipient public address (0x...)
+4. Confirm unshield
+5. Tokens are sent to recipient address
 
-### Can I deposit any amount?
+### Can I shield any amount?
 
-No. Dogenado uses fixed-denomination pools (e.g., 1, 10, 100, 1000 USDC). This standardization is essential for privacy.
+Yes! Unlike traditional mixers, zDoge supports **any amount**. Shield 1 DOGE, 100 DOGE, or 1000 DOGE - whatever you need.
 
-## Withdrawals
+### How does auto-discovery work?
 
-### How do I withdraw?
+When you receive a private transfer:
+1. Sender encrypts note details in a memo
+2. Memo is stored in the Transfer event
+3. Your wallet automatically scans for new transfers
+4. Your wallet decrypts the memo using your spending key
+5. New note is automatically added to your wallet
 
-1. Paste your secret note
-2. Enter recipient address
-3. Choose withdrawal timing
-4. Confirm and wait for proof generation (30-60 seconds)
-5. Receive funds at recipient address
-
-### Why does proof generation take so long?
-
-Zero-knowledge proofs require complex mathematical computations. The 30-60 second wait happens in your browser and ensures your privacy is cryptographically protected.
-
-### Do I need to connect a wallet to withdraw?
-
-No! Withdrawal transactions are processed without requiring wallet connection, maximizing your privacy.
-
-### Can I withdraw to any address?
-
-Yes. You can withdraw to any valid DogeOS address.
-
-### What is the 0.5% fee?
-
-A service fee that covers:
-- Gas costs for transaction processing
-- Infrastructure maintenance
-- Protocol development
+No manual note sharing required!
 
 ## Privacy
 
-### How private is Dogenado?
+### How private is zDoge?
 
-Cryptographically, it's impossible to link your deposit to your withdrawal on-chain. However, privacy also depends on your operational security (see [Tips for Anonymity](/user-guide/tips-anonymity)).
+All shielded transactions hide:
+- ✅ Sender identity
+- ✅ Recipient identity
+- ✅ Transaction amounts
+- ✅ Transaction links
+
+The blockchain only shows that transactions occurred, not who made them or how much was transferred.
 
 ### Can anyone see my transactions?
 
 People can see:
-- That a deposit was made (amount, time, depositor address)
-- That a withdrawal was made (amount, time, recipient address)
+- That shielded transactions occurred (Shield, Transfer, Unshield events)
+- Transaction timestamps
+- Transaction hashes
 
 They **cannot** see:
-- Which deposit corresponds to which withdrawal
+- Who sent or received
+- Transaction amounts
+- Which notes were spent
+- Links between transactions
 
 ### Should I use a VPN?
 
 For maximum privacy, yes. Your IP address could potentially be logged by RPC providers or the website.
 
-### How long should I wait before withdrawing?
+### How long should I wait between transactions?
 
-The longer you wait, the more deposits accumulate in the pool, increasing your anonymity set. We recommend waiting at least a few hours, ideally days.
+The longer you wait, the more shielded notes accumulate, increasing your anonymity set. We recommend varying timing to avoid patterns.
 
 ## Technical
 
-### What blockchain does Dogenado use?
+### What blockchain does zDoge use?
 
 DogeOS (Dogecoin Layer 2).
 
@@ -114,43 +125,48 @@ Zero-Knowledge Succinct Non-Interactive Arguments of Knowledge - a cryptographic
 
 Yes. All smart contracts and frontend code are open source and available on GitHub.
 
-### Has Dogenado been audited?
+### Has zDoge been audited?
 
 [Update this based on audit status]
 
 ### What is a Merkle tree?
 
-A data structure that efficiently stores commitments and allows proof of membership. Dogenado uses a Merkle tree with 20 levels, supporting up to 1,048,576 deposits per pool.
+A data structure that efficiently stores commitments and allows proof of membership. zDoge uses a Merkle tree with 20 levels, supporting up to 1,048,576 shielded notes.
+
+### What is a shielded address?
+
+A shielded address (zdoge:...) is derived from your spending key. It's used to receive private transfers. Only someone with your spending key can decrypt memos encrypted to your shielded address.
 
 ## Troubleshooting
 
-### My deposit isn't showing up
+### "Insufficient shielded balance"
 
-1. Check the transaction on the block explorer
-2. Ensure you're looking at the correct pool
-3. Wait for network confirmation
-4. Refresh the page
+You don't have enough shielded tokens. Shield more tokens first.
 
-### Withdrawal is stuck on "Generating proof"
+### "Invalid recipient address"
 
-1. Ensure JavaScript is enabled
-2. Try a different browser (Chrome recommended)
-3. Refresh and try again
-4. Check console for errors
+For transfers, ensure the address starts with `zdoge:`. For unshield, ensure it starts with `0x` and is 42 characters.
 
-### "Note already spent" error
+### "Proof generation failed"
 
-This note has already been used for a withdrawal. Each note can only be used once.
+- Refresh the page and try again
+- Ensure you're using a modern browser (Chrome recommended)
+- Check that JavaScript is enabled
+- Try a smaller amount
 
-### "Invalid note format" error
+### "Transaction failed"
 
-Ensure you copied the complete note including the `dogenado-` prefix and the entire hex string.
+- Check your gas balance (if not using relayer)
+- Ensure relayer has sufficient balance (if using relayer)
+- Try again after a few minutes
+- Check network status
 
-### Transaction failed
+### "Auto-discovery not working"
 
-1. Check your gas balance
-2. Verify the pool still has the funds
-3. Try again with higher gas
+- Ensure your wallet is connected
+- Check that auto-discovery is enabled
+- Wait a few minutes for scanning
+- Try refreshing the page
 
 ## Safety
 
@@ -160,13 +176,20 @@ Privacy is a fundamental right. However, regulations vary by jurisdiction. Users
 
 ### Could my funds be stolen?
 
-The only way to withdraw funds is with the secret note. If you keep your note secure and the smart contracts are bug-free, your funds are safe.
+The only way to spend your notes is with your spending key. If you keep your spending key secure and the smart contracts are bug-free, your funds are safe.
 
 ### What if the website goes down?
 
-The smart contracts are deployed on DogeOS and are immutable. Even if the website disappears, funds can be recovered by interacting directly with the contracts using your secret note.
+The smart contracts are deployed on DogeOS and are immutable. Even if the website disappears, you can interact directly with the contracts using your spending key.
+
+### How do I back up my wallet?
+
+Your spending key is the master key. Back it up securely:
+- Write it down on paper (offline)
+- Store in encrypted password manager
+- Keep multiple copies in secure locations
+- Never share it with anyone
 
 ---
 
-**Still have questions?** Join our community on [Discord/Telegram/etc.]
-
+**Still have questions?** Join our community on [X (Twitter)](https://x.com/zDogeCash)

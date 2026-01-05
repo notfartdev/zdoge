@@ -6,7 +6,7 @@ sidebar_position: 4
 
 # Merkle Tree
 
-Dogenado uses a Merkle tree to efficiently store and verify deposit commitments.
+zDoge uses a Merkle tree to efficiently store and verify shielded note commitments.
 
 ## What is a Merkle Tree?
 
@@ -23,7 +23,7 @@ A Merkle tree is a hash-based data structure where:
               H1    H2 H3   H4
               |     |   |    |
              C1    C2  C3   C4
-           (commitments)
+        (shielded notes/commitments)
 ```
 
 ## Why Merkle Trees?
@@ -52,7 +52,7 @@ Steps:
 If computed Root matches stored Root → C2 exists!
 ```
 
-## Dogenado's Merkle Tree
+## zDoge's Merkle Tree
 
 ### Configuration
 
@@ -61,7 +61,7 @@ If computed Root matches stored Root → C2 exists!
 | Height | 20 levels |
 | Max Leaves | 2^20 = 1,048,576 |
 | Hash Function | MiMC Sponge |
-| Leaf Type | Pedersen commitment |
+| Leaf Type | MiMC commitment |
 
 ### Root History
 
@@ -72,7 +72,7 @@ uint32 public constant ROOT_HISTORY_SIZE = 30;
 bytes32[ROOT_HISTORY_SIZE] public roots;
 ```
 
-This allows withdrawals even if new deposits occur between proof generation and submission.
+This allows transactions even if new notes are added between proof generation and submission.
 
 ## MiMC Hash Function
 
@@ -101,7 +101,7 @@ function hash(left, right) {
 
 ## Tree Updates
 
-When a deposit is made:
+When a note is shielded:
 
 ### 1. Insert Commitment
 
@@ -145,14 +145,14 @@ Initial (empty):
      /\   /\
     0  0 0  0
 
-After deposit C1:
+After shield C1:
          R1
         /  \
       H10   0
       /\   /\
     C1  0 0  0
 
-After deposit C2:
+After shield C2:
          R2
         /  \
       H12   0
@@ -258,4 +258,3 @@ With n = 1,048,576 and height = 20:
 ---
 
 **Back to:** [Architecture Overview](/technical/architecture)
-

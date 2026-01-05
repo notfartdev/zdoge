@@ -7,6 +7,8 @@ import ResourceCard from '@site/src/components/ResourceCard';
 
 # User Guide
 
+Step-by-step guides for using zDoge.
+
 <div className="resources-grid" style={{
   display: 'grid',
   gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
@@ -16,38 +18,51 @@ import ResourceCard from '@site/src/components/ResourceCard';
 
 <ResourceCard 
   title="Connect Your Wallet"
-  description="Before using Dogenado, you need to connect a compatible wallet to interact with the DogeOS blockchain."
+  description="Before using zDoge, you need to connect a compatible wallet to interact with the DogeOS blockchain."
   href="/user-guide/connect-wallet"
   icon="Wallet"
 />
 
 <ResourceCard 
-  title="How to Deposit"
-  description="Depositing tokens into Dogenado is the first step to gaining privacy. Learn how to make your first deposit."
-  href="/user-guide/deposit"
-  icon="ArrowDownCircle"
+  title="How to Shield"
+  description="Shielding tokens converts your public tokens to private shielded notes. Learn how to make your first shield."
+  href="/user-guide/shield"
+  icon="Shield"
 />
 
 <ResourceCard 
-  title="How to Withdraw"
-  description="Withdrawing from Dogenado allows you to receive your tokens at any address while maintaining privacy."
-  href="/user-guide/withdraw"
-  icon="ArrowUpCircle"
+  title="How to Transfer Privately"
+  description="Transfer tokens privately between shielded addresses with complete privacy."
+  href="/user-guide/transfer"
+  icon="Send"
 />
 
 <ResourceCard 
-  title="Check Note Status"
-  description="Verify whether a deposit note has been withdrawn with our note status checker tool."
+  title="How to Swap Tokens"
+  description="Swap tokens privately within the shielded layer without revealing amounts or tokens."
+  href="/user-guide/swap"
+  icon="ArrowLeftRight"
+/>
+
+<ResourceCard 
+  title="How to Unshield"
+  description="Unshielding converts your shielded notes back to public tokens at any address."
+  href="/user-guide/unshield"
+  icon="ShieldOff"
+/>
+
+<ResourceCard 
+  title="Check Transaction Status"
+  description="View your transaction history and verify the status of your shielded transactions."
   href="/user-guide/check-status"
   icon="Search"
 />
 
 <ResourceCard 
   title="Tips for Anonymity"
-  description="Dogenado provides the cryptographic foundation for privacy, but following best practices maximizes your anonymity."
+  description="zDoge provides the cryptographic foundation for privacy, but following best practices maximizes your anonymity."
   href="/user-guide/tips-anonymity"
-  icon="Shield"
+  icon="Lock"
 />
 
 </div>
-

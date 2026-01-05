@@ -71,8 +71,8 @@ const app = express();
 
 // CORS configuration - allow frontend domains
 const allowedOrigins = [
-  'https://dogenado.cash',
-  'https://www.dogenado.cash',
+  'https://zdoge.cash',
+  'https://www.zdoge.cash',
   'http://localhost:3000', // Development
   'http://localhost:3001', // Development
 ];

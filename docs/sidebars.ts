@@ -17,8 +17,10 @@ const sidebars: SidebarsConfig = {
       },
       items: [
         'user-guide/connect-wallet',
-        'user-guide/deposit',
-        'user-guide/withdraw',
+        'user-guide/shield',
+        'user-guide/transfer',
+        'user-guide/swap',
+        'user-guide/unshield',
         'user-guide/check-status',
         'user-guide/tips-anonymity',
       ],

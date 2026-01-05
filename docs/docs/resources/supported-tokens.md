@@ -6,98 +6,95 @@ sidebar_position: 2
 
 # Supported Tokens
 
-Dogenado supports multiple tokens with various pool denominations.
+zDoge supports multiple tokens with **variable amounts** - you can shield any amount of any supported token.
 
 ## Token Overview
 
 | Token | Symbol | Decimals | Type |
 |-------|--------|----------|------|
-| USD Coin | USDC | 6 | Stablecoin |
-| Tether | USDT | 6 | Stablecoin |
+| Dogecoin | DOGE | 18 | Native token |
+| USD Coin | USDC | 18 | Stablecoin (18 decimals on DogeOS) |
+| Tether | USDT | 18 | Stablecoin (18 decimals on DogeOS) |
 | USD1 | USD1 | 18 | Stablecoin |
-| Wrapped DOGE | WDOGE | 18 | Wrapped Native |
 | Wrapped Ether | WETH | 18 | Wrapped ETH |
-| Liquid Bitcoin | LBTC | 8 | Wrapped BTC |
+| Liquid Bitcoin | LBTC | 18 | Wrapped BTC (18 decimals on DogeOS) |
 
-## Pool Denominations
+## Variable Amount Support
 
-### Stablecoins
+Unlike traditional mixers with fixed denominations, zDoge supports **any amount**:
 
-Ideal for everyday transactions and privacy:
+- ✅ Shield 1 DOGE or 1000 DOGE
+- ✅ Shield 0.5 USDC or 5000 USDC
+- ✅ Shield any amount you need
 
-| Token | Pools |
-|-------|-------|
-| USDC | 1, 10, 100, 1,000 |
-| USDT | 1, 10, 100, 1,000 |
-| USD1 | 1, 10, 100, 1,000 |
+This flexibility makes zDoge suitable for:
+- Small everyday transactions
+- Large value transfers
+- Any use case you need
 
-### Wrapped DOGE
+## Token Details
 
-Privacy for DOGE holders:
+### Native DOGE
 
-| Pool | USD Equivalent* |
-|------|-----------------|
-| 100 WDOGE | ~$10 |
-| 1,000 WDOGE | ~$100 |
-| 10,000 WDOGE | ~$1,000 |
-| 100,000 WDOGE | ~$10,000 |
+The native Dogecoin token on DogeOS. No wrapping required - shield DOGE directly.
 
-*Approximate, based on current prices
+**Features:**
+- Native token support
+- No wrapping fees
+- Direct shielding
 
-### Wrapped ETH
+### USDC (USD Coin)
 
-Privacy for ETH on DogeOS:
+A stablecoin pegged to the US Dollar. 18 decimals on DogeOS (not 6 like on Ethereum mainnet).
 
-| Pool | USD Equivalent* |
-|------|-----------------|
-| 0.01 WETH | ~$25 |
-| 0.1 WETH | ~$250 |
-| 1 WETH | ~$2,500 |
-| 10 WETH | ~$25,000 |
+**Use Cases:**
+- Stable value transfers
+- Privacy for USD-denominated transactions
+- Cross-chain privacy
 
-### Liquid Bitcoin
+### USDT (Tether)
 
-Privacy for BTC holders:
+Another stablecoin pegged to the US Dollar. 18 decimals on DogeOS.
 
-| Pool | USD Equivalent* |
-|------|-----------------|
-| 0.001 LBTC | ~$40 |
-| 0.01 LBTC | ~$400 |
-| 0.1 LBTC | ~$4,000 |
-| 1 LBTC | ~$40,000 |
+**Use Cases:**
+- Alternative stablecoin option
+- Privacy for USD-denominated transactions
+- High liquidity
 
-## Choosing a Pool
+### USD1
 
-### Factors to Consider
+A stablecoin on DogeOS. 18 decimals.
 
-1. **Anonymity Set Size**
-   - Popular pools have more deposits
-   - More deposits = better privacy
+**Use Cases:**
+- DogeOS-native stablecoin
+- Privacy for local transactions
 
-2. **Your Amount**
-   - Choose the largest pool that fits your needs
-   - Larger pools often have bigger anonymity sets
+### WETH (Wrapped Ether)
 
-3. **Waiting Time**
-   - Busy pools accumulate deposits faster
-   - Less waiting = quicker privacy
+Wrapped Ethereum on DogeOS. 18 decimals.
 
-### Recommendations
+**Use Cases:**
+- Privacy for ETH holdings
+- Cross-chain privacy
+- DeFi integration
 
-| Use Case | Recommended Pool |
-|----------|------------------|
-| Small transfers | 10-100 USDC |
-| Medium transfers | 100-1000 USDC |
-| Large transfers | 1000+ USDC or WETH pools |
-| BTC privacy | 0.1 LBTC |
+### LBTC (Liquid Bitcoin)
+
+Wrapped Bitcoin on DogeOS. 18 decimals on DogeOS (not 8 like native Bitcoin).
+
+**Use Cases:**
+- Privacy for BTC holdings
+- Cross-chain privacy
+- Large value transfers
 
 ## Getting Tokens
 
 ### On DogeOS Testnet
 
 For testnet, you can get tokens from:
-- DogeOS Testnet Faucet
+- [DogeOS Testnet Faucet](https://faucet.testnet.dogeos.com)
 - Testnet token bridges
+- Testnet exchanges
 
 ### Token Bridges
 
@@ -108,7 +105,7 @@ For testnet, you can get tokens from:
 
 ## Token Standards
 
-All tokens on Dogenado are **ERC-20 compatible**:
+All tokens on zDoge are **ERC-20 compatible**:
 
 ```solidity
 interface IERC20 {
@@ -119,6 +116,32 @@ interface IERC20 {
     function allowance(address owner, address spender) external view returns (uint256);
 }
 ```
+
+## Choosing Tokens
+
+### Factors to Consider
+
+1. **Liquidity**
+   - More liquid tokens = better swap rates
+   - Popular tokens = larger anonymity sets
+
+2. **Use Case**
+   - Stablecoins for stable value
+   - Native DOGE for direct use
+   - Wrapped tokens for cross-chain
+
+3. **Privacy Needs**
+   - All tokens offer the same privacy level
+   - Choose based on your needs
+
+### Recommendations
+
+| Use Case | Recommended Token |
+|----------|------------------|
+| Everyday transactions | DOGE, USDC, USDT |
+| Stable value | USDC, USDT, USD1 |
+| Large transfers | DOGE, WETH, LBTC |
+| Cross-chain privacy | WETH, LBTC |
 
 ## Adding New Tokens
 
@@ -133,4 +156,3 @@ Requirements for new tokens:
 ---
 
 **See also:** [Contract Addresses](/resources/contract-addresses)
-

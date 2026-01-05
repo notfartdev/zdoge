@@ -6,7 +6,7 @@ sidebar_position: 1
 
 # Architecture Overview
 
-Dogenado is built on a multi-layer architecture designed for security, privacy, and scalability.
+zDoge is built on a multi-layer architecture designed for security, privacy, and scalability using Zcash-style shielded transactions.
 
 ## System Components
 
@@ -20,25 +20,33 @@ graph TB
     
     subgraph Blockchain["DogeOS Blockchain"]
         subgraph Contracts["Smart Contracts"]
-            Mixer["MixerPoolV2<br/>(per token/amount)"]
-            Verifier["Verifier<br/>(Groth16)"]
-            ERC20["ERC20 Tokens<br/>(USDC, etc)"]
+            ShieldedPool["ShieldedPoolMultiToken<br/>(Main Contract)"]
+            Verifiers["Verifiers<br/>(Shield/Transfer/Unshield/Swap)"]
+            Tokens["ERC20 Tokens<br/>(DOGE, USDC, etc)"]
         end
+    end
+    
+    subgraph Backend["Backend Service"]
+        Indexer["Shielded Indexer<br/>(Event Indexing)"]
+        Relayer["Relayer<br/>(Gas Payer)"]
+        Database["PostgreSQL<br/>(Transaction History)"]
     end
     
     Frontend --> Contracts
     ZKProof --> Contracts
     Wallet --> Contracts
+    Frontend --> Backend
+    Backend --> Contracts
     
     style Browser fill:#1a1a1a,stroke:#C2A633,stroke-width:2px,color:#fff
     style Blockchain fill:#1a1a1a,stroke:#C2A633,stroke-width:2px,color:#fff
+    style Backend fill:#1a1a1a,stroke:#C2A633,stroke-width:2px,color:#fff
     style Contracts fill:#161616,stroke:#C2A633,stroke-width:1px,color:#fff
     style Frontend fill:#0d0d0d,stroke:#C2A633,stroke-width:1px,color:#C2A633
     style ZKProof fill:#0d0d0d,stroke:#C2A633,stroke-width:1px,color:#C2A633
     style Wallet fill:#0d0d0d,stroke:#C2A633,stroke-width:1px,color:#C2A633
-    style Mixer fill:#0d0d0d,stroke:#C2A633,stroke-width:1px,color:#C2A633
-    style Verifier fill:#0d0d0d,stroke:#C2A633,stroke-width:1px,color:#C2A633
-    style ERC20 fill:#0d0d0d,stroke:#C2A633,stroke-width:1px,color:#C2A633
+    style ShieldedPool fill:#0d0d0d,stroke:#C2A633,stroke-width:1px,color:#C2A633
+    style Verifiers fill:#0d0d0d,stroke:#C2A633,stroke-width:1px,color:#C2A633
 ```
 
 ## Frontend Layer
@@ -49,109 +57,127 @@ The web interface is built with **Next.js** and runs entirely in the user's brow
 
 | Component | Function |
 |-----------|----------|
-| **Deposit UI** | Token selection, amount selection, transaction submission |
-| **Withdraw UI** | Note parsing, recipient entry, proof generation |
+| **Shield UI** | Token selection, amount entry, transaction submission |
+| **Transfer UI** | Recipient entry, note selection, proof generation |
+| **Unshield UI** | Recipient entry, note selection, proof generation |
+| **Swap UI** | Token pair selection, amount entry, proof generation |
 | **Proof Generation** | Client-side ZK proof generation using snarkjs |
+| **Auto-Discovery** | Scanning for incoming transfers, memo decryption |
 | **Wallet Integration** | MetaMask, WalletConnect for transaction signing |
 
 ### Client-Side Proof Generation
 
 Zero-knowledge proofs are generated entirely in the browser:
 
-1. User provides deposit note
-2. Browser parses secret and nullifier
+1. User initiates transaction (shield/transfer/unshield/swap)
+2. Browser selects notes and generates proof inputs
 3. snarkjs generates Groth16 proof (~30-60 seconds)
 4. Proof is submitted to blockchain
 
-This ensures the user's secret never leaves their device.
+This ensures the user's secrets never leave their device.
 
 ## Smart Contract Layer
 
-All pool logic runs on DogeOS smart contracts.
+All shielded transaction logic runs on DogeOS smart contracts.
 
-### MixerPoolV2 Contract
+### ShieldedPoolMultiToken Contract
 
-Each pool is an instance of `MixerPoolV2`:
+The main contract handling all shielded operations:
 
 ```solidity
-contract MixerPoolV2 {
+contract ShieldedPoolMultiToken {
     // Configuration
-    IVerifier public verifier;
-    IERC20 public token;
-    uint256 public denomination;
+    IShieldVerifier public shieldVerifier;
+    ITransferVerifier public transferVerifier;
+    IUnshieldVerifier public unshieldVerifier;
+    ISwapVerifier public swapVerifier;
     
     // State
-    mapping(uint256 => bool) public nullifierHashes;
-    mapping(uint256 => bool) public commitments;
-    
-    // Merkle tree state
-    uint32 public currentRootIndex;
-    bytes32[ROOT_HISTORY_SIZE] public roots;
+    mapping(bytes32 => bool) public nullifierHashes;
+    MerkleTree public tree;
     
     // Functions
-    function deposit(bytes32 commitment) external;
-    function withdraw(bytes calldata proof, ...) external;
-    function scheduleWithdrawal(...) external;
-    function executeScheduledWithdrawal(...) external;
+    function shield(bytes calldata proof, bytes32 commitment, ...) external;
+    function transfer(bytes calldata proof, bytes32[2] commitments, bytes[2] memos, ...) external;
+    function unshield(bytes calldata proof, bytes32 nullifier, address recipient, ...) external;
+    function swap(bytes calldata proof, bytes32 inputNullifier, bytes32 outputCommitment, ...) external;
 }
 ```
 
-### Verifier Contract
+### Verifier Contracts
 
-A Groth16 verifier generated from the circuit:
+Separate Groth16 verifiers for each transaction type:
+- **ShieldVerifier** - Verifies shield proofs
+- **TransferVerifier** - Verifies transfer proofs
+- **UnshieldVerifier** - Verifies unshield proofs
+- **SwapVerifier** - Verifies swap proofs
 
-```solidity
-contract Verifier {
-    function verifyProof(
-        uint[2] memory a,
-        uint[2][2] memory b,
-        uint[2] memory c,
-        uint[2] memory input
-    ) public view returns (bool);
-}
-```
+## Backend Layer
+
+The backend provides indexing, relaying, and transaction history services.
+
+### Shielded Indexer
+
+- Watches Shield, Transfer, Unshield, Swap events
+- Maintains shielded Merkle tree state
+- Tracks nullifiers
+- Stores encrypted memos for auto-discovery
+
+### Relayer Service
+
+- Submits transactions on behalf of users
+- Pays gas fees (enables gasless transactions)
+- Rate limiting and balance monitoring
+
+### Transaction History
+
+- PostgreSQL database for persistence
+- Syncs transaction history across devices
+- Stores all transaction types
 
 ## Data Flow
 
-### Deposit Flow
+### Shield Flow (Public → Private)
 
 ```
 User                    Frontend               Contract
   │                        │                      │
   │─── Select token ──────>│                      │
-  │─── Select amount ─────>│                      │
+  │─── Enter amount ───────>│                      │
   │                        │                      │
-  │<── Generate secrets ───│                      │
+  │<── Generate note ───────│                      │
   │<── Compute commitment ─│                      │
   │                        │                      │
-  │─── Confirm deposit ───>│                      │
-  │                        │─── deposit(commit) ─>│
+  │─── Confirm shield ─────>│                      │
+  │                        │─── shield(proof) ───>│
   │                        │                      │─── Add to tree
   │                        │<── Emit event ───────│
-  │<── Return note ────────│                      │
+  │<── Success ────────────│                      │
 ```
 
-### Withdrawal Flow
+### Transfer Flow (Private → Private)
 
 ```
 User                    Frontend               Contract
   │                        │                      │
-  │─── Paste note ────────>│                      │
   │─── Enter recipient ───>│                      │
+  │─── Enter amount ───────>│                      │
   │                        │                      │
-  │                        │─── Fetch Merkle path │
-  │                        │<── Path data ────────│
-  │                        │                      │
-  │<── Generate ZK proof ──│                      │
+  │<── Select notes ───────│                      │
+  │<── Generate memo ──────│                      │
+  │<── Generate ZK proof ───│                      │
   │      (30-60 seconds)   │                      │
   │                        │                      │
-  │─── Confirm withdraw ──>│                      │
-  │                        │─── withdraw(proof) ─>│
+  │─── Confirm transfer ───>│                      │
+  │                        │─── transfer(proof) ──>│
   │                        │                      │─── Verify proof
-  │                        │                      │─── Check nullifier
-  │                        │                      │─── Transfer tokens
+  │                        │                      │─── Add commitments
+  │                        │                      │─── Mark nullifier
   │                        │<── Emit event ───────│
   │<── Success ────────────│                      │
+  │                        │                      │
+  │                        │                      │─── Auto-discovery
+  │                        │                      │    (Recipient)
 ```
 
 ## Security Model
@@ -164,20 +190,23 @@ User                    Frontend               Contract
 | ZK Circuits | Trustless | Mathematically verified |
 | Frontend | Verify yourself | Open source, runs locally |
 | Merkle Tree | Trustless | On-chain verification |
+| Backend | Minimal trust | Only for indexing/relaying |
 
 ### What's Protected
 
-- **Deposit-withdrawal link**: Cryptographically hidden
-- **Secret/nullifier**: Never leaves user's browser
-- **Funds**: Controlled by user's note
+- **Transaction links**: Cryptographically hidden
+- **Amounts**: Hidden in all shielded transactions
+- **Sender/Recipient**: Hidden in transfers
+- **Spending keys**: Never leave user's browser
 
 ### What's Visible On-Chain
 
-- Deposit transactions (amount, time, depositor address)
-- Withdrawal transactions (amount, time, recipient address)
-- Pool statistics (total deposits, total withdrawals)
+- Shield events (commitment, token, amount, time)
+- Transfer events (nullifier, commitments, memos, time)
+- Unshield events (nullifier, recipient, token, amount, time)
+- Swap events (input nullifier, output commitment, tokens, time)
 
-The link between deposits and withdrawals cannot be determined.
+The link between transactions cannot be determined.
 
 ## Scalability
 
@@ -186,17 +215,17 @@ The link between deposits and withdrawals cannot be determined.
 | Metric | Value |
 |--------|-------|
 | Merkle Tree Depth | 20 levels |
-| Max Deposits per Pool | 1,048,576 |
+| Max Shielded Notes | 1,048,576 |
 | Proof Generation | 30-60 seconds |
-| On-chain Verification | ~300,000 gas |
+| On-chain Verification | ~300,000-500,000 gas |
 
 ### Future Improvements
 
 - Layer 2 proof aggregation
-- Batch withdrawals
+- Batch transactions
 - Cross-chain bridges
+- Improved proof generation speed
 
 ---
 
 **Next:** [Smart Contracts](/technical/smart-contracts)
-

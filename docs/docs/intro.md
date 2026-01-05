@@ -6,84 +6,91 @@ sidebar_position: 1
 ---
 
 <div className="hero-banner">
-  <img src="/img/dogenadobanner.png" alt="DogenadoCash - Privacy Protocol for DogeOS" />
+  <img src="/img/dogenadobanner.png" alt="zDoge - Shielded Transactions for DogeOS" />
 </div>
 
-# Introduction to DogenadoCash
+# Introduction to zDoge
 
-**DogenadoCash** is a **non-custodial privacy protocol** enabling **permissionless shielded transactions** on DogeOS (Dogecoin Layer 2). A decentralized privacy protocol enabling private transactions on Doge.
+**zDoge** is a **non-custodial privacy protocol** enabling **permissionless shielded transactions** on DogeOS (Dogecoin Layer 2). A Zcash-style shielded transaction system enabling private payments with variable amounts.
 
-:::info What is DogenadoCash?
-DogenadoCash is a privacy protocol that uses zero-knowledge proofs (zkSNARKs) to enable anonymous token transfers. When you deposit tokens, you receive a secret note. This note can be used to withdraw to any address without revealing the connection to your original deposit.
+:::info What is zDoge?
+zDoge is a privacy protocol that uses zero-knowledge proofs (zkSNARKs) to enable anonymous token transfers. You can shield tokens (convert public tokens to private shielded notes), transfer tokens privately between shielded addresses, swap tokens within the shielded layer, and unshield tokens back to public addresses - all with complete privacy.
 :::
 
 ## How Privacy is Achieved
 
-DogenadoCash achieves anonymity by breaking the on-chain link between source and destination addresses through **anonymity pools**:
+zDoge achieves anonymity through **shielded transactions** using zero-knowledge proofs:
 
-1. **Deposit**: You deposit a fixed amount of tokens into a pool and receive a secret note
-2. **Wait**: Your deposit joins other deposits in the anonymity set
-3. **Withdraw**: Use your secret note to withdraw to any address - the blockchain cannot link it to your deposit
+1. **Shield**: Convert public tokens to private shielded notes (any amount)
+2. **Transfer**: Send tokens privately between shielded addresses (z→z)
+3. **Swap**: Exchange tokens within the shielded layer (z→z)
+4. **Unshield**: Convert shielded notes back to public tokens (z→t)
 
-The larger the anonymity set (more deposits), the stronger the privacy guarantee.
+All transactions hide sender, recipient, and amount on-chain. The system uses encrypted memos for auto-discovery, so recipients automatically receive incoming transfers.
 
 ## Key Features
 
 | Feature | Description |
 |---------|-------------|
-| **Zero-Knowledge Proofs** | Mathematical guarantees that no one can link deposits to withdrawals |
-| **Non-Custodial** | You always control your funds via your secret note |
+| **Zero-Knowledge Proofs** | Mathematical guarantees that no one can link transactions |
+| **Variable Amounts** | Shield any amount - no fixed denominations required |
+| **Private Transfers** | Send tokens privately between shielded addresses |
+| **Auto-Discovery** | Recipients automatically discover incoming transfers |
+| **Token Swaps** | Swap tokens privately within the shielded layer |
+| **Non-Custodial** | You always control your funds via your spending key |
 | **Fast Transactions** | Built on DogeOS for quick, low-cost transactions |
-| **Multi-Token Support** | Privacy for USDC, USDT, USD1, WDOGE, WETH, and LBTC |
-| **Optional Timelock** | Enhanced security with scheduled withdrawals |
+| **Multi-Token Support** | Privacy for DOGE, USDC, USDT, USD1, WETH, and LBTC |
 
 ## Network Status
 
 :::caution Testnet Phase
-DogenadoCash is currently live on **DogeOS Testnet** as we prepare for the upcoming **Doge zkEVM Mainnet** launch. All features are fully functional for testing purposes.
+zDoge is currently live on **DogeOS Testnet** as we prepare for the upcoming **Doge zkEVM Mainnet** launch. All features are fully functional for testing purposes.
 :::
 
 **Current deployment:**
 - **DogeOS Testnet** — Live and fully operational
 - **Doge zkEVM Mainnet** — Coming soon
 
-## Supported Tokens & Pools
+## Supported Tokens
 
-Each token has multiple pool denominations to choose from:
+zDoge supports multiple tokens with **variable amounts** (any amount can be shielded):
 
-| Token | Pool Amounts |
-|-------|--------------|
-| USDC | 1, 10, 100, 1000 |
-| USDT | 1, 10, 100, 1000 |
-| USD1 | 1, 10, 100, 1000 |
-| WDOGE | 100, 1000, 10000, 100000 |
-| WETH | 0.01, 0.1, 1, 10 |
-| LBTC | 0.001, 0.01, 0.1, 1 |
+| Token | Symbol | Type |
+|-------|--------|------|
+| Dogecoin | DOGE | Native token |
+| USD Coin | USDC | Stablecoin (18 decimals on DogeOS) |
+| Tether | USDT | Stablecoin (18 decimals on DogeOS) |
+| USD1 | USD1 | Stablecoin |
+| Wrapped Ether | WETH | Wrapped ETH |
+| Liquid Bitcoin | LBTC | Wrapped BTC (18 decimals on DogeOS) |
 
 ## Fee Structure
 
-DogenadoCash charges a **0.5% service fee** on withdrawals to cover:
+zDoge charges a **relayer fee** on transactions (when using the relayer service) to cover:
 - Gas costs for transaction processing
 - Infrastructure maintenance
 - Protocol development
 
+The fee is typically 0.5% of the transaction amount, with a minimum fee to ensure profitability.
+
 :::tip Example
-If you deposit 100 USDC and withdraw:
-- **Gross amount**: 100 USDC
-- **Service fee (0.5%)**: 0.5 USDC
-- **You receive**: 99.5 USDC
+If you transfer 100 DOGE using the relayer:
+- **Gross amount**: 100 DOGE
+- **Relayer fee (0.5%)**: 0.5 DOGE
+- **Recipient receives**: 99.5 DOGE
 :::
 
 ## Getting Started
 
-Ready to start using DogenadoCash? Follow these guides:
+Ready to start using zDoge? Follow these guides:
 
 1. [Connect Your Wallet](/user-guide/connect-wallet)
-2. [Make a Deposit](/user-guide/deposit)
-3. [Withdraw Anonymously](/user-guide/withdraw)
+2. [Shield Tokens](/user-guide/shield)
+3. [Send Privately](/user-guide/transfer)
+4. [Unshield Tokens](/user-guide/unshield)
 
 ---
 
 :::warning Disclaimer
-DogenadoCash is provided as-is. Users are responsible for understanding local regulations regarding privacy protocols. Always secure your secret notes - if lost, funds cannot be recovered.
+zDoge is provided as-is. Users are responsible for understanding local regulations regarding privacy protocols. Always secure your spending key - if lost, funds cannot be recovered.
 :::

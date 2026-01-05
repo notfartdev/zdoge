@@ -1,60 +1,57 @@
 ---
 id: tips-anonymity
 title: Tips for Anonymity
-sidebar_position: 5
+sidebar_position: 7
 ---
 
 # Tips for Anonymity
 
-Dogenado provides the cryptographic foundation for privacy, but maintaining anonymity also requires proper operational security (OpSec).
+zDoge provides the cryptographic foundation for privacy, but maintaining anonymity also requires proper operational security (OpSec).
 
 ## The Anonymity Set
 
-Your privacy is directly proportional to the **anonymity set size** - the number of deposits in a pool. The larger the set, the harder it is to correlate your deposit with your withdrawal.
+Your privacy is directly proportional to the **anonymity set size** - the number of shielded notes in the system. The larger the set, the harder it is to correlate your transactions.
 
 ```
-Small Set (5 deposits):    1 in 5 chance of correlation
-Large Set (1000 deposits): 1 in 1000 chance of correlation
+Small Set (10 notes):    1 in 10 chance of correlation
+Large Set (1000 notes): 1 in 1000 chance of correlation
 ```
 
 ### How to Maximize Anonymity Set
 
-1. **Choose popular pools** - Pools with more deposits offer better privacy
-2. **Wait before withdrawing** - Let more deposits accumulate after yours
-3. **Check pool statistics** - View deposit counts before choosing a pool
+1. **Wait between transactions** - Let more notes accumulate after yours
+2. **Vary transaction timing** - Don't create patterns
+3. **Use the system actively** - More users = larger anonymity set
 
 ## Timing Considerations
 
-### Don't Withdraw Immediately
+### Don't Transfer Immediately After Shield
 
-If you deposit at 2:00 PM and withdraw at 2:05 PM, an observer might correlate them based on timing.
+If you shield at 2:00 PM and transfer at 2:05 PM, an observer might correlate them based on timing.
 
 **Better approach:**
-- Wait hours or days between deposit and withdrawal
-- Use the 1-hour or 24-hour timelock options
+- Wait hours or days between shield and transfer
+- Vary your timing randomly
 - Don't follow a predictable pattern
 
 ### Avoid Patterns
 
-**Bad**: Always deposit Monday, withdraw Tuesday
+**Bad**: Always shield Monday, transfer Tuesday, unshield Wednesday
 **Good**: Vary your timing randomly
 
 ## Amount Patterns
 
-### Use Common Denominations
+### Vary Transaction Amounts
 
-Popular pool sizes have larger anonymity sets:
+Unlike fixed-denomination mixers, zDoge supports any amount. This means:
 
-| Token | Recommended Pools |
-|-------|-------------------|
-| USDC | 100, 1000 |
-| WETH | 0.1, 1 |
-| WDOGE | 1000, 10000 |
+**Good practices:**
+- Don't always use round numbers (100, 200, 300)
+- Vary amounts slightly (98.5, 201.3, 299.7)
+- Don't create obvious patterns
 
-### Don't Create Correlations
-
-**Bad**: Deposit 100 USDC, deposit 100 USDC, withdraw 200 USDC worth to same address
-**Good**: Use consistent denominations, separate destination addresses
+**Bad**: Shield 100, transfer 100, unshield 100
+**Good**: Shield 100, transfer 98.5, unshield 95.2
 
 ## Network Privacy
 
@@ -68,20 +65,27 @@ Your IP address can be logged. For maximum privacy:
 
 ### Fresh Recipient Addresses
 
-**Bad**: Withdraw to an address that received funds from your main wallet
+**Bad**: Unshield to an address that received funds from your main wallet
 **Good**: Generate a brand new address with no transaction history
 
 ## Wallet Hygiene
 
-### Don't Connect Wallet for Withdrawals
+### Shielded Address Privacy
 
-Dogenado doesn't require a wallet connection to withdraw. The transaction is submitted by the service.
+Your shielded address (zdoge:...) is public and can be shared. However:
 
-### Separate Deposit and Withdrawal Devices
+- ✅ Sharing your shielded address is safe (can't spend your notes)
+- ⚠️ Don't link your shielded address to your identity publicly
+- ✅ Use different shielded addresses for different purposes (optional)
 
-For maximum privacy:
-- Deposit from Device A
-- Withdraw from Device B (with VPN/Tor)
+### Spending Key Security
+
+Your spending key is the master key:
+
+- ✅ Never share your spending key
+- ✅ Back it up securely (offline, encrypted)
+- ✅ Store multiple copies in secure locations
+- ❌ Never store it online or in cloud storage
 
 ## Metadata Leakage
 
@@ -90,50 +94,84 @@ For maximum privacy:
 - Use incognito/private browsing mode
 - Clear cookies after each session
 - Consider a privacy-focused browser
+- Use different browsers for different transactions
 
 ### RPC Endpoint Privacy
 
 The RPC endpoint you use can log your requests. Consider:
 - Self-hosted nodes
 - Privacy-focused RPC providers
+- Rotating between providers
+
+## Transaction Patterns
+
+### Shield → Transfer → Unshield
+
+**Good pattern:**
+1. Shield tokens
+2. Wait (hours/days)
+3. Transfer to another shielded address
+4. Wait (hours/days)
+5. Unshield to fresh address
+
+This breaks the link at multiple points.
+
+### Multiple Transfers
+
+If you need to send to multiple recipients:
+
+**Good**: Make separate transfers with delays between them
+**Bad**: All transfers in quick succession
 
 ## Common Mistakes to Avoid
 
 | Mistake | Risk | Solution |
 |---------|------|----------|
-| Immediate withdrawal | Timing correlation | Wait for more deposits |
-| Same address for deposit/withdraw | Direct link | Use fresh addresses |
-| Unique amounts across pools | Amount correlation | Use standard denominations |
+| Immediate transfer after shield | Timing correlation | Wait for more notes |
+| Same address for shield/unshield | Direct link | Use fresh addresses |
+| Round number amounts | Amount correlation | Vary amounts slightly |
 | Same browser session | Session tracking | Use private browsing |
 | Public WiFi without VPN | IP exposure | Always use VPN |
 | Discussing transactions | Social engineering | Never share details |
+| Linking shielded address to identity | Identity correlation | Keep addresses separate |
 
 ## Privacy Checklist
 
-Before withdrawing, verify:
+Before making transactions, verify:
 
-- [ ] Waited sufficient time after deposit
+- [ ] Waited sufficient time since last transaction
 - [ ] Using VPN or Tor
-- [ ] Recipient address is fresh (no history)
-- [ ] Not connected to depositor wallet
+- [ ] Recipient address is fresh (for unshield)
+- [ ] Amounts are varied (not round numbers)
 - [ ] Private/incognito browser mode
-- [ ] Pool has sufficient anonymity set
+- [ ] Not creating timing patterns
+- [ ] Spending key is backed up securely
 
 ## Understanding the Limits
 
-Dogenado provides **cryptographic privacy** but cannot protect against:
+zDoge provides **cryptographic privacy** but cannot protect against:
 
-- **Timing analysis**: If deposit and withdrawal happen at unique times
+- **Timing analysis**: If transactions happen at unique times
 - **Amount analysis**: If your amounts are unique
 - **Social engineering**: If you tell someone about your transaction
 - **Endpoint logging**: If your RPC provider logs requests
 - **Browser fingerprinting**: If your browser is uniquely identifiable
+- **Metadata correlation**: If you link transactions through other means
 
 **Privacy is a practice, not just a tool.**
+
+## Best Practices Summary
+
+1. **Wait between transactions** - Let anonymity set grow
+2. **Vary amounts and timing** - Don't create patterns
+3. **Use VPN/Tor** - Protect your IP
+4. **Fresh addresses** - For unshield recipients
+5. **Secure spending key** - Back it up offline
+6. **Private browsing** - Reduce fingerprinting
+7. **Don't link identities** - Keep transactions separate
 
 ---
 
 :::warning Legal Note
-Users are responsible for understanding and complying with local regulations regarding privacy protocols. Dogenado is a tool - how you use it is your responsibility.
+Users are responsible for understanding and complying with local regulations regarding privacy protocols. zDoge is a tool - how you use it is your responsibility.
 :::
-

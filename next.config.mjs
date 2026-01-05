@@ -24,7 +24,7 @@ const nextConfig = {
               "style-src 'self' 'unsafe-inline'", // Required for styled-components/tailwind
               "img-src 'self' data: https:",
               "font-src 'self' https://fonts.gstatic.com",
-              "connect-src 'self' https://*.dogeos.com wss://*.dogeos.com http://localhost:* ws://localhost:* https://api.coingecko.com https://*.onrender.com https://dogenadocash.onrender.com",
+              "connect-src 'self' https://*.dogeos.com wss://*.dogeos.com http://localhost:* ws://localhost:* https://api.coingecko.com https://*.onrender.com",
               "frame-ancestors 'none'",
               "base-uri 'self'",
               "form-action 'self'",

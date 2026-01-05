@@ -3,19 +3,19 @@ import type {Config} from '@docusaurus/types';
 import type * as Preset from '@docusaurus/preset-classic';
 
 const config: Config = {
-  title: 'DogenadoCash',
-  tagline: 'A decentralized privacy protocol enabling private transactions on Doge',
+  title: 'zDoge',
+  tagline: 'Zcash-style shielded transactions for DogeOS - Private payments with zero-knowledge proofs',
   favicon: 'img/dogenadologo.png',
 
   future: {
     v4: true,
   },
 
-  url: 'https://docs.dogenado.cash',
+  url: 'https://docs.zdoge.cash',
   baseUrl: '/',
 
-  organizationName: 'dogenado',
-  projectName: 'dogenado-docs',
+  organizationName: 'zdoge',
+  projectName: 'zdoge-docs',
 
   onBrokenLinks: 'throw',
   onBrokenMarkdownLinks: 'warn',
@@ -49,9 +49,9 @@ const config: Config = {
       respectPrefersColorScheme: true,
     },
     navbar: {
-      title: 'DogenadoCash',
+      title: 'zDoge',
       logo: {
-        alt: 'DogenadoCash Logo',
+        alt: 'zDoge Logo',
         src: 'img/dogenadologo.png',
       },
       items: [
@@ -62,12 +62,12 @@ const config: Config = {
           label: 'Documentation',
         },
         {
-          href: 'https://dogenado.cash/dashboard',
+          href: 'https://zdoge.cash',
           label: 'Launch App',
           position: 'right',
         },
         {
-          href: 'https://x.com/DogenadoCash',
+          href: 'https://x.com/zDogeCash',
           label: 'X',
           position: 'right',
         },
@@ -98,7 +98,7 @@ const config: Config = {
           items: [
             {
               label: 'Launch App',
-              href: 'https://dogenado.cash/dashboard',
+              href: 'https://zdoge.cash',
             },
             {
               label: 'Block Explorer',
@@ -111,12 +111,12 @@ const config: Config = {
           items: [
             {
               label: 'X (Twitter)',
-              href: 'https://x.com/DogenadoCash',
+              href: 'https://x.com/zDogeCash',
             },
           ],
         },
       ],
-      copyright: `Copyright © ${new Date().getFullYear()} DogenadoCash. A decentralized privacy protocol for DogeOS.`,
+      copyright: `Copyright © ${new Date().getFullYear()} zDoge. A Zcash-style shielded transaction system for DogeOS.`,
     },
     prism: {
       theme: prismThemes.github,
