@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "build": "npm run clean && tsc --skipLibCheck",
-    "clean": "node --input-type=module -e \"import('fs').then(fs => fs.default.rmSync('dist', {recursive: true, force: true}))\" || rm -rf dist || true",
+    "clean": "rm -rf dist 2>/dev/null || true",
     "start": "node dist/index.js",
     "dev": "tsc --watch",
     "db:init": "node dist/database/init.js",
