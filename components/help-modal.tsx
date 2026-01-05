@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { HelpCircle, X } from "lucide-react"
 
 const faqs = [
@@ -36,34 +36,33 @@ export function HelpModal() {
           <HelpCircle className="w-5 h-5" strokeWidth={1.5} />
         </button>
       </DialogTrigger>
-      <DialogContent className="max-w-md bg-black border-white/10 rounded-lg p-0 overflow-hidden" showCloseButton={false}>
-        <div className="p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-normal font-serif">FAQ</h2>
-            <button
-              onClick={() => setOpen(false)}
-              className="w-8 h-8 rounded-full hover:bg-white/10 flex items-center justify-center text-gray-400 hover:text-white transition-colors"
-              aria-label="Close"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-          
-          <div className="space-y-6">
-            {faqs.map((faq, index) => (
-              <div key={index} className="space-y-2">
-                <h3 className="font-medium font-mono text-sm text-white">
-                  {index + 1}. {faq.question}
-                </h3>
-                <p className="font-mono text-xs text-muted-foreground leading-relaxed">
-                  {faq.answer}
-                </p>
-              </div>
-            ))}
-          </div>
+      <DialogContent className="max-w-md bg-black border border-white/10 rounded-lg p-6 shadow-xl" showCloseButton={false}>
+        <div className="flex items-center justify-between mb-6">
+          <DialogTitle className="text-xl font-normal font-serif text-white">
+            FAQ
+          </DialogTitle>
+          <button
+            onClick={() => setOpen(false)}
+            className="w-8 h-8 rounded-full hover:bg-white/10 flex items-center justify-center text-gray-400 hover:text-white transition-colors"
+            aria-label="Close"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        
+        <div className="space-y-6">
+          {faqs.map((faq, index) => (
+            <div key={index} className="space-y-2">
+              <h3 className="font-medium font-mono text-sm text-white">
+                {index + 1}. {faq.question}
+              </h3>
+              <p className="font-mono text-xs text-muted-foreground leading-relaxed">
+                {faq.answer}
+              </p>
+            </div>
+          ))}
         </div>
       </DialogContent>
     </Dialog>
   )
 }
-
