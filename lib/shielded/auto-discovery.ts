@@ -29,7 +29,7 @@ const TRANSFER_EVENT_TOPIC = '0xc04b6b3901a13e218d50c78452e5f79a4dc3f7ba86d15155
 let isScanning = false;
 let lastScannedBlock = 0;
 let scanInterval: NodeJS.Timeout | null = null;
-let onNewNoteCallback: ((note: ShieldedNote) => void) | null = null;
+let onNewNoteCallback: ((note: ShieldedNote, txHash?: string) => void) | null = null;
 
 interface TransferEvent {
   nullifierHash: string;
@@ -50,7 +50,7 @@ export function startAutoDiscovery(
   poolAddress: string,
   identity: ShieldedIdentity,
   existingNotes: ShieldedNote[],
-  onNewNote: (note: ShieldedNote) => void
+  onNewNote: (note: ShieldedNote, txHash?: string) => void
 ): void {
   // Always update the callback, even if already running
   // This ensures the latest callback is always registered
@@ -307,7 +307,7 @@ async function tryDiscoverNote(
     if (note) {
       console.log(`[AutoDiscovery] 🎉 Discovered incoming transfer! ${Number(note.amount) / 1e18} ${note.token || 'DOGE'}`);
       existingCommitments.add(note.commitment.toString());
-      onNewNoteCallback?.(note);
+      onNewNoteCallback?.(note, event.txHash);
     }
   }
 
@@ -386,9 +386,9 @@ export async function forceScan(
   const originalCallback = onNewNoteCallback;
   
   // Temporarily capture discovered notes
-  onNewNoteCallback = (note) => {
+  onNewNoteCallback = (note, txHash) => {
     discoveredNotes.push(note);
-    originalCallback?.(note);
+    originalCallback?.(note, txHash);
   };
 
   // Get current block and scan last 100 blocks

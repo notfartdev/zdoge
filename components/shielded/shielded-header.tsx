@@ -20,6 +20,7 @@ import {
   addDiscoveredNote,
   type ShieldedWalletState,
 } from "@/lib/shielded/shielded-service"
+import { addTransaction, initTransactionHistory } from "@/lib/shielded/transaction-history"
 import {
   startAutoDiscovery,
   stopAutoDiscovery,

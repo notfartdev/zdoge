@@ -50,6 +50,7 @@ import { TransferInterface } from "./transfer-interface"
 import { UnshieldInterface } from "./unshield-interface"
 import { SwapInterface } from "./swap-interface"
 import { ShieldedNotesList } from "./shielded-notes-list"
+import { addTransaction } from "@/lib/shielded/transaction-history"
 
 export function ShieldedWallet() {
   const { toast } = useToast()
@@ -143,10 +144,23 @@ export function ShieldedWallet() {
             shieldedPool.address,
             state.identity,
             getNotes(),
-            (discoveredNote) => {
+            (discoveredNote, txHash) => {
               // New note discovered! Add it and refresh UI
               const added = addDiscoveredNote(discoveredNote)
               if (added) {
+                // Add to transaction history
+                if (txHash && wallet?.address) {
+                  addTransaction({
+                    type: 'transfer',
+                    txHash: txHash,
+                    timestamp: Math.floor(Date.now() / 1000),
+                    token: discoveredNote.token || 'DOGE',
+                    amount: (Number(discoveredNote.amount) / 1e18).toFixed(4),
+                    status: 'completed',
+                  }).catch(err => {
+                    console.warn('[ShieldedWallet] Failed to add transaction to history:', err)
+                  })
+                }
                 refreshState()
                 toast({
                   title: "💰 Incoming Transfer!",
