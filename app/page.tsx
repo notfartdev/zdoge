@@ -356,40 +356,14 @@ export default function HomePage() {
                 {/* Buttons - side by side */}
                 <div className="flex flex-col sm:flex-row items-center gap-4">
                   <Link href="/shield">
-                    <button className="group relative px-8 sm:px-12 py-3 sm:py-3.5 bg-[#C2A633] text-black/90 font-mono text-xs sm:text-sm tracking-[0.15em] sm:tracking-[0.25em] font-bold transition-colors duration-300 hover:text-black flex items-center gap-2 sm:gap-3">
-                      <span className="relative z-10">Launch zDoge</span>
-                      
-                      {/* Arrow icon */}
-                      <svg 
-                        viewBox="0 0 24 24" 
-                        className="w-4 h-4 relative z-10 transition-transform duration-300 group-hover:translate-x-0.5" 
-                        fill="none" 
-                        stroke="currentColor" 
-                        strokeWidth="2.5" 
-                        strokeLinecap="round" 
-                        strokeLinejoin="round"
-                      >
-                        <path d="M5 12h14M12 5l7 7-7 7" />
-                      </svg>
+                    <button className="group relative px-8 sm:px-12 py-3 sm:py-3.5 bg-[#C2A633] text-black/90 font-mono text-xs sm:text-sm tracking-[0.1em] sm:tracking-[0.2em] transition-colors duration-300 hover:text-black">
+                      Launch zDoge
                     </button>
                   </Link>
                   
                   <Link href="https://docs.zdoge.cash" target="_blank" rel="noopener noreferrer">
-                    <button className="group relative px-8 sm:px-12 py-3 sm:py-3.5 border border-white/20 text-white/90 font-mono text-xs sm:text-sm tracking-[0.15em] sm:tracking-[0.25em] font-bold transition-all duration-300 hover:bg-white/10 hover:border-white/40 flex items-center gap-2 sm:gap-3">
-                      <span className="relative z-10">Learn zDoge</span>
-                      
-                      {/* External link icon */}
-                      <svg 
-                        viewBox="0 0 24 24" 
-                        className="w-4 h-4 relative z-10 transition-transform duration-300 group-hover:translate-x-0.5" 
-                        fill="none" 
-                        stroke="currentColor" 
-                        strokeWidth="2.5" 
-                        strokeLinecap="round" 
-                        strokeLinejoin="round"
-                      >
-                        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3" />
-                      </svg>
+                    <button className="group relative px-8 sm:px-12 py-3 sm:py-3.5 border border-white/20 text-white/90 font-mono text-xs sm:text-sm tracking-[0.1em] sm:tracking-[0.2em] transition-all duration-300 hover:bg-white/10 hover:border-white/40">
+                      Learn zDoge
                     </button>
                   </Link>
                 </div>
