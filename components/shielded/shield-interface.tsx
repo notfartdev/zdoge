@@ -71,7 +71,9 @@ export function ShieldInterface({ onSuccess, selectedToken: externalToken, onTok
   // Initialize transaction history
   useEffect(() => {
     if (wallet?.address) {
-      initTransactionHistory(wallet.address)
+      initTransactionHistory(wallet.address).catch(err => {
+        console.warn('[Shield] Failed to init transaction history:', err)
+      })
     }
   }, [wallet?.address])
   

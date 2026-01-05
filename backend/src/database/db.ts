@@ -540,3 +540,105 @@ export async function getGlobalStats(): Promise<{
   };
 }
 
+// ============ Shielded Transaction Operations ============
+
+export interface ShieldedTransactionRecord {
+  id?: string;
+  wallet_address: string;
+  tx_id: string; // txHash-type combination
+  tx_type: 'shield' | 'transfer' | 'swap' | 'unshield';
+  tx_hash: string;
+  timestamp: number; // Unix timestamp in seconds
+  token: string;
+  amount: string;
+  amount_wei: string;
+  status: 'pending' | 'confirmed' | 'failed';
+  block_number?: number;
+  transaction_data?: any; // JSONB field for flexible data
+}
+
+export async function insertShieldedTransaction(
+  tx: Omit<ShieldedTransactionRecord, 'id'>
+): Promise<string> {
+  const result = await query<{ id: string }>(
+    `INSERT INTO shielded_transactions 
+     (wallet_address, tx_id, tx_type, tx_hash, timestamp, token, amount, amount_wei, status, block_number, transaction_data)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb)
+     ON CONFLICT (wallet_address, tx_id) DO UPDATE SET
+       status = EXCLUDED.status,
+       block_number = COALESCE(EXCLUDED.block_number, shielded_transactions.block_number),
+       transaction_data = EXCLUDED.transaction_data,
+       updated_at = NOW()
+     RETURNING id`,
+    [
+      tx.wallet_address.toLowerCase(),
+      tx.tx_id,
+      tx.tx_type,
+      tx.tx_hash,
+      tx.timestamp,
+      tx.token,
+      tx.amount,
+      tx.amount_wei,
+      tx.status,
+      tx.block_number || null,
+      tx.transaction_data ? JSON.stringify(tx.transaction_data) : null,
+    ]
+  );
+  return result.rows[0].id;
+}
+
+export async function getShieldedTransactionsForWallet(
+  walletAddress: string,
+  limit: number = 500
+): Promise<ShieldedTransactionRecord[]> {
+  const result = await query<ShieldedTransactionRecord & { transaction_data: string }>(
+    `SELECT * FROM shielded_transactions 
+     WHERE wallet_address = $1 
+     ORDER BY timestamp DESC 
+     LIMIT $2`,
+    [walletAddress.toLowerCase(), limit]
+  );
+  
+  // Parse JSONB fields
+  return result.rows.map(row => ({
+    ...row,
+    transaction_data: row.transaction_data ? JSON.parse(row.transaction_data) : null,
+  }));
+}
+
+export async function upsertShieldedTransactions(
+  walletAddress: string,
+  transactions: Omit<ShieldedTransactionRecord, 'id' | 'wallet_address'>[]
+): Promise<void> {
+  if (transactions.length === 0) return;
+  
+  // Use transaction for batch insert
+  await transaction(async (client) => {
+    for (const tx of transactions) {
+      await client.query(
+        `INSERT INTO shielded_transactions 
+         (wallet_address, tx_id, tx_type, tx_hash, timestamp, token, amount, amount_wei, status, block_number, transaction_data)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb)
+         ON CONFLICT (wallet_address, tx_id) DO UPDATE SET
+           status = EXCLUDED.status,
+           block_number = COALESCE(EXCLUDED.block_number, shielded_transactions.block_number),
+           transaction_data = EXCLUDED.transaction_data,
+           updated_at = NOW()`,
+        [
+          walletAddress.toLowerCase(),
+          tx.tx_id,
+          tx.tx_type,
+          tx.tx_hash,
+          tx.timestamp,
+          tx.token,
+          tx.amount,
+          tx.amount_wei,
+          tx.status,
+          tx.block_number || null,
+          tx.transaction_data ? JSON.stringify(tx.transaction_data) : null,
+        ]
+      );
+    }
+  });
+}
+

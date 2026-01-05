@@ -42,6 +42,7 @@ import {
 } from './utils/rpc-fallback.js';
 import { getGasPrice, getEIP1559GasPrice } from './utils/gas-manager.js';
 import { initStorage } from './database/storage.js';
+import * as db from './database/db.js';
 import { shieldedRouter } from './shielded/shielded-routes.js';
 import { 
   initializeShieldedPool, 
@@ -1195,6 +1196,109 @@ app.get('/api/network', apiLimiter, (req, res) => {
     blockExplorer: 'https://blockscout.testnet.dogeos.com',
     tokens: config.tokens,
   });
+});
+
+// ============ Shielded Transaction History Routes ============
+
+// Get shielded transactions for a wallet
+app.get('/api/wallet/:address/shielded-transactions', apiLimiter, async (req, res) => {
+  const walletAddress = req.params.address.toLowerCase();
+  const limit = parseInt(req.query.limit as string) || 500;
+  
+  try {
+    if (db.isDatabaseAvailable()) {
+      const transactions = await db.getShieldedTransactionsForWallet(walletAddress, limit);
+      res.json({
+        wallet: walletAddress,
+        count: transactions.length,
+        transactions: transactions.map(tx => ({
+          id: tx.tx_id,
+          type: tx.tx_type,
+          txHash: tx.tx_hash,
+          timestamp: tx.timestamp,
+          token: tx.token,
+          amount: tx.amount,
+          amountWei: tx.amount_wei,
+          status: tx.status,
+          blockNumber: tx.block_number,
+          ...tx.transaction_data, // Spread flexible fields
+        })),
+      });
+    } else {
+      // Database not available - return empty
+      res.json({
+        wallet: walletAddress,
+        count: 0,
+        transactions: [],
+      });
+    }
+  } catch (error: any) {
+    console.error('[API] Error fetching shielded transactions:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Sync shielded transactions (upsert)
+app.post('/api/wallet/:address/shielded-transactions', apiLimiter, async (req, res) => {
+  const walletAddress = req.params.address.toLowerCase();
+  const transactions = req.body.transactions || [];
+  
+  if (!Array.isArray(transactions)) {
+    return res.status(400).json({ error: 'transactions must be an array' });
+  }
+  
+  try {
+    if (db.isDatabaseAvailable()) {
+      // Transform frontend format to database format
+      const dbTransactions = transactions.map((tx: any) => {
+        const txId = `${tx.txHash}-${tx.type}`;
+        
+        // Extract flexible fields into transaction_data
+        const transactionData: any = {};
+        if (tx.commitment) transactionData.commitment = tx.commitment;
+        if (tx.leafIndex !== undefined) transactionData.leafIndex = tx.leafIndex;
+        if (tx.recipientAddress) transactionData.recipientAddress = tx.recipientAddress;
+        if (tx.recipientPublic) transactionData.recipientPublic = tx.recipientPublic;
+        if (tx.fee) transactionData.fee = tx.fee;
+        if (tx.changeAmount) transactionData.changeAmount = tx.changeAmount;
+        if (tx.inputToken) transactionData.inputToken = tx.inputToken;
+        if (tx.outputToken) transactionData.outputToken = tx.outputToken;
+        if (tx.outputAmount) transactionData.outputAmount = tx.outputAmount;
+        if (tx.recipientPublicAddress) transactionData.recipientPublicAddress = tx.recipientPublicAddress;
+        if (tx.relayerFee) transactionData.relayerFee = tx.relayerFee;
+        
+        return {
+          tx_id: txId,
+          tx_type: tx.type,
+          tx_hash: tx.txHash,
+          timestamp: tx.timestamp,
+          token: tx.token,
+          amount: tx.amount,
+          amount_wei: tx.amountWei,
+          status: tx.status,
+          block_number: tx.blockNumber,
+          transaction_data: Object.keys(transactionData).length > 0 ? transactionData : null,
+        };
+      });
+      
+      await db.upsertShieldedTransactions(walletAddress, dbTransactions);
+      
+      res.json({
+        success: true,
+        synced: dbTransactions.length,
+        wallet: walletAddress,
+      });
+    } else {
+      // Database not available
+      res.status(503).json({ 
+        error: 'Database not available',
+        message: 'Transaction history sync requires database. Data stored locally only.' 
+      });
+    }
+  } catch (error: any) {
+    console.error('[API] Error syncing shielded transactions:', error.message);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // ============ Shielded Pool Routes ============

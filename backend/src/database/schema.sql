@@ -164,6 +164,32 @@ CREATE TABLE IF NOT EXISTS sync_state (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- ============ Shielded Transactions Table ============
+CREATE TABLE IF NOT EXISTS shielded_transactions (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    wallet_address VARCHAR(42) NOT NULL,
+    tx_id VARCHAR(128) NOT NULL, -- txHash-type combination for uniqueness
+    tx_type VARCHAR(20) NOT NULL, -- shield, transfer, swap, unshield
+    tx_hash VARCHAR(66) NOT NULL,
+    timestamp BIGINT NOT NULL, -- Unix timestamp in seconds
+    token VARCHAR(20) NOT NULL, -- Token symbol
+    amount TEXT NOT NULL, -- Amount as string
+    amount_wei TEXT NOT NULL, -- Amount in wei as string
+    status VARCHAR(20) NOT NULL DEFAULT 'pending', -- pending, confirmed, failed
+    block_number INTEGER,
+    transaction_data JSONB, -- Flexible fields (commitment, recipientAddress, fee, etc.)
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    
+    UNIQUE(wallet_address, tx_id)
+);
+
+CREATE INDEX idx_shielded_tx_wallet ON shielded_transactions(wallet_address);
+CREATE INDEX idx_shielded_tx_type ON shielded_transactions(tx_type);
+CREATE INDEX idx_shielded_tx_timestamp ON shielded_transactions(timestamp DESC);
+CREATE INDEX idx_shielded_tx_status ON shielded_transactions(status);
+CREATE INDEX idx_shielded_tx_hash ON shielded_transactions(tx_hash);
+
 -- ============ Helper Functions ============
 
 -- Update timestamp function
@@ -186,6 +212,10 @@ CREATE TRIGGER update_scheduled_withdrawals_updated_at
 
 CREATE TRIGGER update_sync_state_updated_at
     BEFORE UPDATE ON sync_state
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_shielded_transactions_updated_at
+    BEFORE UPDATE ON shielded_transactions
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- ============ Views ============
@@ -237,4 +267,5 @@ COMMENT ON TABLE merkle_nodes IS 'Cached Merkle tree state for fast reconstructi
 COMMENT ON TABLE merkle_roots IS 'Historical Merkle roots for proof verification';
 COMMENT ON TABLE transaction_logs IS 'Relayer transaction logs for monitoring';
 COMMENT ON TABLE sync_state IS 'Blockchain sync progress per pool';
+COMMENT ON TABLE shielded_transactions IS 'User transaction history for shielded operations (shield, transfer, swap, unshield)';
 

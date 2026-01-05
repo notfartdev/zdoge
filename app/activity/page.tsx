@@ -49,8 +49,12 @@ export default function ActivityPage() {
       return
     }
 
-    initTransactionHistory(wallet.address)
-    loadTransactions()
+    initTransactionHistory(wallet.address).then(() => {
+      loadTransactions()
+    }).catch(err => {
+      console.warn('[Activity] Failed to init transaction history:', err)
+      loadTransactions() // Still load from local storage
+    })
   }, [wallet?.address])
 
   // Reset to page 1 when filter changes

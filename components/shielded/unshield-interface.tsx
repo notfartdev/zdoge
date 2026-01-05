@@ -41,7 +41,9 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
   // Initialize transaction history
   useEffect(() => {
     if (wallet?.address) {
-      initTransactionHistory(wallet.address)
+      initTransactionHistory(wallet.address).catch(err => {
+        console.warn('[Unshield] Failed to init transaction history:', err)
+      })
     }
   }, [wallet?.address])
   

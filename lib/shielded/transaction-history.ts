@@ -2,7 +2,10 @@
  * Shielded Transaction History Service
  * 
  * Tracks and stores all shielded transactions for display in Activity page
+ * Syncs with backend API for persistence across devices
  */
+
+import { api } from '../dogeos-config'
 
 export type TransactionType = 'shield' | 'transfer' | 'swap' | 'unshield'
 
@@ -42,6 +45,7 @@ export interface ShieldedTransaction {
 // Storage key per wallet
 const STORAGE_PREFIX = 'dogenado_shielded_tx_history_'
 let currentWalletAddress: string | null = null
+let syncInProgress = false
 
 function getStorageKey(): string {
   const addr = currentWalletAddress?.toLowerCase() || 'default'
@@ -50,15 +54,143 @@ function getStorageKey(): string {
 
 /**
  * Initialize transaction history for a wallet
+ * Loads from backend and syncs with local storage
  */
-export function initTransactionHistory(walletAddress: string): void {
+export async function initTransactionHistory(walletAddress: string): Promise<void> {
   currentWalletAddress = walletAddress
+  
+  // Load from backend first
+  try {
+    const backendTxs = await loadFromBackend(walletAddress)
+    if (backendTxs.length > 0) {
+      // Merge with local storage (backend takes precedence)
+      const localTxs = loadFromLocalStorage()
+      const merged = mergeTransactions(backendTxs, localTxs)
+      saveToLocalStorage(merged)
+      console.log('[TxHistory] Loaded', backendTxs.length, 'transactions from backend')
+    }
+  } catch (error) {
+    console.warn('[TxHistory] Failed to load from backend, using local storage only:', error)
+  }
+}
+
+/**
+ * Load transactions from backend API
+ */
+async function loadFromBackend(walletAddress: string): Promise<ShieldedTransaction[]> {
+  try {
+    const response = await fetch(
+      `${api.indexer}/api/wallet/${walletAddress}/shielded-transactions?limit=500`,
+      {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+      }
+    )
+    
+    if (!response.ok) {
+      throw new Error(`Backend returned ${response.status}`)
+    }
+    
+    const data = await response.json()
+    return data.transactions || []
+  } catch (error) {
+    console.warn('[TxHistory] Backend load error:', error)
+    return []
+  }
+}
+
+/**
+ * Sync transactions to backend API
+ */
+async function syncToBackend(walletAddress: string, transactions: ShieldedTransaction[]): Promise<void> {
+  if (syncInProgress) {
+    console.log('[TxHistory] Sync already in progress, skipping')
+    return
+  }
+  
+  syncInProgress = true
+  try {
+    const response = await fetch(
+      `${api.indexer}/api/wallet/${walletAddress}/shielded-transactions`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transactions }),
+      }
+    )
+    
+    if (!response.ok) {
+      throw new Error(`Backend returned ${response.status}`)
+    }
+    
+    console.log('[TxHistory] Synced', transactions.length, 'transactions to backend')
+  } catch (error) {
+    console.warn('[TxHistory] Backend sync error (will retry later):', error)
+    // Don't throw - we continue with local storage
+  } finally {
+    syncInProgress = false
+  }
+}
+
+/**
+ * Merge backend and local transactions (backend takes precedence)
+ */
+function mergeTransactions(
+  backend: ShieldedTransaction[],
+  local: ShieldedTransaction[]
+): ShieldedTransaction[] {
+  const merged = new Map<string, ShieldedTransaction>()
+  
+  // Add local first
+  for (const tx of local) {
+    merged.set(tx.id, tx)
+  }
+  
+  // Overwrite with backend (more up-to-date)
+  for (const tx of backend) {
+    merged.set(tx.id, tx)
+  }
+  
+  // Sort by timestamp descending
+  return Array.from(merged.values()).sort((a, b) => b.timestamp - a.timestamp)
+}
+
+/**
+ * Load from local storage
+ */
+function loadFromLocalStorage(): ShieldedTransaction[] {
+  if (typeof localStorage === 'undefined' || !currentWalletAddress) {
+    return []
+  }
+  
+  const key = getStorageKey()
+  const stored = localStorage.getItem(key)
+  if (!stored) return []
+  
+  try {
+    return JSON.parse(stored)
+  } catch {
+    return []
+  }
+}
+
+/**
+ * Save to local storage
+ */
+function saveToLocalStorage(history: ShieldedTransaction[]): void {
+  if (typeof localStorage === 'undefined' || !currentWalletAddress) {
+    return
+  }
+  
+  const key = getStorageKey()
+  localStorage.setItem(key, JSON.stringify(history))
 }
 
 /**
  * Add a transaction to history
+ * Syncs to backend in background
  */
-export function addTransaction(tx: Omit<ShieldedTransaction, 'id'>): void {
+export async function addTransaction(tx: Omit<ShieldedTransaction, 'id'>): Promise<void> {
   if (!currentWalletAddress) {
     console.warn('[TxHistory] No wallet address set, skipping transaction save')
     return
@@ -86,19 +218,29 @@ export function addTransaction(tx: Omit<ShieldedTransaction, 'id'>): void {
     history.splice(500)
   }
   
-  saveTransactionHistory(history)
+  saveToLocalStorage(history)
   console.log('[TxHistory] Added transaction:', id, tx.type)
+  
+  // Sync to backend in background (don't await)
+  syncToBackend(currentWalletAddress, history).catch(err => {
+    console.warn('[TxHistory] Background sync failed:', err)
+  })
 }
 
 /**
  * Update transaction status
+ * Syncs to backend in background
  */
-export function updateTransactionStatus(
+export async function updateTransactionStatus(
   txHash: string,
   type: TransactionType,
   status: 'pending' | 'confirmed' | 'failed',
   blockNumber?: number
-): void {
+): Promise<void> {
+  if (!currentWalletAddress) {
+    return
+  }
+  
   const history = getTransactionHistory()
   const id = `${txHash}-${type}`
   
@@ -108,7 +250,12 @@ export function updateTransactionStatus(
     if (blockNumber) {
       history[index].blockNumber = blockNumber
     }
-    saveTransactionHistory(history)
+    saveToLocalStorage(history)
+    
+    // Sync to backend in background (don't await)
+    syncToBackend(currentWalletAddress, history).catch(err => {
+      console.warn('[TxHistory] Background sync failed:', err)
+    })
   }
 }
 
@@ -116,19 +263,7 @@ export function updateTransactionStatus(
  * Get all transactions for current wallet
  */
 export function getTransactionHistory(): ShieldedTransaction[] {
-  if (typeof localStorage === 'undefined' || !currentWalletAddress) {
-    return []
-  }
-  
-  const key = getStorageKey()
-  const stored = localStorage.getItem(key)
-  if (!stored) return []
-  
-  try {
-    return JSON.parse(stored)
-  } catch {
-    return []
-  }
+  return loadFromLocalStorage()
 }
 
 /**
@@ -157,13 +292,16 @@ export function clearTransactionHistory(): void {
   localStorage.removeItem(key)
 }
 
-function saveTransactionHistory(history: ShieldedTransaction[]): void {
-  if (typeof localStorage === 'undefined' || !currentWalletAddress) {
+/**
+ * Force sync current transaction history to backend
+ */
+export async function syncTransactionHistory(): Promise<void> {
+  if (!currentWalletAddress) {
     return
   }
   
-  const key = getStorageKey()
-  localStorage.setItem(key, JSON.stringify(history))
+  const history = getTransactionHistory()
+  await syncToBackend(currentWalletAddress, history)
 }
 
 /**
