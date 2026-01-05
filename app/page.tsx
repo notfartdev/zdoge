@@ -325,32 +325,29 @@ export default function HomePage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
             >
-              {/* Headline - Canela serif, editorial style */}
+              {/* Headline - DM Serif Display */}
               <h1 
                 className="mb-6 text-white/95 mx-auto"
                 style={{
-                  fontFamily: 'var(--font-serif)',
-                  fontWeight: 600,
+                  fontFamily: 'var(--font-dm-serif), serif',
+                  fontWeight: 400,
                   fontSize: 'clamp(3.75rem, 6vw, 5.5rem)',
                   lineHeight: 1.05,
                   letterSpacing: '-0.015em',
-                  maxWidth: '14ch',
                 }}
               >
-                Private DOGE
-                <br />
-                transactions.
+                zDoge
               </h1>
               
-              {/* Description - Canela regular, restrained */}
+              {/* Description - Inter Thin */}
               <motion.p 
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 0.3, duration: 1 }}
                 className="mb-10 text-white/70 mx-auto"
                 style={{
-                  fontFamily: 'var(--font-serif)',
-                  fontWeight: 400,
+                  fontFamily: 'var(--font-inter), sans-serif',
+                  fontWeight: 100,
                   fontSize: '1.125rem',
                   lineHeight: 1.6,
                   letterSpacing: 0,
