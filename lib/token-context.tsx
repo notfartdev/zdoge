@@ -36,12 +36,25 @@ export function TokenProvider({ children }: { children: ReactNode }) {
     const fetchPrices = async () => {
       try {
         const ids = Object.values(COINGECKO_IDS).filter((v, i, a) => a.indexOf(v) === i).join(',')
+        
+        // Add timeout and better error handling
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), 10000) // 10 second timeout
+        
         const response = await fetch(
-          `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd`
+          `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd`,
+          {
+            signal: controller.signal,
+            headers: {
+              'Accept': 'application/json',
+            },
+          }
         )
         
+        clearTimeout(timeoutId)
+        
         if (!response.ok) {
-          throw new Error('Failed to fetch prices')
+          throw new Error(`Failed to fetch prices: ${response.status} ${response.statusText}`)
         }
         
         const data = await response.json()
@@ -55,11 +68,15 @@ export function TokenProvider({ children }: { children: ReactNode }) {
         setPrices(tokenPrices)
         setLoadingPrices(false)
         console.log('[Prices] Fetched:', tokenPrices)
-      } catch (error) {
-        console.error('[Prices] Failed to fetch:', error)
+      } catch (error: any) {
+        // Silently handle errors - use fallback prices
+        if (error.name !== 'AbortError') {
+          console.warn('[Prices] Failed to fetch:', error.message || error)
+        }
+        
         // Fallback prices
         setPrices({
-          DOGE: 0.40, // Fallback DOGE price
+          DOGE: 0.40,
           USDC: 1,
           USDT: 1,
           USD1: 1,
