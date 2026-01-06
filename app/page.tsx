@@ -341,7 +341,7 @@ export default function HomePage() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 0.3, duration: 1 }}
-                className="font-mono text-sm sm:text-base text-white/50 max-w-md mx-auto mb-8 tracking-wide"
+                className="font-sans text-base sm:text-lg text-white/50 max-w-md mx-auto mb-8 font-normal leading-relaxed tracking-[-0.01em]"
               >
                 Zero-knowledge privacy enabling private transactions on Doge.
               </motion.p>
@@ -360,7 +360,7 @@ export default function HomePage() {
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.99 }}
                       transition={{ duration: 0.2, ease: "easeOut" }}
-                      className="relative px-8 sm:px-12 py-3 sm:py-3.5 bg-[#C2A633] text-black/90 font-serif text-sm sm:text-base font-medium tracking-wide transition-colors duration-200 hover:bg-[#D4B844]"
+                      className="relative px-8 sm:px-12 py-3 sm:py-3.5 bg-[#C2A633] text-black/90 font-serif text-sm sm:text-base font-medium tracking-[0.02em] transition-colors duration-200 hover:bg-[#D4B844]"
                     >
                       Launch zDoge
                     </motion.button>
@@ -371,7 +371,7 @@ export default function HomePage() {
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.99 }}
                       transition={{ duration: 0.2, ease: "easeOut" }}
-                      className="relative px-8 sm:px-12 py-3 sm:py-3.5 border border-white/20 text-white/90 font-serif text-sm sm:text-base font-medium tracking-wide transition-all duration-200 hover:bg-white/10 hover:border-white/40"
+                      className="relative px-8 sm:px-12 py-3 sm:py-3.5 border border-white/20 text-white/90 font-serif text-sm sm:text-base font-medium tracking-[0.02em] transition-all duration-200 hover:bg-white/10 hover:border-white/40"
                     >
                       Learn zDoge
                     </motion.button>
@@ -383,7 +383,7 @@ export default function HomePage() {
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ delay: 0.7, duration: 0.8 }}
-                  className="font-mono text-[9px] sm:text-xs text-white/25 tracking-[0.1em] sm:tracking-[0.2em] px-4"
+                  className="font-mono text-[10px] sm:text-xs text-white/25 tracking-[0.12em] uppercase px-4"
                 >
                   <span className="hidden sm:inline">NO SIGNUP&nbsp;&nbsp;·&nbsp;&nbsp;NO TRACKING&nbsp;&nbsp;·&nbsp;&nbsp;NON-CUSTODIAL</span>
                   <span className="sm:hidden">NO SIGNUP · NO TRACKING · NON-CUSTODIAL</span>
@@ -404,13 +404,13 @@ export default function HomePage() {
               transition={{ duration: 1 }}
               className="mb-16"
             >
-              <p className="font-mono text-xs tracking-[0.3em] text-[#C2A633] mb-4">HOW IT WORKS</p>
+              <p className="font-mono text-xs tracking-[0.18em] text-[#C2A633] mb-4 uppercase">HOW IT WORKS</p>
               <h2 className="font-sans text-3xl sm:text-4xl md:text-6xl lg:text-7xl font-light tracking-tight mb-4 md:mb-6">
                 Privacy Through
                 <br />
                 <span className="italic">Shielded Notes</span>
               </h2>
-              <p className="font-mono text-xs sm:text-sm text-muted-foreground max-w-2xl">
+              <p className="font-sans text-sm sm:text-base text-muted-foreground max-w-2xl leading-7 sm:leading-8 tracking-[-0.01em]">
                 zDoge.cash uses zero-knowledge proofs to create private transactions on DogeOS.
                 Like Zcash shielded pools, your DOGE becomes invisible on-chain while remaining 
                 fully yours and spendable anytime.
@@ -429,8 +429,8 @@ export default function HomePage() {
                   className="border border-white/[0.06] p-6 md:p-8 group hover:border-white/10 transition-all duration-500 relative"
                 >
                   <step.illustration />
-                  <h3 className="font-mono text-lg sm:text-xl font-bold text-[#C2A633] tracking-wide mb-3 italic">{step.title}</h3>
-                  <p className="font-mono text-[11px] sm:text-xs text-muted-foreground leading-relaxed">{step.description}</p>
+                  <h3 className="font-mono text-lg sm:text-xl font-semibold text-[#C2A633] mb-3">{step.title}</h3>
+                  <p className="font-sans text-sm sm:text-base text-muted-foreground leading-relaxed">{step.description}</p>
                   
                   {index < 2 && (
                     <div className="hidden md:block absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 z-10">
@@ -454,7 +454,7 @@ export default function HomePage() {
               {/* Mobile version */}
               <div className="md:hidden flex flex-col items-center gap-6">
                 <div className="w-full">
-                  <p className="font-mono text-xs tracking-widest text-[#C2A633] mb-3 text-center">SHIELD</p>
+                  <p className="font-mono text-xs tracking-[0.08em] text-[#C2A633] mb-3 text-center uppercase">SHIELD</p>
                   <div className="flex flex-wrap justify-center gap-2">
                     {['A', 'B', 'C', 'D'].map((wallet) => (
                       <div key={wallet} className="px-3 py-2 border border-white/10">
@@ -462,7 +462,7 @@ export default function HomePage() {
                           <div className="w-6 h-6 rounded bg-[#C2A633]/15 border border-[#C2A633]/40 flex items-center justify-center">
                             <span className="font-mono text-[10px] font-bold text-[#C2A633]">{wallet}</span>
                           </div>
-                          <span className="font-mono text-[10px] text-white/90">0x{wallet.toLowerCase()}...</span>
+                          <span className="font-mono text-[10px] text-white/90 tracking-[0.02em]">0x{wallet.toLowerCase()}...</span>
                         </div>
                       </div>
                     ))}
@@ -482,7 +482,7 @@ export default function HomePage() {
                     <svg viewBox="0 0 40 40" className="w-10 h-10">
                       <path d="M20 5 L35 12 L35 25 Q35 35 20 40 Q5 35 5 25 L5 12 Z" fill="none" stroke="#C2A633" strokeWidth="2" />
                     </svg>
-                    <span className="font-mono text-sm text-[#C2A633] font-bold">SHIELDED POOL</span>
+                    <span className="font-mono text-xs text-[#C2A633] font-bold tracking-[0.08em] uppercase">SHIELDED POOL</span>
                   </div>
                 </div>
 
@@ -495,12 +495,12 @@ export default function HomePage() {
                 </motion.div>
 
                 <div className="w-full">
-                  <p className="font-mono text-xs tracking-widest text-[#C2A633] mb-3 text-center">UNSHIELD</p>
+                  <p className="font-mono text-xs tracking-[0.08em] text-[#C2A633] mb-3 text-center uppercase">UNSHIELD</p>
                   <div className="flex flex-wrap justify-center gap-2">
                     {['W', 'X', 'Y', 'Z'].map((wallet) => (
                       <div key={wallet} className="px-3 py-2 border border-[#C2A633]/40 bg-[#C2A633]/10">
                         <div className="flex items-center gap-2">
-                          <span className="font-mono text-[10px] text-white/90">0x{wallet.toLowerCase()}...</span>
+                          <span className="font-mono text-[10px] text-white/90 tracking-[0.02em]">0x{wallet.toLowerCase()}...</span>
                           <div className="w-6 h-6 rounded bg-[#C2A633]/25 border border-[#C2A633]/60 flex items-center justify-center">
                             <span className="font-mono text-[10px] font-bold text-[#C2A633]">{wallet}</span>
                           </div>
@@ -512,12 +512,12 @@ export default function HomePage() {
               </div>
 
               <div className="mt-8 text-center space-y-2">
-                <p className="font-mono text-xs sm:text-sm text-muted-foreground/85 max-w-3xl mx-auto leading-loose">
+                <p className="font-sans text-sm sm:text-base text-muted-foreground/85 max-w-3xl mx-auto leading-7 sm:leading-8 tracking-[-0.01em]">
                   Shielded notes are cryptographic commitments stored in a Merkle tree. Zero-knowledge proofs 
                   verify transactions without revealing sender, recipient, or amount — ensuring complete 
                   unlinkability between addresses.
                 </p>
-                <p className="font-mono text-[10px] text-muted-foreground/50 max-w-2xl mx-auto leading-relaxed">
+                <p className="font-sans text-xs sm:text-sm text-muted-foreground/50 max-w-2xl mx-auto leading-relaxed tracking-[-0.01em]">
                   Each spend nullifies a unique hash to prevent double-spending while maintaining full anonymity within the shielded pool.
                 </p>
               </div>
@@ -537,13 +537,13 @@ export default function HomePage() {
               transition={{ duration: 1 }}
               className="mb-16 text-center md:text-left"
             >
-              <p className="font-mono text-xs tracking-[0.3em] text-[#C2A633] mb-4">PRIVACY FEATURES</p>
+              <p className="font-mono text-xs tracking-[0.18em] text-[#C2A633] mb-4 uppercase">PRIVACY FEATURES</p>
               <h2 className="font-sans text-3xl sm:text-4xl md:text-6xl lg:text-7xl font-light tracking-tight mb-4 md:mb-6">
                 What&apos;s
                 <br />
                 <span className="italic">Hidden</span>
               </h2>
-              <p className="font-mono text-xs sm:text-sm text-muted-foreground max-w-xl mx-auto md:mx-0">
+              <p className="font-sans text-sm sm:text-base text-muted-foreground max-w-xl mx-auto md:mx-0 leading-7 sm:leading-8 tracking-[-0.01em]">
                 Unlike transparent blockchains, shielded transactions reveal nothing about 
                 who sent what to whom.
               </p>
@@ -591,8 +591,8 @@ export default function HomePage() {
                     </svg>
                   </div>
                   <div>
-                    <h3 className="font-mono text-sm font-bold mb-1">{item.title}</h3>
-                    <p className="font-mono text-xs text-muted-foreground">{item.desc}</p>
+                    <h3 className="font-sans text-sm font-semibold mb-1">{item.title}</h3>
+                    <p className="font-sans text-xs sm:text-sm text-muted-foreground leading-relaxed">{item.desc}</p>
                   </div>
                 </motion.div>
               ))}
@@ -613,15 +613,15 @@ export default function HomePage() {
                   </svg>
                 </div>
                 <div>
-                  <h3 className="font-mono text-sm font-bold text-[#C2A633]/90 mb-2">Security Reminder</h3>
-                  <p className="font-mono text-xs text-muted-foreground leading-relaxed">
+                  <h3 className="font-sans text-sm font-semibold text-[#C2A633]/90 mb-2">Security Reminder</h3>
+                  <p className="font-sans text-xs sm:text-sm text-muted-foreground leading-relaxed tracking-[-0.01em]">
                     zDoge.cash is a decentralized, non-custodial protocol. We never have access to your 
                     funds or private keys. You are solely responsible for keeping your wallet secure. 
                     Always backup your shielded wallet before transactions.
                   </p>
                   <div className="flex flex-wrap gap-2 sm:gap-3 mt-4">
                     {['DECENTRALIZED', 'NON-CUSTODIAL', 'ZK-PRIVATE'].map((tag) => (
-                      <span key={tag} className="px-2 sm:px-3 py-1 border border-[#C2A633]/25 text-[#C2A633]/80 font-mono text-[9px] sm:text-[10px] tracking-wider">
+                      <span key={tag} className="px-2 sm:px-3 py-1 border border-[#C2A633]/25 text-[#C2A633]/80 font-mono text-[10px] tracking-[0.08em] uppercase">
                         {tag}
                       </span>
                     ))}
