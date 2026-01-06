@@ -176,7 +176,7 @@ export function AccountModal() {
       />
       
       {/* Modal */}
-      <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 w-full max-w-md">
+      <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 w-full max-w-md mx-4 sm:mx-0">
         <div className="bg-zinc-900 border border-[#C2A633]/30 shadow-xl">
           {/* Header */}
           <div className="flex items-center justify-between p-4 border-b border-zinc-800">
