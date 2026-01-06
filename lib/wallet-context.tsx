@@ -1,6 +1,6 @@
 "use client"
 
-import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
+import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react"
 import { usePathname } from "next/navigation"
 import { evmWalletService, type EVMWalletConnection } from "./evm-wallet"
 import { dogeosTestnet } from "./dogeos-config"
@@ -13,6 +13,7 @@ interface WalletContextType {
   disconnect: () => void
   refreshBalance: () => Promise<void>
   switchNetwork: () => Promise<void>
+  signMessage: ((message: string) => Promise<string>) | null
 }
 
 const WalletContext = createContext<WalletContextType | undefined>(undefined)
@@ -92,6 +93,21 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, [pathname])
 
+  // Create signMessage function that uses evmWalletService
+  const signMessage = useCallback(
+    wallet?.isConnected 
+      ? async (message: string) => {
+          try {
+            return await evmWalletService.signMessage(message)
+          } catch (error) {
+            console.error("[Wallet] Sign message failed:", error)
+            throw error
+          }
+        }
+      : null,
+    [wallet?.isConnected]
+  )
+
   return (
     <WalletContext.Provider value={{ 
       wallet, 
@@ -100,7 +116,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       connect, 
       disconnect, 
       refreshBalance,
-      switchNetwork 
+      switchNetwork,
+      signMessage
     }}>
       {children}
     </WalletContext.Provider>
