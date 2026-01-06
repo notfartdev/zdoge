@@ -77,9 +77,9 @@
 }
 
 @theme inline {
-  --font-sans: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
-  --font-serif: var(--font-playfair), "Playfair Display", serif;
-  --font-mono: var(--font-geist-mono), "Geist Mono", monospace;
+  --font-family-display: var(--font-display), "Helvetica Neue", "Helvetica", Arial, sans-serif;
+  --font-family-body: var(--font-body), system-ui, -apple-system, sans-serif;
+  --font-family-mono: var(--font-mono), "Geist Mono", monospace;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -124,6 +124,15 @@
   }
   body {
     @apply bg-background text-foreground;
+  }
+}
+
+@layer utilities {
+  .font-display {
+    font-family: var(--font-display);
+  }
+  .font-body {
+    font-family: var(--font-body);
   }
 }
 

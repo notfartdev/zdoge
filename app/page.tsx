@@ -188,7 +188,6 @@ function ShieldedPoolVisualization() {
                     dur={`${2 + level * 0.3}s`} 
                     repeatCount="indefinite"
                     additive="sum"
-                    type="rotate"
                   />
                 </path>
               </g>
@@ -326,10 +325,10 @@ export default function HomePage() {
               transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
             >
               {/* Wordmark - zDOGE with .cash as domain seal */}
-              <h1 className="mb-8 font-serif text-5xl sm:text-6xl md:text-8xl lg:text-9xl font-normal tracking-[-0.02em]">
+              <h1 className="mb-8 font-display text-5xl sm:text-6xl md:text-8xl lg:text-9xl font-normal tracking-[-0.02em]">
                 <span className="text-white/90">z</span><span className="text-white">DOGE</span>
                 <span 
-                  className="font-serif italic align-baseline inline-block"
+                  className="font-display italic align-baseline inline-block"
                   style={{ fontSize: '0.42em', marginLeft: '0.12em', transform: 'translateY(-0.1em)' }}
                 >
                   <span className="text-[#C2A633]/60">.</span><span className="text-[#C2A633]/90 tracking-[0.02em] ml-[0.03em]">CASH</span>
@@ -341,7 +340,7 @@ export default function HomePage() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 0.3, duration: 1 }}
-                className="font-sans text-base sm:text-lg text-white/50 max-w-md mx-auto mb-8 font-normal leading-relaxed tracking-[-0.01em]"
+                className="font-body text-base sm:text-lg text-white/50 max-w-md mx-auto mb-8 font-normal leading-relaxed tracking-[-0.01em]"
               >
                 Zero-knowledge privacy enabling private transactions on Doge.
               </motion.p>
@@ -360,7 +359,7 @@ export default function HomePage() {
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.99 }}
                       transition={{ duration: 0.2, ease: "easeOut" }}
-                      className="btn-slide-fill min-w-[160px] px-8 sm:px-12 py-3 sm:py-3.5 border border-white/20 text-white/90 bg-transparent font-serif text-sm sm:text-base font-medium tracking-[0.02em]"
+                      className="btn-slide-fill min-w-[160px] px-8 sm:px-12 py-3 sm:py-3.5 border border-white/20 text-white/90 bg-transparent font-body text-sm sm:text-base font-medium tracking-[0.02em]"
                     >
                       <span>Use zDoge</span>
                     </motion.button>
@@ -371,7 +370,7 @@ export default function HomePage() {
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.99 }}
                       transition={{ duration: 0.2, ease: "easeOut" }}
-                      className="btn-slide-fill min-w-[160px] px-8 sm:px-12 py-3 sm:py-3.5 border border-white/20 text-white/90 bg-transparent font-serif text-sm sm:text-base font-medium tracking-[0.02em]"
+                      className="btn-slide-fill min-w-[160px] px-8 sm:px-12 py-3 sm:py-3.5 border border-white/20 text-white/90 bg-transparent font-body text-sm sm:text-base font-medium tracking-[0.02em]"
                     >
                       <span>Learn zDoge</span>
                     </motion.button>
@@ -405,12 +404,12 @@ export default function HomePage() {
               className="mb-16"
             >
               <p className="font-mono text-xs tracking-[0.18em] text-[#C2A633] mb-4 uppercase">HOW IT WORKS</p>
-              <h2 className="font-sans text-3xl sm:text-4xl md:text-6xl lg:text-7xl font-light tracking-tight mb-4 md:mb-6">
+              <h2 className="font-display text-3xl sm:text-4xl md:text-6xl lg:text-7xl font-light tracking-tight mb-4 md:mb-6">
                 Privacy Through
                 <br />
                 <span className="italic">Shielded Notes</span>
               </h2>
-              <p className="font-sans text-sm sm:text-base text-muted-foreground max-w-2xl leading-7 sm:leading-8 tracking-[-0.01em]">
+              <p className="font-body text-sm sm:text-base text-muted-foreground max-w-2xl leading-7 sm:leading-8 tracking-[-0.01em]">
                 zDoge.cash uses zero-knowledge proofs to create private transactions on DogeOS.
                 Like Zcash shielded pools, your DOGE becomes invisible on-chain while remaining 
                 fully yours and spendable anytime.
@@ -429,8 +428,8 @@ export default function HomePage() {
                   className="border border-white/[0.06] p-6 md:p-8 group hover:border-white/10 transition-all duration-500 relative"
                 >
                   <step.illustration />
-                  <h3 className="font-mono text-lg sm:text-xl font-semibold text-[#C2A633] mb-3">{step.title}</h3>
-                  <p className="font-sans text-sm sm:text-base text-muted-foreground leading-relaxed">{step.description}</p>
+                  <h3 className="font-display text-lg sm:text-xl font-semibold text-[#C2A633] mb-3">{step.title}</h3>
+                  <p className="font-body text-sm sm:text-base text-muted-foreground leading-relaxed">{step.description}</p>
                   
                   {index < 2 && (
                     <div className="hidden md:block absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 z-10">
@@ -512,12 +511,12 @@ export default function HomePage() {
               </div>
 
               <div className="mt-8 text-center space-y-2">
-                <p className="font-sans text-sm sm:text-base text-muted-foreground/85 max-w-3xl mx-auto leading-7 sm:leading-8 tracking-[-0.01em]">
+                <p className="font-body text-sm sm:text-base text-muted-foreground/85 max-w-3xl mx-auto leading-7 sm:leading-8 tracking-[-0.01em]">
                   Shielded notes are cryptographic commitments stored in a Merkle tree. Zero-knowledge proofs 
                   verify transactions without revealing sender, recipient, or amount — ensuring complete 
                   unlinkability between addresses.
                 </p>
-                <p className="font-sans text-xs sm:text-sm text-muted-foreground/50 max-w-2xl mx-auto leading-relaxed tracking-[-0.01em]">
+                <p className="font-body text-xs sm:text-sm text-muted-foreground/50 max-w-2xl mx-auto leading-relaxed tracking-[-0.01em]">
                   Each spend nullifies a unique hash to prevent double-spending while maintaining full anonymity within the shielded pool.
                 </p>
               </div>
@@ -538,12 +537,12 @@ export default function HomePage() {
               className="mb-16 text-center md:text-left"
             >
               <p className="font-mono text-xs tracking-[0.18em] text-[#C2A633] mb-4 uppercase">PRIVACY FEATURES</p>
-              <h2 className="font-sans text-3xl sm:text-4xl md:text-6xl lg:text-7xl font-light tracking-tight mb-4 md:mb-6">
+              <h2 className="font-display text-3xl sm:text-4xl md:text-6xl lg:text-7xl font-light tracking-tight mb-4 md:mb-6">
                 What&apos;s
                 <br />
                 <span className="italic">Hidden</span>
               </h2>
-              <p className="font-sans text-sm sm:text-base text-muted-foreground max-w-xl mx-auto md:mx-0 leading-7 sm:leading-8 tracking-[-0.01em]">
+              <p className="font-body text-sm sm:text-base text-muted-foreground max-w-xl mx-auto md:mx-0 leading-7 sm:leading-8 tracking-[-0.01em]">
                 Unlike transparent blockchains, shielded transactions reveal nothing about 
                 who sent what to whom.
               </p>
@@ -591,8 +590,8 @@ export default function HomePage() {
                     </svg>
                   </div>
                   <div>
-                    <h3 className="font-sans text-sm font-semibold mb-1">{item.title}</h3>
-                    <p className="font-sans text-xs sm:text-sm text-muted-foreground leading-relaxed">{item.desc}</p>
+                    <h3 className="font-display text-sm font-semibold mb-1">{item.title}</h3>
+                    <p className="font-body text-xs sm:text-sm text-muted-foreground leading-relaxed">{item.desc}</p>
                   </div>
                 </motion.div>
               ))}
@@ -613,8 +612,8 @@ export default function HomePage() {
                   </svg>
                 </div>
                 <div>
-                  <h3 className="font-sans text-sm font-semibold text-[#C2A633]/90 mb-2">Security Reminder</h3>
-                  <p className="font-sans text-xs sm:text-sm text-muted-foreground leading-relaxed tracking-[-0.01em]">
+                  <h3 className="font-display text-sm font-semibold text-[#C2A633]/90 mb-2">Security Reminder</h3>
+                  <p className="font-body text-xs sm:text-sm text-muted-foreground leading-relaxed tracking-[-0.01em]">
                     zDoge.cash is a decentralized, non-custodial protocol. We never have access to your 
                     funds or private keys. You are solely responsible for keeping your wallet secure. 
                     Always backup your shielded wallet before transactions.

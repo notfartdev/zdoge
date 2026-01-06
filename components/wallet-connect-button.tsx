@@ -49,12 +49,12 @@ export function WalletConnectButton() {
     return (
       <div className="space-y-2">
         <Alert variant="destructive" className="bg-red-950 border-red-900 text-red-200">
-          <AlertDescription className="font-sans text-sm">{error}</AlertDescription>
+          <AlertDescription className="font-body text-sm">{error}</AlertDescription>
         </Alert>
         <Button
           onClick={handleConnect}
           disabled={isConnecting}
-          className="w-full bg-[#C2A633] hover:bg-[#C2A633]/90 text-black font-sans font-medium"
+          className="w-full bg-[#C2A633] hover:bg-[#C2A633]/90 text-black font-body font-medium"
         >
           Try Again
         </Button>
@@ -67,7 +67,7 @@ export function WalletConnectButton() {
       <Button
         onClick={handleConnect}
         disabled={isConnecting}
-        className="bg-[#C2A633] hover:bg-[#C2A633]/90 text-black font-sans font-medium px-6"
+        className="bg-[#C2A633] hover:bg-[#C2A633]/90 text-black font-body font-medium px-6"
       >
         <Wallet className="h-4 w-4 mr-2" />
         {isConnecting ? "Connecting..." : "Connect Wallet"}
@@ -80,7 +80,7 @@ export function WalletConnectButton() {
       <DropdownMenuTrigger asChild>
         <Button
           variant="outline"
-          className="border-[#C2A633] text-[#C2A633] hover:bg-[#C2A633]/10 font-sans bg-transparent px-6"
+          className="border-[#C2A633] text-[#C2A633] hover:bg-[#C2A633]/10 font-body bg-transparent px-6"
         >
           <Wallet className="h-4 w-4 mr-2" />
           {formatAddress(wallet.address)}
@@ -88,11 +88,11 @@ export function WalletConnectButton() {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="bg-zinc-900 border-[#C2A633]/20">
         <div className="px-2 py-2">
-          <p className="font-sans text-xs text-white/60">Balance</p>
-          <p className="font-mono text-lg font-bold tracking-[-0.01em] text-[#C2A633]">{formatBalance(wallet.balance)} <span className="font-sans text-sm text-white/70">DOGE</span></p>
+          <p className="font-body text-xs text-white/60">Balance</p>
+          <p className="font-mono text-lg font-bold tracking-[-0.01em] text-[#C2A633]">{formatBalance(wallet.balance)} <span className="font-body text-sm text-white/70">DOGE</span></p>
         </div>
         <DropdownMenuSeparator className="bg-[#C2A633]/20" />
-        <DropdownMenuItem onClick={disconnect} className="font-sans text-red-400 cursor-pointer">
+        <DropdownMenuItem onClick={disconnect} className="font-body text-red-400 cursor-pointer">
           <LogOut className="h-4 w-4 mr-2" />
           Disconnect
         </DropdownMenuItem>

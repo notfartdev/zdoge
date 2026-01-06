@@ -210,8 +210,8 @@ export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", onTokenC
       <Card className="p-6 mb-6 bg-card/50 backdrop-blur border-primary/20">
         <div className="text-center py-8">
           <Shield className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-          <h3 className="text-lg font-sans font-semibold mb-2">Connect Your Wallet</h3>
-          <p className="text-sm font-sans text-muted-foreground">
+          <h3 className="text-lg font-display font-semibold mb-2">Connect Your Wallet</h3>
+          <p className="text-sm font-body text-muted-foreground">
             Connect your wallet to access your shielded balance
           </p>
         </div>
@@ -244,7 +244,7 @@ export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", onTokenC
                       className={`${compact ? 'w-5 h-5' : 'w-6 h-6'} rounded-full`}
                     />
                     <span className={`${compact ? 'text-lg' : 'text-2xl'} font-mono font-bold tracking-[-0.01em]`}>{publicBalance}</span>
-                    <span className="font-sans text-sm text-white/70">{selectedToken}</span>
+                    <span className="font-body text-sm text-white/70">{selectedToken}</span>
                   </div>
                 </SelectValue>
               </SelectTrigger>
@@ -257,7 +257,7 @@ export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", onTokenC
                         alt={symbol} 
                         className="w-5 h-5 rounded-full"
                       />
-                      <span className="font-sans">{symbol}</span>
+                      <span className="font-body">{symbol}</span>
                     </div>
                   </SelectItem>
                 ))}
@@ -273,7 +273,7 @@ export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", onTokenC
               {publicBalance} {selectedToken}
             </div>
           )}
-          {!compact && <div className="text-xs font-sans text-white/60">Available to shield</div>}
+          {!compact && <div className="text-xs font-body text-white/60">Available to shield</div>}
         </div>
         
         <div className={`${compact ? 'p-3' : 'p-4'} rounded-lg bg-primary/5 border border-primary/20`}>
@@ -287,10 +287,10 @@ export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", onTokenC
                 alt={selectedToken} 
                 className={`${compact ? 'w-5 h-5' : 'w-6 h-6'} rounded-full`}
               />
-              <span className="font-sans text-sm text-white/70">{selectedToken}</span>
+              <span className="font-body text-sm text-white/70">{selectedToken}</span>
               <span className={`ml-auto ${compact ? 'text-lg' : 'text-2xl'} font-mono font-bold tracking-[-0.01em]`}>{formatWeiToAmount(shieldedBalance[selectedToken] || 0n).toFixed(4)}</span>
             </div>
-          {!compact && <div className="text-xs font-sans text-white/60">Private balance</div>}
+          {!compact && <div className="text-xs font-body text-white/60">Private balance</div>}
         </div>
       </div>
       
@@ -309,7 +309,7 @@ export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", onTokenC
                   : `zdoge:${shortenAddress(walletState.shieldedAddress)}`
                 }
               </code>
-              <p className="text-xs font-sans text-white/60 mt-1">
+              <p className="text-xs font-body text-white/60 mt-1">
                 Share this address to receive private payments • This address never changes
               </p>
             </div>

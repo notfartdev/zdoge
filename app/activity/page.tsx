@@ -128,8 +128,8 @@ export default function ActivityPage() {
         <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 max-w-5xl">
           <Card className="p-12 text-center">
             <WalletIcon className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-            <h2 className="text-2xl font-sans font-bold mb-2">Connect Your Wallet</h2>
-            <p className="font-sans text-muted-foreground">
+            <h2 className="text-2xl font-display font-bold mb-2">Connect Your Wallet</h2>
+            <p className="font-body text-muted-foreground">
               Connect your wallet to view your transaction history
             </p>
           </Card>
@@ -163,7 +163,7 @@ export default function ActivityPage() {
       <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 max-w-5xl">
         <div className="mb-6 sm:mb-8">
           <div className="flex items-center justify-between mb-2">
-            <h1 className="font-sans text-3xl sm:text-4xl font-semibold tracking-[-0.02em] mb-2 flex items-center gap-2 sm:gap-3">
+            <h1 className="font-display text-3xl sm:text-4xl font-semibold tracking-[-0.02em] mb-2 flex items-center gap-2 sm:gap-3">
               <img 
                 src="https://z.cash/wp-content/uploads/2023/04/you-re-in-control.gif" 
                 alt="Activity" 
@@ -176,13 +176,13 @@ export default function ActivityPage() {
               size="sm"
               onClick={handleRefresh}
               disabled={isRefreshing}
-              className="font-sans"
+              className="font-body"
             >
               <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
               Refresh
             </Button>
           </div>
-          <p className="mt-2 font-sans text-sm sm:text-base text-white/70 leading-relaxed tracking-[-0.01em]">
+          <p className="mt-2 font-body text-sm sm:text-base text-white/70 leading-relaxed tracking-[-0.01em]">
             View your shielded transaction history
           </p>
         </div>
@@ -216,8 +216,8 @@ export default function ActivityPage() {
         {/* Transaction List */}
         {filteredTransactions.length === 0 ? (
           <Card className="p-12 text-center">
-            <h3 className="text-lg font-sans font-bold mb-2">No Transactions</h3>
-            <p className="text-sm font-sans text-white/70 mb-4">
+            <h3 className="text-lg font-display font-bold mb-2">No Transactions</h3>
+            <p className="text-sm font-body text-white/70 mb-4">
               Your shielded transactions will appear here
             </p>
           </Card>
@@ -231,13 +231,13 @@ export default function ActivityPage() {
                     {/* Main Content */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-3 mb-2">
-                        <span className="text-xs font-sans font-medium text-primary">
+                        <span className="text-xs font-body font-medium text-primary">
                           {formatTransactionType(tx.type)}
                         </span>
-                        <span className="text-xs font-sans text-white/70">
+                        <span className="text-xs font-body text-white/70">
                           {tx.token}
                         </span>
-                        <span className={`text-xs font-sans ml-auto ${
+                        <span className={`text-xs font-body ml-auto ${
                           tx.status === 'confirmed' 
                             ? 'text-white/70' 
                             : tx.status === 'failed' 
@@ -252,23 +252,23 @@ export default function ActivityPage() {
                       <div className="space-y-1.5">
                         {tx.type === 'shield' && (
                           <p className="text-xl font-mono font-bold tracking-[-0.01em]">
-                            +{tx.amount} <span className="font-sans text-sm text-white/70">{tx.token}</span>
+                            +{tx.amount} <span className="font-body text-sm text-white/70">{tx.token}</span>
                           </p>
                         )}
                         
                         {tx.type === 'transfer' && (
                           <>
                             <p className="text-xl font-mono font-bold tracking-[-0.01em]">
-                              -{tx.amount} <span className="font-sans text-sm text-white/70">{tx.token}</span>
+                              -{tx.amount} <span className="font-body text-sm text-white/70">{tx.token}</span>
                             </p>
                             {tx.recipientAddress && (
-                              <p className="text-xs font-sans text-white/60">
+                              <p className="text-xs font-body text-white/60">
                                 To: <span className="font-mono">{shortenAddress(tx.recipientAddress, 12)}</span>
                               </p>
                             )}
                             {tx.fee && parseFloat(tx.fee) > 0 && (
-                              <p className="text-xs font-sans text-white/60">
-                                Fee: <span className="font-mono">{tx.fee}</span> <span className="font-sans">{tx.token}</span>
+                              <p className="text-xs font-body text-white/60">
+                                Fee: <span className="font-mono">{tx.fee}</span> <span className="font-body">{tx.token}</span>
                               </p>
                             )}
                           </>
@@ -276,11 +276,11 @@ export default function ActivityPage() {
                         
                         {tx.type === 'swap' && (
                           <>
-                            <p className="text-xl font-sans font-bold">
+                            <p className="text-xl font-body font-bold">
                               {tx.inputToken} → {tx.outputToken}
                             </p>
                             {tx.amount && tx.outputAmount && (
-                              <p className="text-xs font-sans text-white/60">
+                              <p className="text-xs font-body text-white/60">
                                 <span className="font-mono">{tx.amount}</span> {tx.inputToken} → <span className="font-mono">{tx.outputAmount}</span> {tx.outputToken}
                               </p>
                             )}
@@ -290,16 +290,16 @@ export default function ActivityPage() {
                         {tx.type === 'unshield' && (
                           <>
                             <p className="text-xl font-mono font-bold tracking-[-0.01em]">
-                              +{tx.amount} <span className="font-sans text-sm text-white/70">{tx.token}</span>
+                              +{tx.amount} <span className="font-body text-sm text-white/70">{tx.token}</span>
                             </p>
                             {tx.recipientPublicAddress && (
-                              <p className="text-xs font-sans text-white/60">
+                              <p className="text-xs font-body text-white/60">
                                 To: <span className="font-mono">{tx.recipientPublicAddress.slice(0, 8)}...{tx.recipientPublicAddress.slice(-6)}</span>
                               </p>
                             )}
                             {tx.relayerFee && parseFloat(tx.relayerFee) > 0 && (
-                              <p className="text-xs font-sans text-white/60">
-                                Fee: <span className="font-mono">{tx.relayerFee}</span> <span className="font-sans">{tx.token}</span>
+                              <p className="text-xs font-body text-white/60">
+                                Fee: <span className="font-mono">{tx.relayerFee}</span> <span className="font-body">{tx.token}</span>
                               </p>
                             )}
                           </>
@@ -307,7 +307,7 @@ export default function ActivityPage() {
 
                         {/* Timestamp and Hash */}
                         <div className="flex items-center justify-between pt-2 mt-2 border-t">
-                          <span className="text-xs font-sans text-white/60" title={formatFullTimestamp(tx.timestamp)}>
+                          <span className="text-xs font-body text-white/60" title={formatFullTimestamp(tx.timestamp)}>
                             {formatTimestamp(tx.timestamp)}
                           </span>
                           <div className="flex items-center gap-1.5">

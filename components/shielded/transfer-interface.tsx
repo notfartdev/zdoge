@@ -342,8 +342,8 @@ export function TransferInterface({ notes, onSuccess, selectedToken = "DOGE", on
   return (
     <div className="space-y-4">
       <div>
-        <h3 className="text-lg font-sans font-medium">Private Transfer</h3>
-        <p className="text-sm font-sans text-muted-foreground">
+        <h3 className="text-lg font-display font-medium">Private Transfer</h3>
+        <p className="text-sm font-body text-muted-foreground">
           Send shielded tokens to another shielded address privately
         </p>
       </div>

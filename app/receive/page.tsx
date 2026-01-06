@@ -129,8 +129,8 @@ export default function ReceivePage() {
         <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 max-w-5xl">
           <Card className="p-12 text-center">
             <WalletIcon className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-            <h2 className="text-2xl font-sans font-bold mb-2">Connect Your Wallet</h2>
-            <p className="font-sans text-muted-foreground">
+            <h2 className="text-2xl font-display font-bold mb-2">Connect Your Wallet</h2>
+            <p className="font-body text-muted-foreground">
               Connect your wallet to view your receive addresses
             </p>
           </Card>
@@ -144,7 +144,7 @@ export default function ReceivePage() {
       <DashboardNav />
       <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 max-w-5xl">
         <div className="mb-6 sm:mb-8">
-          <h1 className="font-sans text-3xl sm:text-4xl font-semibold tracking-[-0.02em] mb-2 flex items-center gap-2 sm:gap-3">
+          <h1 className="font-display text-3xl sm:text-4xl font-semibold tracking-[-0.02em] mb-2 flex items-center gap-2 sm:gap-3">
             <img 
               src="https://z.cash/wp-content/uploads/2023/04/secret.gif" 
               alt="Receive" 
@@ -152,7 +152,7 @@ export default function ReceivePage() {
             />
             Receive Addresses
           </h1>
-          <p className="mt-2 font-sans text-sm sm:text-base text-white/70 leading-relaxed tracking-[-0.01em]">
+          <p className="mt-2 font-body text-sm sm:text-base text-white/70 leading-relaxed tracking-[-0.01em]">
             Share your addresses to receive payments. Use the shielded address for private transactions.
           </p>
         </div>
@@ -165,8 +165,8 @@ export default function ReceivePage() {
                 <Wallet className="h-5 w-5" />
               </div>
               <div className="flex-1">
-                <h2 className="text-lg font-sans font-semibold mb-1">Public Address</h2>
-                <p className="text-sm font-sans text-white/70">Receive public DOGE & tokens</p>
+                <h2 className="text-lg font-display font-semibold mb-1">Public Address</h2>
+                <p className="text-sm font-body text-white/70">Receive public DOGE & tokens</p>
               </div>
             </div>
 
@@ -223,10 +223,10 @@ export default function ReceivePage() {
                 <Shield className="h-5 w-5 text-primary" />
               </div>
               <div className="flex-1">
-                <h2 className="text-lg font-sans font-semibold mb-1">
+                <h2 className="text-lg font-display font-semibold mb-1">
                   Shielded Address
                 </h2>
-                <p className="text-sm font-sans text-white/70">
+                <p className="text-sm font-body text-white/70">
                   Receive private shielded tokens • This address never changes
                 </p>
               </div>
@@ -234,7 +234,7 @@ export default function ReceivePage() {
 
             {!shieldedAddress ? (
               <div className="text-center py-8">
-                <p className="text-sm font-sans text-white/70">
+                <p className="text-sm font-body text-white/70">
                   Initializing shielded wallet...
                 </p>
               </div>

@@ -47,7 +47,7 @@ export function DashboardNav() {
                   <Link
                     key={link.href}
                     href={link.href}
-                    className={`font-sans text-[11px] tracking-[0.08em] uppercase px-4 py-2 rounded-full transition-all duration-300 flex items-center gap-1.5 ${
+                    className={`font-body text-[11px] tracking-[0.08em] uppercase px-4 py-2 rounded-full transition-all duration-300 flex items-center gap-1.5 ${
                       isActive 
                         ? "bg-[#C2A633] text-black font-bold" 
                         : "text-gray-400 hover:text-white hover:bg-white/10"
@@ -94,7 +94,7 @@ export function DashboardNav() {
                   key={link.href}
                   href={link.href}
                   onClick={() => setMobileMenuOpen(false)}
-                  className={`font-sans text-sm tracking-[0.08em] uppercase transition-all duration-300 flex items-center gap-3 py-3 px-4 rounded ${
+                  className={`font-body text-sm tracking-[0.08em] uppercase transition-all duration-300 flex items-center gap-3 py-3 px-4 rounded ${
                     isActive 
                       ? "bg-[#C2A633] text-black font-bold" 
                       : "text-gray-400 hover:text-white hover:bg-white/5"
