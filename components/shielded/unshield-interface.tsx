@@ -342,20 +342,7 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
   }
   
   if (spendableNotes.length === 0) {
-    return (
-      <div className="text-center py-8 space-y-4">
-        <div>
-          <p className="text-muted-foreground">No shielded notes to unshield</p>
-          <p className="text-sm text-muted-foreground mt-2">Shield some {selectedToken} first</p>
-        </div>
-        <Link href={`/shield?token=${selectedToken}`}>
-          <Button className="mt-4">
-            <ShieldPlus className="h-4 w-4 mr-2" />
-            Shield {selectedToken}
-          </Button>
-        </Link>
-      </div>
-    )
+    return null
   }
   
   const selectedInfo = getSelectedNoteInfo()

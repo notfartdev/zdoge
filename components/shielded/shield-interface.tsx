@@ -450,30 +450,11 @@ export function ShieldInterface({ onSuccess, selectedToken: externalToken, onTok
   
   return (
     <div className="space-y-4">
-      <div>
-        <h3 className="text-lg font-display font-medium flex items-center gap-2">
-          <Coins className="h-5 w-5" />
-          Shield Tokens
-        </h3>
-        <p className="text-sm font-body text-muted-foreground">
-          Deposit public tokens into your shielded balance
-        </p>
-      </div>
-      
       {status === "idle" && (
         <div className="space-y-4">
           {/* Empty State - No Balance */}
           {tokenBalanceNum <= 0 ? (
-            <div className="p-6 rounded-lg bg-muted/30 border border-muted text-center">
-              <Coins className="h-12 w-12 text-muted-foreground mx-auto mb-3 opacity-50" />
-              <h4 className="font-display font-medium mb-1">No {selectedToken} Balance</h4>
-              <p className="text-sm font-body text-muted-foreground mb-4">
-                You need {selectedToken} in your wallet to shield tokens.
-              </p>
-              <p className="text-xs font-body text-white/60">
-                Connect a wallet with {selectedToken} balance to get started.
-              </p>
-            </div>
+            null
           ) : (
             <>
               {/* Amount Input */}

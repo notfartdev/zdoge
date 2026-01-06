@@ -6,6 +6,7 @@ import { Navbar } from "@/components/navbar"
 import { Footer } from "@/components/footer"
 import { CustomCursor } from "@/components/custom-cursor"
 import { SmoothScroll } from "@/components/smooth-scroll"
+import { AppCard } from "@/components/app-card"
 
 // SVG Illustrations for the steps
 function ShieldIllustration() {
@@ -301,94 +302,78 @@ export default function HomePage() {
           }} 
         />
         
-        {/* Hero Section - owns the full viewport with breathing room */}
-        <section className="relative min-h-[110vh] flex items-center justify-center px-6 md:px-12 pb-[20vh] overflow-hidden">
+        {/* Turbine-style Hero Section - App Embedded */}
+        <section className="relative min-h-screen flex items-center px-4 sm:px-6 md:px-12 py-12 md:py-16 overflow-hidden">
           
           {/* Center vignette - calmed, symmetrical, centered */}
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_450px_350px_at_50%_50%,_rgba(194,166,51,0.03)_0%,_transparent_55%)]" />
           
-          {/* Faint oversized Doge silhouette - moved higher to hug the wordmark */}
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none -translate-y-[8vh]">
+          {/* Faint oversized Doge silhouette */}
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
             <img 
               src="/zdoge-logo.png" 
               alt="" 
-              className="w-[500px] h-[500px] md:w-[700px] md:h-[700px] opacity-[0.03] blur-sm select-none"
+              className="w-[400px] h-[400px] md:w-[500px] md:h-[500px] opacity-[0.02] blur-sm select-none"
               aria-hidden="true"
             />
           </div>
           
-          {/* Hero content - moved down to follow background gravity */}
-          <div className="relative z-10 max-w-5xl mx-auto text-center translate-y-[6vh] md:translate-y-[8vh]">
-            <motion.div
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
-            >
-              {/* Wordmark - zDOGE with .cash as domain seal */}
-              <h1 className="mb-8 font-display text-5xl sm:text-6xl md:text-8xl lg:text-9xl font-normal tracking-[-0.02em]">
-                <span className="text-white/90">z</span><span className="text-white">DOGE</span>
-                <span 
-                  className="font-display italic align-baseline inline-block"
-                  style={{ fontSize: '0.42em', marginLeft: '0.12em', transform: 'translateY(-0.1em)' }}
-                >
-                  <span className="text-[#C2A633]/60">.</span><span className="text-[#C2A633]/90 tracking-[0.02em] ml-[0.03em]">CASH</span>
-                </span>
-              </h1>
+          {/* Turbine-style Grid Layout */}
+          <div className="relative z-10 w-full max-w-[1400px] mx-auto">
+            <div className="grid grid-cols-1 lg:grid-cols-[45%_55%] gap-8 lg:gap-12 items-start">
               
-              {/* Subtitle - more breathing room before CTA */}
-              <motion.p 
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.3, duration: 1 }}
-                className="font-body text-base sm:text-lg text-white/50 max-w-md mx-auto mb-8 font-normal leading-relaxed tracking-[-0.01em]"
-              >
-                Zero-knowledge privacy enabling private transactions on Doge.
-              </motion.p>
-              
-              {/* CTA - more breathing room */}
-              <motion.div 
-                initial={{ opacity: 0, y: 20 }}
+              {/* Left: Brand Message (Mobile: Second, Desktop: First) */}
+              <motion.div
+                initial={{ opacity: 0, y: 30 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.5, duration: 0.8 }}
-                className="flex flex-col items-center gap-6"
+                transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
+                className="order-2 lg:order-1 flex flex-col justify-center lg:min-h-[600px]"
               >
-                {/* Buttons - side by side */}
-                <div className="flex flex-col sm:flex-row items-center gap-4">
-                  <Link href="/shield">
-                    <motion.button
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.99 }}
-                      transition={{ duration: 0.2, ease: "easeOut" }}
-                      className="btn-slide-fill min-w-[160px] px-8 sm:px-12 py-3 sm:py-3.5 border border-white/20 text-white/90 bg-transparent font-body text-sm sm:text-base font-medium tracking-[0.02em]"
-                    >
-                      <span>Use zDoge</span>
-                    </motion.button>
-                  </Link>
-                  
-                  <Link href="https://docs.zdoge.cash" target="_blank" rel="noopener noreferrer">
-                    <motion.button
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.99 }}
-                      transition={{ duration: 0.2, ease: "easeOut" }}
-                      className="btn-slide-fill min-w-[160px] px-8 sm:px-12 py-3 sm:py-3.5 border border-white/20 text-white/90 bg-transparent font-body text-sm sm:text-base font-medium tracking-[0.02em]"
-                    >
-                      <span>Learn zDoge</span>
-                    </motion.button>
-                  </Link>
-                </div>
+                {/* Logo/Wordmark */}
+                <h1 className="mb-6 font-display text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-normal tracking-[-0.02em]">
+                  <span className="text-white/90">z</span><span className="text-white">DOGE</span>
+                  <span 
+                    className="font-display italic align-baseline inline-block"
+                    style={{ fontSize: '0.42em', marginLeft: '0.12em', transform: 'translateY(-0.1em)' }}
+                  >
+                    <span className="text-[#C2A633]/60">.</span><span className="text-[#C2A633]/90 tracking-[0.02em] ml-[0.03em]">CASH</span>
+                  </span>
+                </h1>
                 
-                {/* Trust line - facts, not slogans */}
-                <motion.p
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: 0.7, duration: 0.8 }}
-                  className="font-mono text-[10px] sm:text-xs text-white/25 tracking-[0.12em] uppercase px-4"
-                >
-                  <span className="hidden sm:inline">NO SIGNUP&nbsp;&nbsp;·&nbsp;&nbsp;NO TRACKING&nbsp;&nbsp;·&nbsp;&nbsp;NON-CUSTODIAL</span>
-                  <span className="sm:hidden">NO SIGNUP · NO TRACKING · NON-CUSTODIAL</span>
-                </motion.p>
+                {/* Value Prop */}
+                <p className="font-body text-base sm:text-lg text-white/60 mb-6 font-normal leading-relaxed tracking-[-0.01em]">
+                  Zero-knowledge privacy enabling private transactions on Doge.
+                </p>
+                
+                {/* How It Works Button */}
+                <Link href="#how-it-works">
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.99 }}
+                    transition={{ duration: 0.2, ease: "easeOut" }}
+                    className="mb-6 px-6 py-3 border border-white/20 text-white/90 bg-transparent font-body text-sm font-medium tracking-[0.02em] hover:border-white/40 transition-colors"
+                  >
+                    How It Works?
+                  </motion.button>
+                </Link>
+                
+                {/* Trust line */}
+                <p className="font-mono text-[10px] sm:text-xs text-white/25 tracking-[0.12em] uppercase">
+                  NO SIGNUP · NO TRACKING · NON-CUSTODIAL
+                </p>
               </motion.div>
-            </motion.div>
+              
+              {/* Right: App Card (Mobile: First, Desktop: Second) */}
+              <motion.div
+                initial={{ opacity: 0, y: 30 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 1, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
+                className="order-1 lg:order-2"
+              >
+                <AppCard />
+              </motion.div>
+              
+            </div>
           </div>
           
         </section>

@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { useWallet } from "@/lib/wallet-context"
-import { User, X, Wallet, Globe, LogOut, ChevronDown, Check, Copy, Coins, Network, RefreshCw } from "lucide-react"
+import { User, X, Wallet, Globe, ChevronDown, Check, Copy, Coins, Network, RefreshCw } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { dogeosTestnet, tokens, shieldedPool } from "@/lib/dogeos-config"
 import { syncNotesWithChain } from "@/lib/shielded/shielded-service"
@@ -22,7 +22,7 @@ interface TokenBalance {
 }
 
 export function AccountModal() {
-  const { wallet, disconnect } = useWallet()
+  const { wallet } = useWallet()
   const { toast } = useToast()
   const [isOpen, setIsOpen] = useState(false)
   const [showRpcDropdown, setShowRpcDropdown] = useState(false)
@@ -131,11 +131,6 @@ export function AccountModal() {
     }
   }
 
-  const handleDisconnect = () => {
-    disconnect()
-    setIsOpen(false)
-    toast({ title: "Disconnected", description: "Wallet disconnected successfully" })
-  }
 
   const handleSync = async () => {
     setIsSyncing(true)
@@ -153,18 +148,22 @@ export function AccountModal() {
     return `${address.slice(0, 6)}...${address.slice(-4)}`
   }
 
+  // Only show if wallet is connected
+  if (!wallet?.isConnected) {
+    return null
+  }
+
   // Button to open modal
   if (!isOpen) {
     return (
-      <Button
-        variant="ghost"
-        size="sm"
+      <button
         onClick={() => setIsOpen(true)}
-        className="font-body text-sm text-gray-400 hover:text-white hover:bg-transparent flex items-center gap-2"
+        className="text-muted-foreground hover:text-foreground transition-colors duration-300"
+        title="Account"
+        aria-label="Account"
       >
-        <User className="w-4 h-4" />
-        Account
-      </Button>
+        <User className="w-5 h-5" strokeWidth={1.5} />
+      </button>
     )
   }
 
@@ -355,17 +354,6 @@ export function AccountModal() {
               </Button>
             )}
 
-            {/* Disconnect Button */}
-            {wallet?.isConnected && (
-              <Button
-                variant="outline"
-                onClick={handleDisconnect}
-                className="w-full font-body text-sm border-red-500/50 text-red-400 hover:bg-red-500/10 hover:text-red-300 flex items-center justify-center gap-2"
-              >
-                <LogOut className="w-4 h-4" />
-                Disconnect Wallet
-              </Button>
-            )}
           </div>
         </div>
       </div>

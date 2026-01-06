@@ -4,6 +4,10 @@ import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { HelpModal } from "@/components/help-modal"
+import { WalletConnectButton } from "@/components/wallet-connect-button"
+import { AccountModal } from "@/components/account-modal"
+import { useWallet } from "@/lib/wallet-context"
 
 // Social icons
 function XIcon({ className }: { className?: string }) {
@@ -50,6 +54,7 @@ export function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false)
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const pathname = usePathname()
+  const { wallet } = useWallet()
 
   useEffect(() => {
     const handleScroll = () => {
@@ -74,44 +79,50 @@ export function Navbar() {
             <img src="/zdoge-logo.png" alt="zDoge.cash" className="w-10 h-10 sm:w-12 sm:h-12 rounded-full transition-transform duration-300 group-hover:scale-105" />
           </Link>
 
-          {/* Social Icons - Desktop */}
-          <div className="hidden md:flex items-center gap-5">
-            <a
-              href="https://docs.zdoge.cash"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-muted-foreground hover:text-foreground transition-colors duration-300"
-              title="Documentation"
-            >
-              <DocsIcon className="w-5 h-5" />
-            </a>
-            <a
-              href="https://x.com/zDogeCash"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-muted-foreground hover:text-foreground transition-colors duration-300"
-              title="X (Twitter)"
-            >
-              <XIcon className="w-5 h-5" />
-            </a>
-            <a
-              href="https://discord.gg/zdoge"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-muted-foreground hover:text-foreground transition-colors duration-300"
-              title="Discord"
-            >
-              <DiscordIcon className="w-5 h-5" />
-            </a>
-            <a
-              href="https://medium.com/@zdogecash"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-muted-foreground hover:text-foreground transition-colors duration-300"
-              title="Medium"
-            >
-              <MediumIcon className="w-5 h-5" />
-            </a>
+          {/* Wallet & Social Icons - Desktop */}
+          <div className="hidden md:flex items-center gap-4">
+            <WalletConnectButton />
+            {wallet?.isConnected && <AccountModal />}
+            <div className="h-5 w-px bg-border" />
+            <div className="flex items-center gap-5">
+              <HelpModal variant="icon" />
+              <a
+                href="https://docs.zdoge.cash"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-muted-foreground hover:text-foreground transition-colors duration-300"
+                title="Documentation"
+              >
+                <DocsIcon className="w-5 h-5" />
+              </a>
+              <a
+                href="https://x.com/zDogeCash"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-muted-foreground hover:text-foreground transition-colors duration-300"
+                title="X (Twitter)"
+              >
+                <XIcon className="w-5 h-5" />
+              </a>
+              <a
+                href="https://discord.gg/zdoge"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-muted-foreground hover:text-foreground transition-colors duration-300"
+                title="Discord"
+              >
+                <DiscordIcon className="w-5 h-5" />
+              </a>
+              <a
+                href="https://medium.com/@zdogecash"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-muted-foreground hover:text-foreground transition-colors duration-300"
+                title="Medium"
+              >
+                <MediumIcon className="w-5 h-5" />
+              </a>
+            </div>
           </div>
 
           {/* Mobile Menu Button */}
@@ -168,13 +179,24 @@ export function Navbar() {
                 </motion.div>
               ))}
               
-              {/* Social Icons - Mobile */}
+              {/* Wallet Connect - Mobile */}
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.4 }}
+                className="mt-8"
+              >
+                <WalletConnectButton />
+              </motion.div>
+
+              {/* Social Icons & FAQ - Mobile */}
               <motion.div 
                 initial={{ opacity: 0 }} 
                 animate={{ opacity: 1 }} 
                 transition={{ delay: 0.5 }}
                 className="flex items-center gap-6 mt-8"
               >
+                <HelpModal variant="icon" />
                 <a
                   href="https://docs.zdoge.cash"
                   target="_blank"

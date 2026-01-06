@@ -75,6 +75,19 @@ export function WalletConnectButton() {
     )
   }
 
+  const handleChangeWallet = async () => {
+    // Disconnect current wallet first
+    disconnect()
+    // Then reconnect to allow user to select a different wallet
+    setTimeout(async () => {
+      try {
+        await connect()
+      } catch (err) {
+        // User cancelled or error - that's okay
+      }
+    }, 100)
+  }
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -87,12 +100,15 @@ export function WalletConnectButton() {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="bg-zinc-900 border-[#C2A633]/20">
-        <div className="px-2 py-2">
-          <p className="font-body text-xs text-white/60">Balance</p>
-          <p className="font-mono text-lg font-bold tracking-[-0.01em] text-[#C2A633]">{formatBalance(wallet.balance)} <span className="font-body text-sm text-white/70">DOGE</span></p>
-        </div>
+        <DropdownMenuItem 
+          onClick={handleChangeWallet} 
+          className="font-body text-white hover:bg-white/10 cursor-pointer"
+        >
+          <Wallet className="h-4 w-4 mr-2" />
+          Change Wallet
+        </DropdownMenuItem>
         <DropdownMenuSeparator className="bg-[#C2A633]/20" />
-        <DropdownMenuItem onClick={disconnect} className="font-body text-red-400 cursor-pointer">
+        <DropdownMenuItem onClick={disconnect} className="font-body text-red-400 hover:bg-red-500/10 cursor-pointer">
           <LogOut className="h-4 w-4 mr-2" />
           Disconnect
         </DropdownMenuItem>

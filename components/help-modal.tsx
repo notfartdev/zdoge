@@ -23,18 +23,32 @@ const faqs = [
   }
 ]
 
-export function HelpModal() {
+interface HelpModalProps {
+  variant?: "default" | "icon"
+}
+
+export function HelpModal({ variant = "default" }: HelpModalProps) {
   const [open, setOpen] = useState(false)
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <button
-          className="w-10 h-10 rounded-full border border-white/20 bg-white/5 hover:bg-white/10 transition-colors flex items-center justify-center text-gray-400 hover:text-white"
-          aria-label="Help"
-        >
-          <HelpCircle className="w-5 h-5" strokeWidth={1.5} />
-        </button>
+        {variant === "icon" ? (
+          <button
+            className="text-muted-foreground hover:text-foreground transition-colors duration-300"
+            aria-label="FAQ"
+            title="FAQ"
+          >
+            <HelpCircle className="w-5 h-5" strokeWidth={1.5} />
+          </button>
+        ) : (
+          <button
+            className="w-10 h-10 rounded-full border border-white/20 bg-white/5 hover:bg-white/10 transition-colors flex items-center justify-center text-gray-400 hover:text-white"
+            aria-label="Help"
+          >
+            <HelpCircle className="w-5 h-5" strokeWidth={1.5} />
+          </button>
+        )}
       </DialogTrigger>
       <DialogContent 
         className="max-w-md bg-background/80 backdrop-blur-xl border border-white/10 rounded-lg p-6 shadow-2xl" 

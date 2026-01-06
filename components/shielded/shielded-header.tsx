@@ -8,8 +8,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { 
   Shield, Copy, Check, Eye, EyeOff, Wallet, Lock
 } from "lucide-react"
+import { WalletIcon } from "@/components/wallet-icon"
 import { useToast } from "@/hooks/use-toast"
 import { useWallet } from "@/lib/wallet-context"
+import { WalletConnectButton } from "@/components/wallet-connect-button"
 import {
   initializeShieldedWallet,
   getWalletState,
@@ -52,9 +54,10 @@ interface ShieldedHeaderProps {
   selectedToken?: string
   onTokenChange?: (token: string) => void
   compact?: boolean // Use smaller header on secondary pages
+  connectDescription?: string // Custom description for connect wallet state
 }
 
-export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", onTokenChange, compact = false }: ShieldedHeaderProps) {
+export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", onTokenChange, compact = false, connectDescription }: ShieldedHeaderProps) {
   const { toast } = useToast()
   const { wallet, signMessage } = useWallet()
   const [mounted, setMounted] = useState(false)
@@ -207,13 +210,14 @@ export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", onTokenC
   // Show connect wallet prompt if not connected
   if (!wallet?.isConnected || !wallet?.address) {
     return (
-      <Card className="p-6 mb-6 bg-card/50 backdrop-blur border-primary/20">
+      <Card className="p-6 mb-6 bg-muted/30 border border-muted">
         <div className="text-center py-8">
-          <Shield className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+          <WalletIcon className="h-12 w-12 mx-auto mb-4" />
           <h3 className="text-lg font-display font-semibold mb-2">Connect Your Wallet</h3>
-          <p className="text-sm font-body text-muted-foreground">
-            Connect your wallet to access your shielded balance
+          <p className="text-sm font-body text-muted-foreground mb-6">
+            {connectDescription || "Connect your wallet to access your shielded balance"}
           </p>
+          <WalletConnectButton />
         </div>
       </Card>
     )
