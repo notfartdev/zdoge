@@ -464,7 +464,8 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
     }
   }
   
-  if (spendableNotes.length === 0) {
+  // Don't return early if we're showing success state (even if no notes left)
+  if (spendableNotes.length === 0 && status !== "success") {
     return null
   }
   
