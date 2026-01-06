@@ -189,6 +189,19 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
     }
   }
   
+  // Helper function to check if a nullifier is already spent
+  const checkNullifierSpent = async (nullifierHash: string): Promise<boolean> => {
+    try {
+      const response = await fetch(`${RELAYER_URL}/api/shielded/pool/${SHIELDED_POOL_ADDRESS}/nullifier/${nullifierHash}`)
+      if (!response.ok) return false // If check fails, assume not spent (safer to try)
+      const data = await response.json()
+      return data.isSpent === true
+    } catch (error) {
+      console.warn('[Consolidate] Failed to check nullifier status:', error)
+      return false // If check fails, assume not spent (safer to try)
+    }
+  }
+
   const handleConsolidateAll = async () => {
     if (!wallet?.address) {
       toast({ title: "Wallet Required", description: "Please connect your wallet first", variant: "destructive" })
@@ -211,13 +224,17 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
       return
     }
     setStatus("consolidating")
+    // Start at 0 - shows "Processing note 0 of X" (0 notes completed)
     setConsolidateProgress({ current: 0, total: worthyNotes.length, totalReceived: 0 })
     setConsolidateTxHashes([])
     setErrorMessage(null)
     let totalReceived = 0
     const txHashes: string[] = []
+    const skippedNotes: number[] = [] // Track notes that were already spent
+    
     for (let i = 0; i < worthyNotes.length; i++) {
       const note = worthyNotes[i]
+      
       try {
         // Only look for notes of the selected token
         const currentNotes = getNotes().filter(n => 
@@ -227,9 +244,26 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
         )
         const noteIndex = currentNotes.findIndex(n => n.commitment === note.commitment)
         if (noteIndex === -1) continue
+        
+        // Check if note is already spent BEFORE generating proof
         const { fee: relayerFeeWei } = calculateFeeForNote(note.amount)
         const relayerFeeDoge = Number(relayerFeeWei) / 1e18
+        
+        // Generate proof to get nullifierHash for checking
         const proofResult = await prepareUnshield(wallet.address, noteIndex, SHIELDED_POOL_ADDRESS, relayerInfo?.address || undefined, relayerFeeDoge)
+        
+        // Check if nullifier is already spent
+        const isSpent = await checkNullifierSpent(proofResult.nullifierHash)
+        if (isSpent) {
+          console.warn(`[Consolidate] Note ${i + 1} already spent, removing from local state`)
+          skippedNotes.push(i + 1)
+          // Remove the spent note from local state
+          completeUnshield(noteIndex)
+          // Update progress (note was processed, just skipped)
+          setConsolidateProgress({ current: i + 1, total: worthyNotes.length, totalReceived })
+          continue
+        }
+        
         const response = await fetch(`${RELAYER_URL}/api/shielded/relay/unshield`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -244,7 +278,17 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
           }),
         })
         const data = await response.json()
-        if (!response.ok) throw new Error(data.message || data.error || 'Relayer failed')
+        if (!response.ok) {
+          // Check if error is due to already spent
+          if (data.error?.includes('already') || data.error?.includes('spent') || data.message?.includes('already') || data.message?.includes('spent')) {
+            console.warn(`[Consolidate] Note ${i + 1} already spent (from relayer), removing from local state`)
+            skippedNotes.push(i + 1)
+            completeUnshield(noteIndex)
+            setConsolidateProgress({ current: i + 1, total: worthyNotes.length, totalReceived })
+            continue
+          }
+          throw new Error(data.message || data.error || 'Relayer failed')
+        }
         txHashes.push(data.txHash)
         totalReceived += Number(data.amountReceived) / 1e18
         completeUnshield(noteIndex)
@@ -262,12 +306,45 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
           status: 'confirmed',
         })
         
+        // Update progress AFTER successful processing - shows how many notes completed
+        // i + 1 because we just completed note at index i (0-indexed), so we've completed i+1 notes
         setConsolidateProgress({ current: i + 1, total: worthyNotes.length, totalReceived })
         setConsolidateTxHashes([...txHashes])
       } catch (error: any) {
         console.error(`[Consolidate] Error on note ${i + 1}:`, error)
+        // Check if error is due to already spent
+        if (error.message?.includes('already') || error.message?.includes('spent') || error.message?.includes('NullifierAlreadySpent')) {
+          console.warn(`[Consolidate] Note ${i + 1} already spent, removing from local state`)
+          skippedNotes.push(i + 1)
+          // Try to remove the note if we can find it
+          try {
+            const currentNotes = getNotes().filter(n => 
+              n.leafIndex !== undefined && 
+              n.amount > 0n && 
+              (n.token || 'DOGE') === selectedToken
+            )
+            const noteIndex = currentNotes.findIndex(n => n.commitment === note.commitment)
+            if (noteIndex !== -1) {
+              completeUnshield(noteIndex)
+            }
+          } catch (e) {
+            console.warn('[Consolidate] Could not remove spent note:', e)
+          }
+          setConsolidateProgress({ current: i + 1, total: worthyNotes.length, totalReceived })
+          continue
+        }
         setErrorMessage(`Failed on note ${i + 1}: ${error.message}`)
       }
+    }
+    
+    // Show info about skipped notes if any
+    if (skippedNotes.length > 0) {
+      console.log(`[Consolidate] Skipped ${skippedNotes.length} already-spent note(s): ${skippedNotes.join(', ')}`)
+      toast({
+        title: "Note Cleanup",
+        description: `Removed ${skippedNotes.length} already-spent note(s) from your wallet. Your balance has been updated.`,
+        variant: "default",
+      })
     }
     setConsolidateTotalReceived(totalReceived)
     setWithdrawnAmount(totalReceived.toFixed(4))
@@ -647,7 +724,7 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
         </div>
       )}
       
-      {status === "success" && txHash && !consolidateTxHashes.length && (
+      {status === "success" && txHash && consolidateTxHashes.length === 0 && (
         <div className="space-y-4">
           <div className="p-6 rounded-lg bg-white/5 border border-white/10">
             <div className="flex items-start gap-4">

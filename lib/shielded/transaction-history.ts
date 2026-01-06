@@ -27,6 +27,7 @@ export interface ShieldedTransaction {
   recipientPublic?: string // Public address if known
   fee?: string // Relayer fee
   changeAmount?: string // Change returned
+  isIncoming?: boolean // true if this is a received transfer (discovered note)
   
   // For swap
   inputToken?: string

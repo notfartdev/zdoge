@@ -248,17 +248,25 @@ export function ActivityInterface() {
                         {tx.type === 'transfer' && (
                           <>
                             <p className="text-xl font-mono font-bold tracking-[-0.01em]">
-                              -{tx.amount} <span className="font-body text-sm text-white/70">{tx.token}</span>
+                              {tx.isIncoming ? '+' : '-'}{tx.amount} <span className="font-body text-sm text-white/70">{tx.token}</span>
                             </p>
-                            {tx.recipientAddress && (
+                            {tx.isIncoming ? (
                               <p className="text-xs font-body text-white/60">
-                                To: <span className="font-mono">{shortenAddress(tx.recipientAddress, 12)}</span>
+                                Received
                               </p>
-                            )}
-                            {tx.fee && parseFloat(tx.fee) > 0 && (
-                              <p className="text-xs font-body text-white/60">
-                                Fee: <span className="font-mono">{tx.fee}</span> <span className="font-body">{tx.token}</span>
-                              </p>
+                            ) : (
+                              <>
+                                {tx.recipientAddress && (
+                                  <p className="text-xs font-body text-white/60">
+                                    To: <span className="font-mono">{shortenAddress(tx.recipientAddress, 12)}</span>
+                                  </p>
+                                )}
+                                {tx.fee && parseFloat(tx.fee) > 0 && (
+                                  <p className="text-xs font-body text-white/60">
+                                    Fee: <span className="font-mono">{tx.fee}</span> <span className="font-body">{tx.token}</span>
+                                  </p>
+                                )}
+                              </>
                             )}
                           </>
                         )}

@@ -161,7 +161,8 @@ export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", onTokenC
                     token: discoveredNote.token || 'DOGE',
                     amount: formatWeiToAmount(discoveredNote.amount).toFixed(4),
                     amountWei: discoveredNote.amount.toString(),
-                    status: 'completed',
+                    status: 'confirmed', // Received transfers are already confirmed on-chain
+                    isIncoming: true, // Mark as incoming transfer
                   }).catch(err => {
                     console.warn('[ShieldedHeader] Failed to add transaction to history:', err)
                   })
