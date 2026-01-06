@@ -364,8 +364,8 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
   return (
     <div className="space-y-4">
       <div>
-        <h3 className="text-lg font-medium">Send to Public Address</h3>
-        <p className="text-sm text-muted-foreground">Unshield your shielded DOGE to any public wallet address</p>
+        <h3 className="text-lg font-sans font-medium">Send to Public Address</h3>
+        <p className="text-sm font-sans text-muted-foreground">Unshield your shielded DOGE to any public wallet address</p>
       </div>
       
       <div className="p-4 rounded-lg bg-gradient-to-r from-primary/10 to-transparent border">
@@ -375,7 +375,7 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
             <span className="font-medium">Available to Unshield</span>
           </div>
           <div className="text-right">
-            <div className="text-xl font-bold">{formatWeiToAmount(totalBalance).toFixed(4)} DOGE</div>
+            <div className="text-xl font-mono font-bold tracking-[-0.01em]">{formatWeiToAmount(totalBalance).toFixed(4)} <span className="font-sans text-sm text-white/70">DOGE</span></div>
           </div>
         </div>
         {largestNote && (

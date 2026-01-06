@@ -144,6 +144,37 @@
     background: rgba(0, 0, 0, 0.75);
     border-color: rgba(194, 166, 51, 0.25);
   }
+
+  /* Premium button slide animation */
+  .btn-slide-fill {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .btn-slide-fill::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: #C2A633;
+    transform: scaleX(0);
+    transform-origin: right;
+    transition: transform 300ms ease;
+    z-index: 0;
+  }
+
+  .btn-slide-fill:hover::before {
+    transform: scaleX(1);
+  }
+
+  .btn-slide-fill span {
+    position: relative;
+    z-index: 1;
+    transition: color 300ms ease;
+  }
+
+  .btn-slide-fill:hover span {
+    color: #000;
+  }
 }
 
 /* Smooth scroll behavior */

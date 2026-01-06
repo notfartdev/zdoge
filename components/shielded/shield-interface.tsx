@@ -451,11 +451,11 @@ export function ShieldInterface({ onSuccess, selectedToken: externalToken, onTok
   return (
     <div className="space-y-4">
       <div>
-        <h3 className="text-lg font-medium flex items-center gap-2">
+        <h3 className="text-lg font-sans font-medium flex items-center gap-2">
           <Coins className="h-5 w-5" />
           Shield Tokens
         </h3>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm font-sans text-muted-foreground">
           Deposit public tokens into your shielded balance
         </p>
       </div>
@@ -466,11 +466,11 @@ export function ShieldInterface({ onSuccess, selectedToken: externalToken, onTok
           {tokenBalanceNum <= 0 ? (
             <div className="p-6 rounded-lg bg-muted/30 border border-muted text-center">
               <Coins className="h-12 w-12 text-muted-foreground mx-auto mb-3 opacity-50" />
-              <h4 className="font-medium mb-1">No {selectedToken} Balance</h4>
-              <p className="text-sm text-muted-foreground mb-4">
+              <h4 className="font-sans font-medium mb-1">No {selectedToken} Balance</h4>
+              <p className="text-sm font-sans text-muted-foreground mb-4">
                 You need {selectedToken} in your wallet to shield tokens.
               </p>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs font-sans text-white/60">
                 Connect a wallet with {selectedToken} balance to get started.
               </p>
             </div>
@@ -502,13 +502,13 @@ export function ShieldInterface({ onSuccess, selectedToken: externalToken, onTok
                 />
                 {amountError && (
                   <div className="p-2.5 rounded-md bg-orange-500/10 border border-orange-500/20">
-                    <p className="text-xs text-orange-400 flex items-center gap-1.5 font-medium">
+                    <p className="text-xs font-sans text-orange-400 flex items-center gap-1.5 font-medium">
                       <AlertCircle className="h-3.5 w-3.5 text-orange-400 flex-shrink-0" />
                       <span>{amountError}</span>
                     </p>
                   </div>
                 )}
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs font-sans text-white/60">
                   Available: {tokenBalance} {selectedToken}
                   {selectedTokenInfo.isNative && tokenBalanceNum > 0.001 && (
                     <span className="ml-1">(0.001 reserved for gas)</span>
@@ -518,7 +518,7 @@ export function ShieldInterface({ onSuccess, selectedToken: externalToken, onTok
               
               {/* Info Box */}
               <div className="p-3 rounded-lg bg-primary/5 border border-primary/20">
-                <p className="text-sm text-muted-foreground flex items-center gap-2">
+                <p className="text-sm font-sans text-muted-foreground flex items-center gap-2">
                   <img src={TOKEN_LOGOS[selectedToken]} alt={selectedToken} className="w-4 h-4 rounded-full inline" />
                   <span>
                     <strong>Shielding {selectedToken}:</strong>{' '}
@@ -549,16 +549,16 @@ export function ShieldInterface({ onSuccess, selectedToken: externalToken, onTok
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
             <div className="w-full max-w-xs space-y-2">
               <Progress value={25} className="h-2" />
-              <p className="text-sm font-medium text-foreground text-center">
+              <p className="text-sm font-sans font-medium text-foreground text-center">
                 Step 1 of 2: Approving {selectedToken}
               </p>
-              <p className="text-xs text-muted-foreground text-center">
+              <p className="text-xs font-sans text-white/60 text-center">
                 Please confirm the approval transaction in your wallet
               </p>
             </div>
           </div>
           <div className="p-3 rounded-lg bg-primary/10 border border-primary/20">
-            <p className="text-xs text-muted-foreground flex items-start gap-2">
+            <p className="text-xs font-sans text-white/60 flex items-start gap-2">
               <Info className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
               <span><strong>Two-step process:</strong> {selectedToken} requires an approval first, then the shield transaction. This allows the contract to access your tokens.</span>
             </p>
@@ -571,10 +571,10 @@ export function ShieldInterface({ onSuccess, selectedToken: externalToken, onTok
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
           <div className="w-full max-w-xs space-y-2">
             <Progress value={selectedTokenInfo.isNative ? 50 : 60} className="h-2" />
-            <p className="text-sm font-medium text-foreground text-center">
+            <p className="text-sm font-sans font-medium text-foreground text-center">
               {selectedTokenInfo.isNative ? "Preparing shield transaction" : "Step 2 of 2: Preparing shield"}
             </p>
-            <p className="text-xs text-muted-foreground text-center">
+            <p className="text-xs font-sans text-white/60 text-center">
               Generating your private note and preparing the transaction...
             </p>
           </div>
@@ -587,10 +587,10 @@ export function ShieldInterface({ onSuccess, selectedToken: externalToken, onTok
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
             <div className="w-full max-w-xs space-y-2">
               <Progress value={selectedTokenInfo.isNative ? 75 : 85} className="h-2" />
-              <p className="text-sm font-medium text-foreground text-center">
+              <p className="text-sm font-sans font-medium text-foreground text-center">
                 {selectedTokenInfo.isNative ? "Waiting for transaction confirmation" : "Step 2 of 2: Shielding tokens"}
               </p>
-              <p className="text-xs text-muted-foreground text-center">
+              <p className="text-xs font-sans text-white/60 text-center">
                 Confirm the transaction in your wallet to complete the shield
               </p>
             </div>
@@ -618,10 +618,10 @@ export function ShieldInterface({ onSuccess, selectedToken: externalToken, onTok
               </div>
               <div className="flex-1 space-y-3">
                 <div>
-                  <h4 className="text-base font-semibold text-green-300 mb-1.5">
+                  <h4 className="text-base font-sans font-semibold text-green-300 mb-1.5">
                     Shield Successful!
                   </h4>
-                  <p className="text-sm text-green-400/90 leading-relaxed">
+                  <p className="text-sm font-sans text-green-400/90 leading-relaxed">
                     {amount} {selectedToken} has been successfully shielded. Your funds are now private and protected.
                   </p>
                 </div>
@@ -632,7 +632,7 @@ export function ShieldInterface({ onSuccess, selectedToken: externalToken, onTok
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-2 text-sm text-green-300 hover:text-green-200 transition-colors group"
                   >
-                    <span className="font-medium">View transaction on Blockscout</span>
+                    <span className="font-sans font-medium">View transaction on Blockscout</span>
                     <ExternalLink className="h-4 w-4 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
                   </a>
                 )}
@@ -652,10 +652,10 @@ export function ShieldInterface({ onSuccess, selectedToken: externalToken, onTok
             <div className="flex items-start gap-3">
               <AlertCircle className="h-5 w-5 text-orange-400 flex-shrink-0 mt-0.5" />
               <div className="flex-1">
-                <p className="text-sm font-medium text-orange-300 mb-1">
+                <p className="text-sm font-sans font-medium text-orange-300 mb-1">
                   Transaction Failed
                 </p>
-                <p className="text-sm text-orange-400/90">
+                <p className="text-sm font-sans text-orange-400/90">
                   Shield transaction failed. Your funds are safe.
                 </p>
               </div>

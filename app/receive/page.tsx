@@ -4,15 +4,15 @@ import { useState, useEffect } from "react"
 import { DashboardNav } from "@/components/dashboard-nav"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { 
   Copy, 
   Check, 
   QrCode, 
-  Wallet, 
   Shield,
-  Download
+  Download,
+  Wallet
 } from "lucide-react"
+import { WalletIcon } from "@/components/wallet-icon"
 import { useToast } from "@/hooks/use-toast"
 import { useWallet } from "@/lib/wallet-context"
 import {
@@ -128,9 +128,9 @@ export default function ReceivePage() {
         <DashboardNav />
         <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 max-w-5xl">
           <Card className="p-12 text-center">
-            <Wallet className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-            <h2 className="text-2xl font-bold mb-2">Connect Your Wallet</h2>
-            <p className="text-muted-foreground">
+            <WalletIcon className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+            <h2 className="text-2xl font-sans font-bold mb-2">Connect Your Wallet</h2>
+            <p className="font-sans text-muted-foreground">
               Connect your wallet to view your receive addresses
             </p>
           </Card>
@@ -144,29 +144,33 @@ export default function ReceivePage() {
       <DashboardNav />
       <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 max-w-5xl">
         <div className="mb-6 sm:mb-8">
-          <h1 className="text-2xl sm:text-3xl font-bold mb-2 flex items-center gap-2 sm:gap-3">
-            <QrCode className="h-6 w-6 sm:h-8 sm:w-8 text-primary" />
+          <h1 className="font-sans text-3xl sm:text-4xl font-semibold tracking-[-0.02em] mb-2 flex items-center gap-2 sm:gap-3">
+            <img 
+              src="https://z.cash/wp-content/uploads/2023/04/secret.gif" 
+              alt="Receive" 
+              className="h-8 w-8 sm:h-10 sm:w-10 md:h-12 md:w-12"
+            />
             Receive Addresses
           </h1>
-          <p className="text-sm sm:text-base text-muted-foreground">
+          <p className="mt-2 font-sans text-sm sm:text-base text-white/70 leading-relaxed tracking-[-0.01em]">
             Share your addresses to receive payments. Use the shielded address for private transactions.
           </p>
         </div>
 
         <div className="grid md:grid-cols-2 gap-6">
           {/* Public Address */}
-          <Card className="p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="p-2 rounded-full bg-muted">
+          <Card className="p-6 flex flex-col h-full">
+            <div className="flex items-start gap-2 mb-4 min-h-[72px]">
+              <div className="p-2 rounded-full bg-muted flex-shrink-0">
                 <Wallet className="h-5 w-5" />
               </div>
-              <div>
-                <h2 className="text-lg font-semibold">Public Address</h2>
-                <p className="text-sm text-muted-foreground">Receive public DOGE & tokens</p>
+              <div className="flex-1">
+                <h2 className="text-lg font-sans font-semibold mb-1">Public Address</h2>
+                <p className="text-sm font-sans text-white/70">Receive public DOGE & tokens</p>
               </div>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-4 flex-1 flex flex-col">
               {/* QR Code */}
               {publicQrCode && (
                 <div className="flex justify-center p-4 bg-white rounded-lg">
@@ -182,7 +186,7 @@ export default function ReceivePage() {
               </div>
 
               {/* Actions */}
-              <div className="flex gap-2">
+              <div className="flex gap-2 mt-auto">
                 <Button 
                   variant="outline" 
                   className="flex-1"
@@ -213,17 +217,16 @@ export default function ReceivePage() {
           </Card>
 
           {/* Shielded Address */}
-          <Card className="p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="p-2 rounded-full bg-primary/10">
+          <Card className="p-6 flex flex-col h-full">
+            <div className="flex items-start gap-2 mb-4 min-h-[72px]">
+              <div className="p-2 rounded-full bg-primary/10 flex-shrink-0">
                 <Shield className="h-5 w-5 text-primary" />
               </div>
-              <div>
-                <h2 className="text-lg font-semibold flex items-center gap-2">
+              <div className="flex-1">
+                <h2 className="text-lg font-sans font-semibold mb-1">
                   Shielded Address
-                  <Badge variant="outline" className="text-xs">Private & Permanent</Badge>
                 </h2>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm font-sans text-white/70">
                   Receive private shielded tokens • This address never changes
                 </p>
               </div>
@@ -231,12 +234,12 @@ export default function ReceivePage() {
 
             {!shieldedAddress ? (
               <div className="text-center py-8">
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm font-sans text-white/70">
                   Initializing shielded wallet...
                 </p>
               </div>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-4 flex-1 flex flex-col">
                 {/* QR Code */}
                 {shieldedQrCode && (
                   <div className="flex justify-center p-4 bg-white rounded-lg">
@@ -252,7 +255,7 @@ export default function ReceivePage() {
                 </div>
 
                 {/* Actions */}
-                <div className="flex gap-2">
+                <div className="flex gap-2 mt-auto">
                   <Button 
                     variant="outline" 
                     className="flex-1"

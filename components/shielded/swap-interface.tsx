@@ -208,8 +208,8 @@ export function SwapInterface({ notes, onSuccess, onInputTokenChange }: SwapInte
   return (
     <div className="space-y-4">
       <div>
-        <h3 className="text-lg font-medium">Swap Tokens</h3>
-        <p className="text-sm text-muted-foreground">
+        <h3 className="text-lg font-sans font-medium">Swap Tokens</h3>
+        <p className="text-sm font-sans text-muted-foreground">
           Swap tokens privately within the shielded layer
         </p>
       </div>

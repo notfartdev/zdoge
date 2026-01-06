@@ -41,7 +41,7 @@ export function HelpModal() {
         showCloseButton={false}
       >
         <div className="flex items-center justify-between mb-6">
-          <DialogTitle className="text-xl font-normal font-serif text-white">
+          <DialogTitle className="text-xl font-sans font-semibold text-white">
             FAQ
           </DialogTitle>
           <button
@@ -56,10 +56,10 @@ export function HelpModal() {
         <div className="space-y-6">
           {faqs.map((faq, index) => (
             <div key={index} className="space-y-2">
-              <h3 className="font-medium font-mono text-sm text-white">
+              <h3 className="font-sans font-medium text-sm text-white">
                 {index + 1}. {faq.question}
               </h3>
-              <p className="font-mono text-xs text-muted-foreground leading-relaxed">
+              <p className="font-sans text-xs text-white/70 leading-relaxed">
                 {faq.answer}
               </p>
             </div>

@@ -51,7 +51,7 @@ export function Footer() {
           <div className="space-y-4">
             <div className="flex items-center gap-3">
               <img src="/zdoge-logo.png" alt="zDoge.cash" className="w-8 h-8 rounded-full" />
-              <span className="font-mono text-sm tracking-widest text-[#C2A633]">zDOGE</span>
+              <span className="font-mono text-sm tracking-[0.08em] text-[#C2A633]">zDOGE</span>
             </div>
             <div className="font-mono text-xs text-muted-foreground/60 space-y-1">
               <p>Copyright © {new Date().getFullYear()} zDoge</p>

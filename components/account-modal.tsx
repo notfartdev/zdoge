@@ -160,7 +160,7 @@ export function AccountModal() {
         variant="ghost"
         size="sm"
         onClick={() => setIsOpen(true)}
-        className="font-mono text-sm text-gray-400 hover:text-white hover:bg-transparent flex items-center gap-2"
+        className="font-sans text-sm text-gray-400 hover:text-white hover:bg-transparent flex items-center gap-2"
       >
         <User className="w-4 h-4" />
         Account
@@ -181,7 +181,7 @@ export function AccountModal() {
         <div className="bg-zinc-900 border border-[#C2A633]/30 shadow-xl">
           {/* Header */}
           <div className="flex items-center justify-between p-4 border-b border-zinc-800">
-            <h2 className="font-mono text-lg font-bold text-white flex items-center gap-2">
+            <h2 className="font-sans text-lg font-semibold text-white flex items-center gap-2">
               <User className="w-5 h-5 text-[#C2A633]" />
               Account
             </h2>
@@ -201,11 +201,11 @@ export function AccountModal() {
               <div className="p-4 bg-black border border-[#C2A633]/30 space-y-3">
                 <div className="flex items-center gap-2 text-[#C2A633]">
                   <Wallet className="w-4 h-4" />
-                  <span className="font-mono text-xs uppercase tracking-wider font-bold">Connected Wallet</span>
+                  <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-white/60">Connected Wallet</span>
                 </div>
                 <div className="flex items-center justify-between bg-zinc-900 p-3 border border-zinc-800">
                   <div className="flex-1 min-w-0">
-                    <p className="font-mono text-xs text-gray-500 mb-1">Address</p>
+                    <p className="font-sans text-xs text-white/60 mb-1">Address</p>
                     <p className="font-mono text-sm text-white break-all">
                       {wallet.address}
                     </p>
@@ -227,11 +227,11 @@ export function AccountModal() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 text-gray-400">
                     <Coins className="w-4 h-4" />
-                    <span className="font-mono text-xs uppercase tracking-wider">Wallet Balance</span>
+                    <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-white/60">Wallet Balance</span>
                   </div>
                   <button 
                     onClick={fetchTokenBalances}
-                    className="text-[10px] font-mono text-[#C2A633] hover:underline"
+                    className="text-[10px] font-sans text-[#C2A633] hover:underline"
                   >
                     Refresh
                   </button>
@@ -240,7 +240,7 @@ export function AccountModal() {
                 <div className="space-y-2">
                   {loadingBalances ? (
                     <div className="text-center py-3">
-                      <span className="font-mono text-xs text-gray-500">Loading balances...</span>
+                      <span className="font-sans text-xs text-white/60">Loading balances...</span>
                     </div>
                   ) : tokenBalances.length > 0 ? (
                     tokenBalances.map((token, i) => (
@@ -251,14 +251,14 @@ export function AccountModal() {
                               {token.symbol.charAt(0)}
                             </span>
                           </div>
-                          <span className="font-mono text-sm text-white">{token.symbol}</span>
+                          <span className="font-sans text-sm text-white/70">{token.symbol}</span>
                         </div>
-                        <span className="font-mono text-sm text-gray-400">{token.balance}</span>
+                        <span className="font-mono text-sm font-bold tracking-[-0.01em]">{token.balance}</span>
                       </div>
                     ))
                   ) : (
                     <div className="text-center py-3">
-                      <span className="font-mono text-xs text-gray-500">No balances found</span>
+                      <span className="font-sans text-xs text-white/60">No balances found</span>
                     </div>
                   )}
                 </div>
@@ -269,7 +269,7 @@ export function AccountModal() {
             <div className="p-4 bg-black border border-zinc-800 space-y-3">
               <div className="flex items-center gap-2 text-gray-400">
                 <Network className="w-4 h-4" />
-                <span className="font-mono text-xs uppercase tracking-wider">Network</span>
+                <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-white/60">Network</span>
               </div>
               
               <div className="flex items-center justify-between bg-zinc-900 p-3 border border-zinc-800">
@@ -278,8 +278,8 @@ export function AccountModal() {
                     <span className="font-mono text-black font-bold text-sm">Ð</span>
                   </div>
                   <div>
-                    <p className="font-mono text-sm text-white">{dogeosTestnet.name}</p>
-                    <p className="font-mono text-[10px] text-gray-500">Chain ID: {dogeosTestnet.id}</p>
+                    <p className="font-sans text-sm text-white">{dogeosTestnet.name}</p>
+                    <p className="font-sans text-[10px] text-white/60">Chain ID: <span className="font-mono">{dogeosTestnet.id}</span></p>
                   </div>
                 </div>
                 <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" title="Connected" />
@@ -290,7 +290,7 @@ export function AccountModal() {
             <div className="p-4 bg-black border border-zinc-800 space-y-3">
               <div className="flex items-center gap-2 text-gray-400">
                 <Globe className="w-4 h-4" />
-                <span className="font-mono text-xs uppercase tracking-wider">RPC Endpoint</span>
+                <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-white/60">RPC Endpoint</span>
               </div>
               
               {/* RPC Dropdown */}
@@ -299,7 +299,7 @@ export function AccountModal() {
                   onClick={() => setShowRpcDropdown(!showRpcDropdown)}
                   className="w-full flex items-center justify-between p-3 bg-zinc-900 border border-zinc-700 hover:border-[#C2A633]/50 transition-colors"
                 >
-                  <span className="font-mono text-sm text-white">{selectedRpc.name}</span>
+                  <span className="font-sans text-sm text-white">{selectedRpc.name}</span>
                   <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${showRpcDropdown ? 'rotate-180' : ''}`} />
                 </button>
 
@@ -309,7 +309,7 @@ export function AccountModal() {
                       <button
                         key={rpc.id}
                         onClick={() => handleRpcChange(rpc)}
-                        className={`w-full text-left p-3 font-mono text-sm hover:bg-[#C2A633]/20 transition-colors flex items-center justify-between ${
+                        className={`w-full text-left p-3 font-sans text-sm hover:bg-[#C2A633]/20 transition-colors flex items-center justify-between ${
                           selectedRpc.id === rpc.id ? 'bg-[#C2A633]/10 text-[#C2A633]' : 'text-white'
                         }`}
                       >
@@ -329,12 +329,12 @@ export function AccountModal() {
                     value={customRpcUrl}
                     onChange={(e) => setCustomRpcUrl(e.target.value)}
                     placeholder="https://your-rpc-url.com"
-                    className="w-full p-3 bg-zinc-800 border border-zinc-700 font-mono text-sm text-white placeholder:text-gray-500 focus:border-[#C2A633]/50 focus:outline-none"
+                    className="w-full p-3 bg-zinc-800 border border-zinc-700 font-sans text-sm text-white placeholder:text-gray-500 focus:border-[#C2A633]/50 focus:outline-none"
                   />
                   <Button
                     onClick={handleCustomRpcSave}
                     disabled={!customRpcUrl}
-                    className="w-full bg-[#C2A633] hover:bg-[#C2A633]/90 text-black font-mono font-bold"
+                    className="w-full bg-[#C2A633] hover:bg-[#C2A633]/90 text-black font-sans font-medium"
                   >
                     Save Custom RPC
                   </Button>
@@ -348,7 +348,7 @@ export function AccountModal() {
                 variant="outline"
                 onClick={handleSync}
                 disabled={isSyncing}
-                className="w-full font-mono text-sm border-[#C2A633]/50 text-[#C2A633] hover:bg-[#C2A633]/10 hover:text-[#C2A633] flex items-center justify-center gap-2"
+                className="w-full font-sans text-sm border-[#C2A633]/50 text-[#C2A633] hover:bg-[#C2A633]/10 hover:text-[#C2A633] flex items-center justify-center gap-2"
               >
                 <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
                 {isSyncing ? 'Syncing...' : 'Sync Shielded Notes'}
@@ -360,7 +360,7 @@ export function AccountModal() {
               <Button
                 variant="outline"
                 onClick={handleDisconnect}
-                className="w-full font-mono text-sm border-red-500/50 text-red-400 hover:bg-red-500/10 hover:text-red-300 flex items-center justify-center gap-2"
+                className="w-full font-sans text-sm border-red-500/50 text-red-400 hover:bg-red-500/10 hover:text-red-300 flex items-center justify-center gap-2"
               >
                 <LogOut className="w-4 h-4" />
                 Disconnect Wallet

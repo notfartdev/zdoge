@@ -142,7 +142,7 @@ function ShieldedPoolVisualization() {
           const y = 70 + i * 80
           return (
             <g key={`shield-${wallet}`}>
-              <rect x="20" y={y} width="140" height="50" rx="2" fill="rgba(0,0,0,0.5)" stroke="rgba(255,255,255,0.15)" strokeWidth="1" />
+              <rect x="20" y={y} width="140" height="50" rx="2" fill="rgba(194,166,51,0.08)" stroke="rgba(194,166,51,0.4)" strokeWidth="1" />
               <rect x="30" y={y + 12} width="26" height="26" rx="4" fill="rgba(194,166,51,0.15)" stroke="#C2A633" strokeWidth="1" />
               <text x="43" y={y + 30} fill="#C2A633" fontSize="11" fontFamily="monospace" fontWeight="bold" textAnchor="middle">{wallet}</text>
               <text x="68" y={y + 29} fill="rgba(255,255,255,0.9)" fontSize="11" fontFamily="monospace">0x{wallet.toLowerCase()}...</text>
@@ -360,9 +360,9 @@ export default function HomePage() {
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.99 }}
                       transition={{ duration: 0.2, ease: "easeOut" }}
-                      className="relative px-8 sm:px-12 py-3 sm:py-3.5 bg-[#C2A633] text-black/90 font-serif text-sm sm:text-base font-medium tracking-[0.02em] transition-colors duration-200 hover:bg-[#D4B844]"
+                      className="btn-slide-fill min-w-[160px] px-8 sm:px-12 py-3 sm:py-3.5 border border-white/20 text-white/90 bg-transparent font-serif text-sm sm:text-base font-medium tracking-[0.02em]"
                     >
-                      Launch zDoge
+                      <span>Use zDoge</span>
                     </motion.button>
                   </Link>
                   
@@ -371,9 +371,9 @@ export default function HomePage() {
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.99 }}
                       transition={{ duration: 0.2, ease: "easeOut" }}
-                      className="relative px-8 sm:px-12 py-3 sm:py-3.5 border border-white/20 text-white/90 font-serif text-sm sm:text-base font-medium tracking-[0.02em] transition-all duration-200 hover:bg-white/10 hover:border-white/40"
+                      className="btn-slide-fill min-w-[160px] px-8 sm:px-12 py-3 sm:py-3.5 border border-white/20 text-white/90 bg-transparent font-serif text-sm sm:text-base font-medium tracking-[0.02em]"
                     >
-                      Learn zDoge
+                      <span>Learn zDoge</span>
                     </motion.button>
                   </Link>
                 </div>

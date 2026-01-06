@@ -30,10 +30,15 @@ function ShieldPageContent() {
       <DashboardNav />
       <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 max-w-5xl">
         <div className="mb-6 sm:mb-8">
-          <h1 className="text-2xl sm:text-3xl font-bold mb-2 font-mono">
+          <h1 className="font-sans text-3xl sm:text-4xl font-semibold tracking-[-0.02em] mb-2 flex items-center gap-2 sm:gap-3">
+            <img 
+              src="https://z.cash/wp-content/uploads/2023/04/privacy.gif" 
+              alt="Shield" 
+              className="h-8 w-8 sm:h-10 sm:w-10 md:h-12 md:w-12"
+            />
             Shield Tokens
           </h1>
-          <p className="text-sm sm:text-base text-muted-foreground font-mono">
+          <p className="mt-2 font-sans text-sm sm:text-base text-white/70 leading-relaxed tracking-[-0.01em]">
             Convert public tokens to private shielded notes. Your funds become invisible on-chain.
           </p>
         </div>
