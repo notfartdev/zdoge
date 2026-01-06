@@ -14,7 +14,7 @@ import {
 import { Alert, AlertDescription } from "@/components/ui/alert"
 
 export function WalletConnectButton() {
-  const { wallet, isConnecting, connect, disconnect } = useWallet()
+  const { wallet, isConnecting, connect, disconnect, requestAccountSelection } = useWallet()
   const [error, setError] = useState<string | null>(null)
 
   const handleConnect = async () => {
@@ -76,16 +76,22 @@ export function WalletConnectButton() {
   }
 
   const handleChangeWallet = async () => {
-    // Disconnect current wallet first
-    disconnect()
-    // Then reconnect to allow user to select a different wallet
-    setTimeout(async () => {
-      try {
-        await connect()
-      } catch (err) {
-        // User cancelled or error - that's okay
+    try {
+      // Disconnect current wallet first
+      disconnect()
+      
+      // Wait a bit for state to update
+      await new Promise(resolve => setTimeout(resolve, 200))
+      
+      // Request account selection - this will show the account picker
+      // if multiple accounts are available in MetaMask
+      await requestAccountSelection()
+    } catch (err: any) {
+      // User cancelled or error - that's okay
+      if (err?.code !== 4001) { // 4001 is user rejection, don't log that
+        console.log('[Wallet] Change wallet error:', err)
       }
-    }, 100)
+    }
   }
 
   return (

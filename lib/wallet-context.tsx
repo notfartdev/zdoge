@@ -10,6 +10,7 @@ interface WalletContextType {
   isConnecting: boolean
   isWrongNetwork: boolean
   connect: () => Promise<void>
+  requestAccountSelection: () => Promise<void>
   disconnect: () => void
   refreshBalance: () => Promise<void>
   switchNetwork: () => Promise<void>
@@ -35,6 +36,23 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       }
     } catch (error) {
       console.error("[Wallet] Connection failed:", error)
+      throw error
+    } finally {
+      setIsConnecting(false)
+    }
+  }
+
+  const requestAccountSelection = async () => {
+    setIsConnecting(true)
+    try {
+      const connection = await evmWalletService.requestAccountSelection()
+      if (connection) {
+        setWallet(connection)
+        setIsWrongNetwork(connection.chainId !== dogeosTestnet.id)
+        localStorage.setItem("wallet_connected", "true")
+      }
+    } catch (error) {
+      console.error("[Wallet] Account selection failed:", error)
       throw error
     } finally {
       setIsConnecting(false)
@@ -113,7 +131,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       wallet, 
       isConnecting, 
       isWrongNetwork,
-      connect, 
+      connect,
+      requestAccountSelection, 
       disconnect, 
       refreshBalance,
       switchNetwork,

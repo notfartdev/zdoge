@@ -99,6 +99,35 @@ class EVMWalletService {
   }
 
   /**
+   * Request account selection (for changing wallets)
+   * This attempts to revoke and re-request permissions to show account picker
+   */
+  async requestAccountSelection(): Promise<EVMWalletConnection | null> {
+    if (!this.isWalletInstalled()) {
+      throw new Error('No Ethereum wallet found. Please install MetaMask.');
+    }
+
+    try {
+      // Try to revoke existing permissions first to force account selection
+      try {
+        await window.ethereum!.request({
+          method: 'wallet_requestPermissions',
+          params: [{ eth_accounts: {} }],
+        });
+      } catch (revokeError) {
+        // If revocation fails, that's okay - continue with normal connection
+        console.log('[EVMWallet] Could not revoke permissions, continuing...');
+      }
+
+      // Now request accounts - this should show the account picker
+      return await this.connect();
+    } catch (error: any) {
+      console.error('[EVMWallet] Account selection failed:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Switch to DogeOS Testnet
    */
   async switchToDogeOS(): Promise<void> {
