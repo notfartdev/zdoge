@@ -54,9 +54,11 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
   const [withdrawnAmount, setWithdrawnAmount] = useState<string | null>(null)
   const [fee, setFee] = useState<string | null>(null)
   const [relayerInfo, setRelayerInfo] = useState<RelayerInfo | null>(null)
+  const [isLoadingRelayerInfo, setIsLoadingRelayerInfo] = useState(true)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [consolidateProgress, setConsolidateProgress] = useState<{ current: number; total: number; totalReceived: number } | null>(null)
   const [consolidateTxHashes, setConsolidateTxHashes] = useState<string[]>([])
+  const [consolidateTotalReceived, setConsolidateTotalReceived] = useState<number>(0)
   const [usdValue, setUsdValue] = useState<string | null>(null)
   
   const spendableNotes = useMemo(() => 
@@ -116,11 +118,16 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
   
   useEffect(() => {
     async function fetchRelayerInfo() {
+      setIsLoadingRelayerInfo(true)
       try {
         const response = await fetch(`${RELAYER_URL}/api/shielded/relay/info`)
-        if (response.ok) setRelayerInfo(await response.json())
+        if (response.ok) {
+          setRelayerInfo(await response.json())
+        }
       } catch (error) {
         console.warn('Could not fetch relayer info:', error)
+      } finally {
+        setIsLoadingRelayerInfo(false)
       }
     }
     fetchRelayerInfo()
@@ -145,7 +152,12 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
     let requiredFee = (requestedAmount * feePercent) / 10000n
     if (requiredFee < minFee) requiredFee = minFee
     const requiredNoteAmount = requestedAmount + requiredFee
-    const freshNotes = getNotes().filter(n => n.leafIndex !== undefined && n.amount > 0n)
+    // Only use notes for the selected token
+    const freshNotes = getNotes().filter(n => 
+      n.leafIndex !== undefined && 
+      n.amount > 0n && 
+      (n.token || 'DOGE') === selectedToken
+    )
     const sortedAsc = [...freshNotes].sort((a, b) => Number(a.amount - b.amount))
     for (const note of sortedAsc) {
       if (note.amount >= requiredNoteAmount) {
@@ -186,7 +198,12 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
       toast({ title: "Relayer Offline", description: "Cannot consolidate while relayer is offline", variant: "destructive" })
       return
     }
-    const freshNotes = getNotes().filter(n => n.leafIndex !== undefined && n.amount > 0n)
+    // Only consolidate notes for the selected token
+    const freshNotes = getNotes().filter(n => 
+      n.leafIndex !== undefined && 
+      n.amount > 0n && 
+      (n.token || 'DOGE') === selectedToken
+    )
     const minFee = BigInt(Math.floor(parseFloat(relayerInfo.minFee) * 1e18))
     const worthyNotes = freshNotes.filter(n => n.amount > minFee)
     if (worthyNotes.length === 0) {
@@ -202,7 +219,12 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
     for (let i = 0; i < worthyNotes.length; i++) {
       const note = worthyNotes[i]
       try {
-        const currentNotes = getNotes().filter(n => n.leafIndex !== undefined && n.amount > 0n)
+        // Only look for notes of the selected token
+        const currentNotes = getNotes().filter(n => 
+          n.leafIndex !== undefined && 
+          n.amount > 0n && 
+          (n.token || 'DOGE') === selectedToken
+        )
         const noteIndex = currentNotes.findIndex(n => n.commitment === note.commitment)
         if (noteIndex === -1) continue
         const { fee: relayerFeeWei } = calculateFeeForNote(note.amount)
@@ -247,9 +269,10 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
         setErrorMessage(`Failed on note ${i + 1}: ${error.message}`)
       }
     }
+    setConsolidateTotalReceived(totalReceived)
     setWithdrawnAmount(totalReceived.toFixed(4))
     setStatus("success")
-    toast({ title: "🎉 Consolidation Complete!", description: `Received ${totalReceived.toFixed(4)} ${selectedToken}. Now re-shield to create one big note!` })
+    // Don't show toast - the green success UI box will show instead
     onSuccess?.()
   }
   
@@ -312,12 +335,35 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
       })
       
       setStatus("success")
-      toast({ title: "Unshield Successful!", description: `Received ${receivedAmount} ${selectedToken}` })
+      // Don't show toast - the green success UI box will show instead
       onSuccess?.()
     } catch (error: any) {
       setStatus("error")
-      setErrorMessage(error.message || "Transaction failed")
-      toast({ title: "Unshield Failed", description: error.message, variant: "destructive" })
+      
+      // Better error messages
+      let errorMessage = "Transaction failed"
+      if (error?.message) {
+        if (error.message.includes("user rejected") || error.message.includes("User denied")) {
+          errorMessage = "Transaction was cancelled. Please try again when ready."
+        } else if (error.message.includes("insufficient funds") || error.message.includes("insufficient balance")) {
+          errorMessage = "Insufficient balance. Please check your shielded balance."
+        } else if (error.message.includes("network") || error.message.includes("RPC") || error.message.includes("relayer")) {
+          errorMessage = "Network or relayer error. Please check your connection and try again."
+        } else if (error.message.includes("proof") || error.message.includes("nullifier")) {
+          errorMessage = "Proof generation failed. Please try again."
+        } else if (error.message.includes("consolidation")) {
+          errorMessage = "Consolidation failed. Please try again."
+        } else {
+          errorMessage = error.message
+        }
+      }
+      
+      setErrorMessage(errorMessage)
+      toast({ 
+        title: "Unshield Failed", 
+        description: errorMessage, 
+        variant: "destructive" 
+      })
     }
   }
   
@@ -386,19 +432,42 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
                 Unshield all available notes directly to your connected wallet
               </p>
               <div className="mt-2 text-sm">
-                <div className="flex items-center gap-2">
-                  <span className="text-muted-foreground">You'll receive:</span>
-                  <span className="font-medium text-green-500">~{formatWeiToAmount(totalReceivableAfterFees).toFixed(4)} {selectedToken}</span>
-                </div>
-                {usdValue && (
-                  <div className="text-muted-foreground mt-1">
-                    {usdValue}
+                {isLoadingRelayerInfo ? (
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>Computing notes...</span>
                   </div>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-2">
+                      <span className="text-muted-foreground">You'll receive:</span>
+                      <span className="font-medium text-green-500">~{formatWeiToAmount(totalReceivableAfterFees).toFixed(4)} {selectedToken}</span>
+                    </div>
+                    {usdValue && (
+                      <div className="text-muted-foreground mt-1">
+                        {usdValue}
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
-              <Button className="mt-3 w-full" variant="outline" onClick={handleConsolidateAll} disabled={!relayerInfo?.available || !wallet?.address}>
-                <Layers className="h-4 w-4 mr-2" />
-                Consolidate All to {wallet?.address ? `${wallet.address.slice(0, 6)}...${wallet.address.slice(-4)}` : 'Wallet'}
+              <Button 
+                className="mt-3 w-full" 
+                variant="outline" 
+                onClick={handleConsolidateAll} 
+                disabled={isLoadingRelayerInfo || !relayerInfo?.available || !wallet?.address}
+              >
+                {isLoadingRelayerInfo ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Computing notes...
+                  </>
+                ) : (
+                  <>
+                    <Layers className="h-4 w-4 mr-2" />
+                    Consolidate All to {wallet?.address ? `${wallet.address.slice(0, 6)}...${wallet.address.slice(-4)}` : 'Wallet'}
+                  </>
+                )}
               </Button>
             </div>
           </div>
@@ -461,13 +530,50 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
       )}
       
       {status === "consolidating" && consolidateProgress && (
-        <div className="flex flex-col items-center py-8 space-y-4">
-          <Loader2 className="h-8 w-8 animate-spin" />
-          <p className="text-muted-foreground">Consolidating note {consolidateProgress.current}/{consolidateProgress.total}...</p>
-          <div className="w-full bg-muted rounded-full h-2">
-            <div className="bg-primary h-2 rounded-full transition-all" style={{ width: `${(consolidateProgress.current / consolidateProgress.total) * 100}%` }} />
+        <div className="space-y-4">
+          <div className="p-6 rounded-lg bg-white/5 border border-white/10">
+            <div className="flex flex-col items-center space-y-4">
+              {/* Animated Icon */}
+              <div className="relative">
+                <div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center">
+                  <Layers className="h-8 w-8 text-white/80 animate-pulse" strokeWidth={1.5} />
+                </div>
+                <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-[#C2A633] flex items-center justify-center">
+                  <Loader2 className="h-3 w-3 text-black animate-spin" />
+                </div>
+              </div>
+              
+              {/* Progress Info */}
+              <div className="w-full max-w-xs space-y-3">
+                <div className="text-center space-y-2">
+                  <h4 className="text-base font-display font-semibold text-white">
+                    Consolidating Notes
+                  </h4>
+                  <p className="text-sm font-body text-white/70">
+                    Processing note {consolidateProgress.current} of {consolidateProgress.total}...
+                  </p>
+                </div>
+                
+                {/* Progress Bar */}
+                <div className="relative w-full h-2 bg-white/5 rounded-full overflow-hidden">
+                  <div 
+                    className="absolute top-0 left-0 h-full bg-white rounded-full origin-left transition-transform duration-300"
+                    style={{ 
+                      width: `${(consolidateProgress.current / consolidateProgress.total) * 100}%`
+                    }}
+                  />
+                </div>
+                
+                {/* Received Amount */}
+                <div className="text-center">
+                  <p className="text-sm font-body text-white/60">Received so far:</p>
+                  <p className="text-lg font-display font-semibold text-[#C2A633]">
+                    {consolidateProgress.totalReceived.toFixed(4)} {selectedToken}
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
-          <p className="text-sm text-green-500">Received so far: {consolidateProgress.totalReceived.toFixed(4)} {selectedToken}</p>
         </div>
       )}
       
@@ -493,25 +599,69 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
         </div>
       )}
       
-      {status === "success" && (
-        <div className="space-y-4" ref={(el) => {
-          if (el) {
-            setTimeout(() => el.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100)
-          }
-        }}>
-          <div className="p-5 rounded-lg bg-green-500/10 border border-green-500/30">
-            <div className="flex items-start gap-3">
-              <div className="flex-shrink-0 w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center">
-                <Check className="h-5 w-5 text-green-400" strokeWidth={2.5} />
+      {status === "success" && consolidateTxHashes.length > 0 && (
+        <div className="space-y-4">
+          <div className="p-6 rounded-lg bg-white/5 border border-white/10">
+            <div className="flex items-start gap-4">
+              <div className="flex-shrink-0 w-12 h-12 rounded-full bg-[#C2A633]/20 flex items-center justify-center">
+                <Check className="h-6 w-6 text-[#C2A633]" strokeWidth={2.5} />
               </div>
               <div className="flex-1 space-y-3">
                 <div>
-                  <h4 className="text-base font-semibold text-green-300 mb-1.5">
+                  <h4 className="text-lg font-display font-semibold text-white mb-2">
+                    Consolidation Complete!
+                  </h4>
+                  <p className="text-sm font-body text-white/70 leading-relaxed">
+                    Successfully consolidated {consolidateTxHashes.length} note{consolidateTxHashes.length > 1 ? 's' : ''} and received {consolidateTotalReceived.toFixed(4)} {selectedToken}.
+                  </p>
+                </div>
+                <div className="pt-3 border-t border-white/10 space-y-2">
+                  <p className="text-xs font-medium text-white/60">
+                    Transaction Links ({consolidateTxHashes.length}):
+                  </p>
+                  <div className="max-h-48 overflow-y-auto space-y-1.5">
+                    {consolidateTxHashes.map((hash, i) => (
+                      <a 
+                        key={hash} 
+                        href={`https://blockscout.testnet.dogeos.com/tx/${hash}`} 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        className="inline-flex items-center gap-2 text-xs text-[#C2A633] hover:text-[#C2A633]/80 transition-colors group font-medium"
+                      >
+                        <span className="font-mono">Transaction {i + 1}: {hash.slice(0, 10)}...{hash.slice(-8)}</span>
+                        <ExternalLink className="h-3 w-3 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all" />
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <Button 
+            className="w-full bg-white/5 hover:bg-white/10 text-[#C2A633] border border-[#C2A633]/50 hover:border-[#C2A633] font-body font-medium transition-all" 
+            onClick={reset}
+          >
+            Done
+          </Button>
+        </div>
+      )}
+      
+      {status === "success" && txHash && !consolidateTxHashes.length && (
+        <div className="space-y-4">
+          <div className="p-6 rounded-lg bg-white/5 border border-white/10">
+            <div className="flex items-start gap-4">
+              <div className="flex-shrink-0 w-12 h-12 rounded-full bg-[#C2A633]/20 flex items-center justify-center">
+                <Check className="h-6 w-6 text-[#C2A633]" strokeWidth={2.5} />
+              </div>
+              <div className="flex-1 space-y-3">
+                <div>
+                  <h4 className="text-lg font-display font-semibold text-white mb-2">
                     Unshield Successful!
                   </h4>
-                  <p className="text-sm text-green-400/90 leading-relaxed">
+                  <p className="text-sm font-body text-white/70 leading-relaxed">
                     Received {withdrawnAmount} {selectedToken}
-                    {fee && <span className="text-green-400/70"> (Fee: {fee} {selectedToken})</span>}
+                    {fee && <span className="text-white/60"> (Fee: {fee} {selectedToken})</span>}
                   </p>
                 </div>
                 {txHash && (
@@ -519,15 +669,15 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
                     href={`https://blockscout.testnet.dogeos.com/tx/${txHash}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 text-sm text-green-300 hover:text-green-200 transition-colors group"
+                    className="inline-flex items-center gap-2 text-sm text-[#C2A633] hover:text-[#C2A633]/80 transition-colors group font-medium"
                   >
-                    <span className="font-medium">View transaction on Blockscout</span>
+                    <span className="font-body">View transaction on Blockscout</span>
                     <ExternalLink className="h-4 w-4 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
                   </a>
                 )}
                 {consolidateTxHashes.length > 0 && (
-                  <div className="pt-3 border-t border-green-500/20 space-y-2">
-                    <p className="text-xs font-medium text-green-400/70">
+                  <div className="pt-3 border-t border-white/10 space-y-2">
+                    <p className="text-xs font-medium text-white/60">
                       Consolidation Transactions ({consolidateTxHashes.length}):
                     </p>
                     <div className="max-h-32 overflow-y-auto space-y-1.5">
@@ -537,7 +687,7 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
                           href={`https://blockscout.testnet.dogeos.com/tx/${hash}`} 
                           target="_blank" 
                           rel="noopener noreferrer" 
-                          className="inline-flex items-center gap-2 text-xs text-green-300 hover:text-green-200 transition-colors group"
+                          className="inline-flex items-center gap-2 text-xs text-[#C2A633] hover:text-[#C2A633]/80 transition-colors group font-medium"
                         >
                           <span className="font-mono">{i + 1}. {hash.slice(0, 10)}...{hash.slice(-8)}</span>
                           <ExternalLink className="h-3 w-3 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all" />
@@ -549,7 +699,12 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
               </div>
             </div>
           </div>
-          <Button className="w-full" onClick={reset}>{consolidateTxHashes.length > 0 ? 'Done' : 'Unshield More'}</Button>
+          <Button 
+            className="w-full bg-white/5 hover:bg-white/10 text-[#C2A633] border border-[#C2A633]/50 hover:border-[#C2A633] font-body font-medium transition-all" 
+            onClick={reset}
+          >
+            {consolidateTxHashes.length > 0 ? 'Done' : 'Unshield More'}
+          </Button>
         </div>
       )}
       

@@ -167,9 +167,22 @@ export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", onTokenC
                   })
                 }
                 refreshState()
+                const explorerUrl = txHash ? `https://blockscout.testnet.dogeos.com/tx/${txHash}` : null
                 toast({
                   title: "💰 Incoming Transfer!",
-                  description: `Received ${formatWeiToAmount(discoveredNote.amount).toFixed(4)} ${discoveredNote.token || 'DOGE'}`,
+                  description: explorerUrl ? (
+                    <div className="space-y-2">
+                      <p>Received {formatWeiToAmount(discoveredNote.amount).toFixed(4)} {discoveredNote.token || 'DOGE'}</p>
+                      <a 
+                        href={explorerUrl} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-[#C2A633] hover:underline text-sm font-medium"
+                      >
+                        View transaction on Blockscout →
+                      </a>
+                    </div>
+                  ) : `Received ${formatWeiToAmount(discoveredNote.amount).toFixed(4)} ${discoveredNote.token || 'DOGE'}`,
                 })
               }
             }

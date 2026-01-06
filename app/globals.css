@@ -1,6 +1,25 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+/* Progress bar fill animations */
+@keyframes progressFill75 {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(0.75);
+  }
+}
+
+@keyframes progressFill85 {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(0.85);
+  }
+}
+
 @custom-variant dark (&:is(.dark *));
 
 /* Dark portfolio theme - using dark mode as default */

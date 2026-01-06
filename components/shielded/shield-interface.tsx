@@ -14,7 +14,8 @@ import {
   ShieldPlus,
   Coins,
   Info,
-  ExternalLink
+  ExternalLink,
+  Wallet
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { useWallet } from "@/lib/wallet-context"
@@ -60,11 +61,12 @@ const ShieldEventABI = parseAbiItem('event Shield(bytes32 indexed commitment, ui
 
 interface ShieldInterfaceProps {
   onSuccess?: () => void
+  onReset?: () => void
   selectedToken?: string
   onTokenChange?: (token: string) => void
 }
 
-export function ShieldInterface({ onSuccess, selectedToken: externalToken, onTokenChange }: ShieldInterfaceProps) {
+export function ShieldInterface({ onSuccess, onReset, selectedToken: externalToken, onTokenChange }: ShieldInterfaceProps) {
   const { wallet } = useWallet()
   const { toast } = useToast()
   
@@ -417,19 +419,32 @@ export function ShieldInterface({ onSuccess, selectedToken: externalToken, onTok
       
       setStatus("success")
       
-      toast({
-        title: "Shield Successful!",
-        description: `${amountNum} ${selectedToken} is now shielded`,
-      })
-      
+      // Don't show toast - the green success UI box will show instead
       onSuccess?.()
       
     } catch (error: any) {
       console.error("Shield error:", error)
       setStatus("error")
+      
+      // Better error messages
+      let errorMessage = "Transaction failed"
+      if (error?.message) {
+        if (error.message.includes("user rejected") || error.message.includes("User denied")) {
+          errorMessage = "Transaction was cancelled. Please try again when ready."
+        } else if (error.message.includes("insufficient funds") || error.message.includes("insufficient balance")) {
+          errorMessage = "Insufficient balance. Please check your wallet balance."
+        } else if (error.message.includes("network") || error.message.includes("RPC")) {
+          errorMessage = "Network error. Please check your connection and try again."
+        } else if (error.message.includes("gas") || error.message.includes("fee")) {
+          errorMessage = "Gas estimation failed. Please try again or increase gas limit."
+        } else {
+          errorMessage = error.message
+        }
+      }
+      
       toast({
         title: "Shield Failed",
-        description: error.message || "Transaction failed",
+        description: errorMessage,
         variant: "destructive",
       })
     } finally {
@@ -446,6 +461,8 @@ export function ShieldInterface({ onSuccess, selectedToken: externalToken, onTok
     setPendingNote(null)
     setAmountError(null)
     isSubmittingRef.current = false
+    // Trigger component reset in AppCard
+    onReset?.()
   }
   
   return (
@@ -564,45 +581,63 @@ export function ShieldInterface({ onSuccess, selectedToken: externalToken, onTok
       
       {status === "confirming" && (
         <div className="space-y-4">
-          <div className="flex flex-col items-center py-8 space-y-4">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            <div className="w-full max-w-xs space-y-2">
-              <Progress value={selectedTokenInfo.isNative ? 75 : 85} className="h-2" />
-              <p className="text-sm font-body font-medium text-foreground text-center">
-                {selectedTokenInfo.isNative ? "Waiting for transaction confirmation" : "Step 2 of 2: Shielding tokens"}
-              </p>
-              <p className="text-xs font-body text-white/60 text-center">
-                Confirm the transaction in your wallet to complete the shield
-              </p>
+          <div className="p-6 rounded-lg bg-white/5 border border-white/10">
+            <div className="flex flex-col items-center space-y-4">
+              {/* Animated Wallet Icon */}
+              <div className="relative">
+                <div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center">
+                  <Wallet className="h-8 w-8 text-white/80 animate-pulse" strokeWidth={1.5} />
+                </div>
+                <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-[#C2A633] flex items-center justify-center">
+                  <Loader2 className="h-3 w-3 text-black animate-spin" />
+                </div>
+              </div>
+              
+              {/* Progress Bar */}
+              <div className="w-full max-w-xs space-y-3">
+                <div className="relative w-full h-2 bg-white/5 rounded-full overflow-hidden">
+                  <div 
+                    className="absolute top-0 left-0 h-full w-full bg-white rounded-full origin-left"
+                    style={{ 
+                      animation: `progressFill${selectedTokenInfo.isNative ? '75' : '85'} 2.5s ease-out infinite`
+                    }}
+                  />
+                </div>
+                <div className="space-y-2 text-center">
+                  <h4 className="text-base font-display font-semibold text-white">
+                    {selectedTokenInfo.isNative ? "Waiting for Confirmation" : "Step 2 of 2: Shielding Tokens"}
+                  </h4>
+                  <p className="text-sm font-body text-white/60 leading-relaxed">
+                    Please confirm the transaction in your wallet to complete the shield
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
+          
           <Button 
             variant="outline" 
-            className="w-full" 
+            className="w-full border-white/20 hover:bg-white/5" 
             onClick={reset}
           >
-            Cancel
+            Cancel Transaction
           </Button>
         </div>
       )}
       
-      {status === "success" && noteBackup && (
-        <div className="space-y-4" ref={(el) => {
-          if (el) {
-            setTimeout(() => el.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100)
-          }
-        }}>
-          <div className="p-5 rounded-lg bg-green-500/10 border border-green-500/30">
-            <div className="flex items-start gap-3">
-              <div className="flex-shrink-0 w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center">
-                <Check className="h-5 w-5 text-green-400" strokeWidth={2.5} />
+      {status === "success" && txHash && (
+        <div className="space-y-4">
+          <div className="p-6 rounded-lg bg-white/5 border border-white/10">
+            <div className="flex items-start gap-4">
+              <div className="flex-shrink-0 w-12 h-12 rounded-full bg-[#C2A633]/20 flex items-center justify-center">
+                <Check className="h-6 w-6 text-[#C2A633]" strokeWidth={2.5} />
               </div>
               <div className="flex-1 space-y-3">
                 <div>
-                  <h4 className="text-base font-display font-semibold text-green-300 mb-1.5">
+                  <h4 className="text-lg font-display font-semibold text-white mb-2">
                     Shield Successful!
                   </h4>
-                  <p className="text-sm font-body text-green-400/90 leading-relaxed">
+                  <p className="text-sm font-body text-white/70 leading-relaxed">
                     {amount} {selectedToken} has been successfully shielded. Your funds are now private and protected.
                   </p>
                 </div>
@@ -611,9 +646,9 @@ export function ShieldInterface({ onSuccess, selectedToken: externalToken, onTok
                     href={`https://blockscout.testnet.dogeos.com/tx/${txHash}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 text-sm text-green-300 hover:text-green-200 transition-colors group"
+                    className="inline-flex items-center gap-2 text-sm text-[#C2A633] hover:text-[#C2A633]/80 transition-colors group font-medium"
                   >
-                    <span className="font-body font-medium">View transaction on Blockscout</span>
+                    <span className="font-body">View transaction on Blockscout</span>
                     <ExternalLink className="h-4 w-4 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
                   </a>
                 )}
@@ -621,7 +656,10 @@ export function ShieldInterface({ onSuccess, selectedToken: externalToken, onTok
             </div>
           </div>
           
-          <Button className="w-full" onClick={reset}>
+          <Button 
+            className="w-full bg-white/5 hover:bg-white/10 text-[#C2A633] border border-[#C2A633]/50 hover:border-[#C2A633] font-body font-medium transition-all" 
+            onClick={reset}
+          >
             Shield More Tokens
           </Button>
         </div>

@@ -284,20 +284,33 @@ export function TransferInterface({ notes, onSuccess, selectedToken = "DOGE", on
       
       setStatus("success")
       
-      toast({
-        title: "Transfer Successful!",
-        description: `Sent ${amountNum} ${selectedNote.token || 'DOGE'} privately (0% gas paid by you!)`,
-      })
-      
+      // Don't show toast - the green success UI box will show instead
       onSuccess?.()
       
     } catch (error: any) {
       console.error("Transfer error:", error)
       setStatus("error")
-      setErrorMessage(error.message || "Transaction failed")
+      
+      // Better error messages
+      let errorMessage = "Transaction failed"
+      if (error?.message) {
+        if (error.message.includes("user rejected") || error.message.includes("User denied")) {
+          errorMessage = "Transaction was cancelled. Please try again when ready."
+        } else if (error.message.includes("insufficient funds") || error.message.includes("insufficient balance")) {
+          errorMessage = "Insufficient balance. Please check your shielded balance."
+        } else if (error.message.includes("network") || error.message.includes("RPC") || error.message.includes("relayer")) {
+          errorMessage = "Network or relayer error. Please check your connection and try again."
+        } else if (error.message.includes("proof") || error.message.includes("nullifier")) {
+          errorMessage = "Proof generation failed. Please try again."
+        } else {
+          errorMessage = error.message
+        }
+      }
+      
+      setErrorMessage(errorMessage)
       toast({
         title: "Transfer Failed",
-        description: error.message || "Transaction failed",
+        description: errorMessage,
         variant: "destructive",
       })
     }
@@ -447,61 +460,117 @@ export function TransferInterface({ notes, onSuccess, selectedToken = "DOGE", on
       )}
       
       {status === "proving" && (
-        <div className="flex flex-col items-center py-8 space-y-4">
-          <Loader2 className="h-8 w-8 animate-spin" />
-          <div className="w-full max-w-xs space-y-2">
-            <Progress value={33} className="h-2" />
-            <p className="text-sm text-muted-foreground text-center">Generating ZK proof...</p>
-            <p className="text-xs text-muted-foreground text-center">This may take 10-30 seconds</p>
+        <div className="space-y-4">
+          <div className="p-6 rounded-lg bg-white/5 border border-white/10">
+            <div className="flex flex-col items-center space-y-4">
+              {/* Animated Icon */}
+              <div className="relative">
+                <div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center">
+                  <Send className="h-8 w-8 text-white/80 animate-pulse" strokeWidth={1.5} />
+                </div>
+                <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-[#C2A633] flex items-center justify-center">
+                  <Loader2 className="h-3 w-3 text-black animate-spin" />
+                </div>
+              </div>
+              
+              {/* Progress Info */}
+              <div className="w-full max-w-xs space-y-3">
+                <div className="text-center space-y-2">
+                  <h4 className="text-base font-display font-semibold text-white">
+                    Generating ZK Proof
+                  </h4>
+                  <p className="text-sm font-body text-white/70">
+                    This may take 10-30 seconds...
+                  </p>
+                </div>
+                
+                {/* Progress Bar */}
+                <div className="relative w-full h-2 bg-white/5 rounded-full overflow-hidden">
+                  <div 
+                    className="absolute top-0 left-0 h-full bg-white rounded-full origin-left"
+                    style={{ 
+                      width: '33%',
+                      animation: 'progressFill 2.5s ease-out infinite'
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}
       
       {status === "relaying" && (
-        <div className="flex flex-col items-center py-8 space-y-4">
-          <Loader2 className="h-8 w-8 animate-spin" />
-          <div className="w-full max-w-xs space-y-2">
-            <Progress value={66} className="h-2" />
-            <p className="text-sm text-muted-foreground text-center">Submitting transaction...</p>
-            <p className="text-xs text-muted-foreground text-center">Your wallet never signs!</p>
+        <div className="space-y-4">
+          <div className="p-6 rounded-lg bg-white/5 border border-white/10">
+            <div className="flex flex-col items-center space-y-4">
+              {/* Animated Icon */}
+              <div className="relative">
+                <div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center">
+                  <Send className="h-8 w-8 text-white/80 animate-pulse" strokeWidth={1.5} />
+                </div>
+                <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-[#C2A633] flex items-center justify-center">
+                  <Loader2 className="h-3 w-3 text-black animate-spin" />
+                </div>
+              </div>
+              
+              {/* Progress Info */}
+              <div className="w-full max-w-xs space-y-3">
+                <div className="text-center space-y-2">
+                  <h4 className="text-base font-display font-semibold text-white">
+                    Submitting Transaction
+                  </h4>
+                  <p className="text-sm font-body text-white/70">
+                    Your wallet never signs!
+                  </p>
+                </div>
+                
+                {/* Progress Bar */}
+                <div className="relative w-full h-2 bg-white/5 rounded-full overflow-hidden">
+                  <div 
+                    className="absolute top-0 left-0 h-full bg-white rounded-full origin-left"
+                    style={{ 
+                      width: '66%',
+                      animation: 'progressFill 2.5s ease-out infinite'
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}
       
-      {status === "success" && (
-        <div className="space-y-4" ref={(el) => {
-          if (el) {
-            setTimeout(() => el.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100)
-          }
-        }}>
-          <div className="p-5 rounded-lg bg-green-500/10 border border-green-500/30">
-            <div className="flex items-start gap-3">
-              <div className="flex-shrink-0 w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center">
-                <Check className="h-5 w-5 text-green-400" strokeWidth={2.5} />
+      {status === "success" && txHash && (
+        <div className="space-y-4">
+          <div className="p-6 rounded-lg bg-white/5 border border-white/10">
+            <div className="flex items-start gap-4">
+              <div className="flex-shrink-0 w-12 h-12 rounded-full bg-[#C2A633]/20 flex items-center justify-center">
+                <Check className="h-6 w-6 text-[#C2A633]" strokeWidth={2.5} />
               </div>
               <div className="flex-1 space-y-3">
                 <div>
-                  <h4 className="text-base font-semibold text-green-300 mb-1.5">
+                  <h4 className="text-lg font-display font-semibold text-white mb-2">
                     Transfer Successful!
                   </h4>
-                  <p className="text-sm text-green-400/90 leading-relaxed">
+                  <p className="text-sm font-body text-white/70 leading-relaxed">
                     {transactionDetails?.amountSent} {selectedToken} sent privately to recipient.
                   </p>
                 </div>
                 {transactionDetails && (
-                  <div className="pt-3 border-t border-green-500/20 space-y-2">
+                  <div className="pt-3 border-t border-white/10 space-y-2">
                     <div className="flex justify-between text-xs">
-                      <span className="text-green-400/70">Amount sent:</span>
-                      <span className="text-green-300 font-medium">{formatWeiToAmount(BigInt(Math.floor(transactionDetails.amountSent * 1e18))).toFixed(4)} {selectedToken}</span>
+                      <span className="text-white/60">Amount sent:</span>
+                      <span className="text-white font-medium">{formatWeiToAmount(BigInt(Math.floor(transactionDetails.amountSent * 1e18))).toFixed(4)} {selectedToken}</span>
                     </div>
                     <div className="flex justify-between text-xs">
-                      <span className="text-green-400/70">Note consumed:</span>
-                      <span className="text-green-300 font-medium">{formatWeiToAmount(transactionDetails.noteConsumed).toFixed(4)} {selectedToken}</span>
+                      <span className="text-white/60">Note consumed:</span>
+                      <span className="text-white font-medium">{formatWeiToAmount(transactionDetails.noteConsumed).toFixed(4)} {selectedToken}</span>
                     </div>
                     {transactionDetails.changeReceived > 0n && (
                       <div className="flex justify-between text-xs">
-                        <span className="text-green-400/70">Change received:</span>
-                        <span className="text-green-300 font-medium">{formatWeiToAmount(transactionDetails.changeReceived).toFixed(4)} {selectedToken}</span>
+                        <span className="text-white/60">Change received:</span>
+                        <span className="text-white font-medium">{formatWeiToAmount(transactionDetails.changeReceived).toFixed(4)} {selectedToken}</span>
                       </div>
                     )}
                   </div>
@@ -511,9 +580,9 @@ export function TransferInterface({ notes, onSuccess, selectedToken = "DOGE", on
                     href={`https://blockscout.testnet.dogeos.com/tx/${txHash}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 text-sm text-green-300 hover:text-green-200 transition-colors group"
+                    className="inline-flex items-center gap-2 text-sm text-[#C2A633] hover:text-[#C2A633]/80 transition-colors group font-medium"
                   >
-                    <span className="font-medium">View transaction on Blockscout</span>
+                    <span className="font-body">View transaction on Blockscout</span>
                     <ExternalLink className="h-4 w-4 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
                   </a>
                 )}
@@ -521,7 +590,10 @@ export function TransferInterface({ notes, onSuccess, selectedToken = "DOGE", on
             </div>
           </div>
           
-          <Button className="w-full" onClick={reset}>
+          <Button 
+            className="w-full bg-white/5 hover:bg-white/10 text-[#C2A633] border border-[#C2A633]/50 hover:border-[#C2A633] font-body font-medium transition-all" 
+            onClick={reset}
+          >
             Send Another Transfer
           </Button>
         </div>

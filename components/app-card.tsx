@@ -32,6 +32,12 @@ function AppCardContent() {
 
   const handleSuccess = () => {
     refresh()
+    // Don't increment key on success - let the success UI box show
+    // The component will reset naturally when user clicks "Shield More Tokens" button
+  }
+  
+  const handleReset = () => {
+    // Only reset key when explicitly requested (e.g., from reset button)
     if (activeTab === 'shield' || activeTab === 'swap') {
       setKey(k => k + 1)
     }
@@ -96,7 +102,8 @@ function AppCardContent() {
           />
           <ShieldInterface 
             key={key}
-            onSuccess={handleSuccess} 
+            onSuccess={handleSuccess}
+            onReset={handleReset}
             selectedToken={selectedToken}
             onTokenChange={setSelectedToken}
           />
@@ -132,6 +139,7 @@ function AppCardContent() {
             key={key}
             notes={notes} 
             onSuccess={handleSuccess}
+            onReset={handleReset}
             onInputTokenChange={(token) => {
               setSelectedToken(token)
             }}

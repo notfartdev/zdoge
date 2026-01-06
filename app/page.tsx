@@ -4,7 +4,6 @@ import { motion } from "framer-motion"
 import Link from "next/link"
 import { Navbar } from "@/components/navbar"
 import { Footer } from "@/components/footer"
-import { CustomCursor } from "@/components/custom-cursor"
 import { SmoothScroll } from "@/components/smooth-scroll"
 import { AppCard } from "@/components/app-card"
 
@@ -288,7 +287,6 @@ function ShieldedPoolVisualization() {
 export default function HomePage() {
   return (
     <SmoothScroll>
-      <CustomCursor />
       <Navbar />
       {/* Global unified background */}
       <main className="min-h-screen bg-[#0a0a0a] relative">
