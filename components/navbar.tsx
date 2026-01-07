@@ -81,8 +81,7 @@ export function Navbar() {
 
           {/* Wallet & Social Icons - Desktop */}
           <div className="hidden md:flex items-center gap-4">
-            <WalletConnectButton />
-            {wallet?.isConnected && <AccountModal />}
+            <AccountModal />
             <div className="h-5 w-px bg-border" />
             <div className="flex items-center gap-5">
               <HelpModal variant="icon" />

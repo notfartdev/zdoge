@@ -325,39 +325,59 @@ export default function HomePage() {
                 initial={{ opacity: 0, y: 30 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
-                className="order-2 lg:order-1 flex flex-col justify-center lg:min-h-[600px]"
+                className="order-2 lg:order-1 flex flex-col justify-center lg:min-h-[600px] max-w-[600px]"
               >
                 {/* Logo/Wordmark */}
-                <h1 className="mb-6 font-display text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-normal tracking-[-0.02em]">
-                  <span className="text-white/90">z</span><span className="text-white">DOGE</span>
+                <h1 className="mb-4 font-display text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-normal tracking-[-0.015em]">
+                  <span className="text-white">z</span><span className="text-white">DOGE</span>
                   <span 
                     className="font-display italic align-baseline inline-block"
                     style={{ fontSize: '0.42em', marginLeft: '0.12em', transform: 'translateY(-0.1em)' }}
                   >
-                    <span className="text-[#C2A633]/60">.</span><span className="text-[#C2A633]/90 tracking-[0.02em] ml-[0.03em]">CASH</span>
+                    <span className="text-[#C2A633]/70">.</span><span className="text-[#C2A633] tracking-[0.02em] ml-[0.03em]">CASH</span>
                   </span>
                 </h1>
                 
-                {/* Value Prop */}
-                <p className="font-body text-base sm:text-lg text-white/60 mb-6 font-normal leading-relaxed tracking-[-0.01em]">
-                  Zero-knowledge privacy enabling private transactions on Doge.
+                {/* Subheadline */}
+                <p className="font-display text-xl sm:text-2xl md:text-3xl text-white mb-4 font-normal tracking-[-0.005em] uppercase">
+                  PRIVATE DOGE TRANSACTIONS
                 </p>
                 
-                {/* How It Works Button */}
+                {/* Value Prop */}
+                <p className="font-body text-base sm:text-lg text-white/50 mb-6 font-normal leading-relaxed tracking-[-0.01em]">
+                  A zero-knowledge protocol for non-custodial privacy on Dogecoin.
+                </p>
+                
+                {/* Learn Zdoge Button */}
                 <Link href="#how-it-works">
                   <motion.button
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.99 }}
-                    transition={{ duration: 0.2, ease: "easeOut" }}
-                    className="mb-6 px-6 py-3 border border-white/20 text-white/90 bg-transparent font-body text-sm font-medium tracking-[0.02em] hover:border-white/40 transition-colors"
+                    transition={{ duration: 0.12, ease: "easeOut" }}
+                    className="mb-6 px-6 py-3 rounded-full border-0 font-body text-sm font-medium tracking-[0.02em] transition-all duration-[120ms] ease-out"
+                    style={{
+                      background: 'rgba(255, 255, 255, 0.04)',
+                      backdropFilter: 'blur(6px)',
+                      color: 'rgba(255, 255, 255, 0.9)',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)'
+                      e.currentTarget.style.color = 'rgba(255, 255, 255, 1)'
+                      e.currentTarget.style.boxShadow = '0 4px 16px rgba(255, 255, 255, 0.08)'
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = 'rgba(255, 255, 255, 0.04)'
+                      e.currentTarget.style.color = 'rgba(255, 255, 255, 0.9)'
+                      e.currentTarget.style.boxShadow = 'none'
+                    }}
                   >
-                    How It Works?
+                    Learn zDoge
                   </motion.button>
                 </Link>
                 
-                {/* Trust line */}
-                <p className="font-mono text-[10px] sm:text-xs text-white/25 tracking-[0.12em] uppercase">
-                  NO SIGNUP · NO TRACKING · NON-CUSTODIAL
+                {/* Micro technical line */}
+                <p className="font-mono text-[10px] tracking-[0.18em] text-white/30 uppercase">
+                  BUILT WITH ZK PROOFS · ON-CHAIN VERIFIABLE · NON-CUSTODIAL
                 </p>
               </motion.div>
               

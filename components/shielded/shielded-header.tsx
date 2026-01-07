@@ -231,7 +231,7 @@ export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", onTokenC
           <p className="text-sm font-body text-muted-foreground mb-6">
             {connectDescription || "Connect your wallet to access your shielded balance"}
           </p>
-          <WalletConnectButton />
+          <WalletConnectButton variant="default" />
         </div>
       </Card>
     )

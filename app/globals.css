@@ -210,6 +210,37 @@ html {
   scroll-behavior: smooth;
 }
 
+/* Premium tab styling for glass UI - minimalist: icon brightness + subtle underline */
+.app-tab-trigger[data-state="active"] {
+  box-shadow: none;
+  position: relative;
+  background: transparent !important;
+}
+
+.app-tab-trigger[data-state="active"]::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 60%;
+  height: 1px;
+  background: rgba(194, 166, 51, 0.2);
+}
+
+.app-tab-trigger[data-state="active"] svg {
+  filter: brightness(1.15);
+}
+
+.app-tab-trigger[data-state="inactive"] {
+  opacity: 0.5;
+  background: transparent !important;
+}
+
+.app-tab-trigger {
+  background: transparent !important;
+}
+
 /* Noise texture overlay */
 .noise-overlay {
   position: fixed;

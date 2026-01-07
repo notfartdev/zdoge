@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { useWallet } from "@/lib/wallet-context"
-import { User, X, Wallet, Globe, ChevronDown, Check, Copy, Coins, Network, RefreshCw } from "lucide-react"
+import { User, X, Wallet, Globe, ChevronDown, Check, Copy, Coins, Network, RefreshCw, LogOut, ArrowLeftRight } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { dogeosTestnet, tokens, shieldedPool } from "@/lib/dogeos-config"
 import { syncNotesWithChain } from "@/lib/shielded/shielded-service"
@@ -22,7 +22,7 @@ interface TokenBalance {
 }
 
 export function AccountModal() {
-  const { wallet } = useWallet()
+  const { wallet, disconnect, requestAccountSelection } = useWallet()
   const { toast } = useToast()
   const [isOpen, setIsOpen] = useState(false)
   const [showRpcDropdown, setShowRpcDropdown] = useState(false)
@@ -148,6 +148,24 @@ export function AccountModal() {
     return `${address.slice(0, 6)}...${address.slice(-4)}`
   }
 
+  const handleDisconnect = () => {
+    disconnect()
+    setIsOpen(false)
+    toast({ title: "Disconnected", description: "Wallet disconnected" })
+  }
+
+  const handleChangeWallet = async () => {
+    try {
+      await requestAccountSelection()
+      setIsOpen(false)
+      toast({ title: "Wallet Changed", description: "Switched to different account" })
+    } catch (err: any) {
+      if (err?.code !== 4001) { // 4001 is user rejection
+        toast({ title: "Failed", description: "Could not change wallet", variant: "destructive" })
+      }
+    }
+  }
+
   // Only show if wallet is connected
   if (!wallet?.isConnected) {
     return null
@@ -176,10 +194,10 @@ export function AccountModal() {
       />
       
       {/* Modal */}
-      <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 w-full max-w-md mx-4 sm:mx-0">
-        <div className="bg-zinc-900 border border-[#C2A633]/30 shadow-xl">
+      <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 w-full max-w-md mx-4 sm:mx-0 max-h-[90vh] flex flex-col">
+        <div className="bg-zinc-900 border border-[#C2A633]/30 shadow-xl flex flex-col max-h-full overflow-hidden">
           {/* Header */}
-          <div className="flex items-center justify-between p-4 border-b border-zinc-800">
+          <div className="flex items-center justify-between p-4 border-b border-zinc-800 flex-shrink-0">
             <h2 className="font-display text-lg font-semibold text-white flex items-center gap-2">
               <User className="w-5 h-5 text-[#C2A633]" />
               Account
@@ -193,7 +211,7 @@ export function AccountModal() {
           </div>
 
           {/* Content */}
-          <div className="p-4 space-y-4 max-h-[70vh] overflow-y-auto">
+          <div className="p-4 space-y-4 overflow-y-auto flex-1 min-h-0">
             
             {/* Wallet Address Section */}
             {wallet?.isConnected && (
@@ -352,6 +370,28 @@ export function AccountModal() {
                 <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
                 {isSyncing ? 'Syncing...' : 'Sync Shielded Notes'}
               </Button>
+            )}
+
+            {/* Wallet Actions - Disconnect & Change Wallet */}
+            {wallet?.isConnected && (
+              <div className="space-y-2 pt-2 border-t border-zinc-800">
+                <Button
+                  variant="outline"
+                  onClick={handleChangeWallet}
+                  className="w-full font-body text-sm border-white/20 text-white/90 hover:bg-white/10 hover:text-white flex items-center justify-center gap-2"
+                >
+                  <ArrowLeftRight className="w-4 h-4" />
+                  Change Wallet
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={handleDisconnect}
+                  className="w-full font-body text-sm border-red-500/30 text-red-400 hover:bg-red-500/10 hover:text-red-300 flex items-center justify-center gap-2"
+                >
+                  <LogOut className="w-4 h-4" />
+                  Disconnect
+                </Button>
+              </div>
             )}
 
           </div>

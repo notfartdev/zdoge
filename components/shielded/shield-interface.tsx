@@ -11,7 +11,7 @@ import {
   Loader2, 
   AlertCircle, 
   Check, 
-  ShieldPlus,
+  Shield,
   Coins,
   Info,
   ExternalLink,
@@ -533,7 +533,7 @@ export function ShieldInterface({ onSuccess, onReset, selectedToken: externalTok
                 onClick={handleShield}
                 disabled={!wallet?.isConnected || status !== "idle" || !amount || parseFloat(amount) <= 0 || !!amountError}
               >
-                <ShieldPlus className="h-4 w-4 mr-2" />
+                <Shield className="h-4 w-4 mr-2" />
                 Shield {selectedToken}
               </Button>
             </>

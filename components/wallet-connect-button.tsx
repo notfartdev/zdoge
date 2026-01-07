@@ -13,7 +13,11 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 
-export function WalletConnectButton() {
+interface WalletConnectButtonProps {
+  variant?: 'default' | 'quiet' // 'quiet' for navbar, 'default' for in-card hero
+}
+
+export function WalletConnectButton({ variant = 'quiet' }: WalletConnectButtonProps) {
   const { wallet, isConnecting, connect, disconnect, requestAccountSelection } = useWallet()
   const [error, setError] = useState<string | null>(null)
 
@@ -63,11 +67,60 @@ export function WalletConnectButton() {
   }
 
   if (!wallet?.isConnected) {
+    if (variant === 'quiet') {
+      // Header version - ghost pill style (like "How it Works?")
+      return (
+        <Button
+          onClick={handleConnect}
+          disabled={isConnecting}
+          className="font-body text-sm font-medium px-4 py-1.5 rounded-full border-0 transition-all duration-[120ms] ease-out disabled:opacity-50 disabled:cursor-not-allowed"
+          style={{
+            background: 'rgba(255, 255, 255, 0.04)',
+            backdropFilter: 'blur(6px)',
+            color: 'rgba(255, 255, 255, 0.9)',
+          }}
+          onMouseEnter={(e) => {
+            if (!isConnecting) {
+              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)'
+              e.currentTarget.style.color = 'rgba(255, 255, 255, 1)'
+              e.currentTarget.style.boxShadow = '0 4px 16px rgba(255, 255, 255, 0.08)'
+            }
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.04)'
+            e.currentTarget.style.color = 'rgba(255, 255, 255, 0.9)'
+            e.currentTarget.style.boxShadow = 'none'
+          }}
+        >
+          <Wallet className="h-3.5 w-3.5 mr-1.5" />
+          {isConnecting ? "Connecting..." : "Connect Wallet"}
+        </Button>
+      )
+    }
+    
+    // In-card version - ghost pill style (like "How it Works?")
     return (
       <Button
         onClick={handleConnect}
         disabled={isConnecting}
-        className="bg-[#C2A633] hover:bg-[#C2A633]/90 text-black font-body font-medium px-6"
+        className="font-body font-medium px-6 py-3 rounded-full border-0 transition-all duration-[120ms] ease-out disabled:opacity-50 disabled:cursor-not-allowed"
+        style={{
+          background: 'rgba(255, 255, 255, 0.04)',
+          backdropFilter: 'blur(6px)',
+          color: 'rgba(255, 255, 255, 0.9)',
+        }}
+        onMouseEnter={(e) => {
+          if (!isConnecting) {
+            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)'
+            e.currentTarget.style.color = 'rgba(255, 255, 255, 1)'
+            e.currentTarget.style.boxShadow = '0 4px 16px rgba(255, 255, 255, 0.08)'
+          }
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = 'rgba(255, 255, 255, 0.04)'
+          e.currentTarget.style.color = 'rgba(255, 255, 255, 0.9)'
+          e.currentTarget.style.boxShadow = 'none'
+        }}
       >
         <Wallet className="h-4 w-4 mr-2" />
         {isConnecting ? "Connecting..." : "Connect Wallet"}

@@ -66,13 +66,17 @@ const geistMono = Geist_Mono({
 })
 
 export const metadata: Metadata = {
-  title: "zDoge.cash - Private DOGE Transactions",
+  title: "Private Doge Transactions",
   description: "A decentralized privacy protocol enabling shielded transactions on DogeOS",
   icons: {
     icon: [
-      { url: '/zdoge-logo.png', type: 'image/png' },
+      { url: '/zdoge-logo.png', type: 'image/png', sizes: '32x32' },
+      { url: '/zdoge-logo.png', type: 'image/png', sizes: '16x16' },
     ],
-    apple: '/zdoge-logo.png',
+    apple: [
+      { url: '/zdoge-logo.png', sizes: '180x180', type: 'image/png' },
+    ],
+    shortcut: '/zdoge-logo.png',
   },
 }
 
