@@ -161,15 +161,34 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
         total += feeResult.received
       }
     }
+    
+    // Debug logging
+    if (spendableNotes.length > 0) {
+      console.log(`[Consolidate] Total calculation:`, {
+        notesCount: spendableNotes.length,
+        totalWei: total.toString(),
+        totalHuman: formatUnits(total, tokenDecimals),
+        selectedToken,
+        tokenDecimals,
+        notes: spendableNotes.map(n => ({
+          amountWei: n.amount.toString(),
+          amountHuman: formatUnits(n.amount, n.decimals ?? tokenDecimals),
+          fee: calculateFeeForNote(n.amount).fee.toString(),
+          received: calculateFeeForNote(n.amount).received.toString(),
+        })),
+      })
+    }
+    
     return total
-  }, [spendableNotes, relayerInfo])
+  }, [spendableNotes, relayerInfo, tokenDecimals, selectedToken])
   
   // Calculate USD value
   useEffect(() => {
     async function calculateUSD() {
-      const dogeAmount = Number(formatUnits(totalReceivableAfterFees, tokenDecimals))
+      const tokenAmount = Number(formatUnits(totalReceivableAfterFees, tokenDecimals))
       try {
-        const usd = await getUSDValue(dogeAmount, "DOGE")
+        // Use selectedToken instead of hardcoded "DOGE"
+        const usd = await getUSDValue(tokenAmount, selectedToken)
         setUsdValue(formatUSD(usd))
       } catch (error) {
         console.error('Failed to calculate USD value:', error)
@@ -181,7 +200,7 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
     } else {
       setUsdValue(null)
     }
-  }, [totalReceivableAfterFees])
+  }, [totalReceivableAfterFees, selectedToken, tokenDecimals])
   
   useEffect(() => {
     async function fetchRelayerInfo() {
@@ -305,15 +324,64 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
       toast({ title: "Relayer Offline", description: "Cannot consolidate while relayer is offline", variant: "destructive" })
       return
     }
+    // Get token metadata for validation
+    const tokenMeta = getTokenMetadata(selectedToken)
+    
     // Only consolidate notes for the selected token
-    const freshNotes = getNotes().filter(n => 
-      n.leafIndex !== undefined && 
-      n.amount > 0n && 
-      (n.token || 'DOGE') === selectedToken
+    // Also validate that notes have correct tokenAddress and reasonable amounts
+    const freshNotes = getNotes().filter(n => {
+      if (n.leafIndex === undefined || n.amount <= 0n) return false
+      
+      // Check token symbol match
+      const noteToken = n.token || 'DOGE'
+      if (noteToken !== selectedToken) return false
+      
+      // For ERC20 tokens, also check tokenAddress matches
+      if (selectedToken !== 'DOGE') {
+        const noteTokenAddress = n.tokenAddress?.toLowerCase()
+        const expectedTokenAddress = tokenMeta.address.toLowerCase()
+        if (noteTokenAddress && noteTokenAddress !== expectedTokenAddress) {
+          console.warn(`[Consolidate] Note tokenAddress mismatch: ${noteTokenAddress} vs ${expectedTokenAddress}, skipping`)
+          return false
+        }
+      }
+      
+      return true
+    })
+    
+    // Log all notes found for debugging
+    console.log(`[Consolidate] Found ${freshNotes.length} notes for ${selectedToken}:`, 
+      freshNotes.map(n => {
+        const commitmentStr = typeof n.commitment === 'bigint'
+          ? '0x' + n.commitment.toString(16).padStart(64, '0')
+          : String(n.commitment)
+        const noteDecimals = n.decimals ?? tokenDecimals
+        return {
+          commitment: commitmentStr.slice(0, 12) + '...',
+          amountWei: n.amount.toString(),
+          amountHuman: formatUnits(n.amount, noteDecimals),
+          token: n.token || 'DOGE',
+          tokenAddress: n.tokenAddress || 'N/A',
+          decimals: n.decimals ?? 'N/A',
+        }
+      })
     )
+    
     // Use token decimals for minFee
     const minFee = parseUnits(relayerInfo.minFee, tokenDecimals)
-    const worthyNotes = freshNotes.filter(n => n.amount > minFee)
+    const worthyNotes = freshNotes.filter(n => {
+      const noteDecimals = n.decimals ?? tokenDecimals
+      // Validate note amount is reasonable (at least 0.0001 tokens)
+      const minReasonableAmount = parseUnits('0.0001', noteDecimals)
+      if (n.amount < minReasonableAmount) {
+        console.warn(`[Consolidate] Note amount too small (${formatUnits(n.amount, noteDecimals)} ${n.token || 'DOGE'}), skipping`)
+        return false
+      }
+      return n.amount > minFee
+    })
+    
+    console.log(`[Consolidate] After filtering (minFee: ${formatUnits(minFee, tokenDecimals)}), ${worthyNotes.length} notes to consolidate`)
+    
     if (worthyNotes.length === 0) {
       toast({ title: "No Notes to Consolidate", description: "All notes are too small (dust)", variant: "destructive" })
       return
@@ -329,16 +397,45 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
     
     for (let i = 0; i < worthyNotes.length; i++) {
       const note = worthyNotes[i]
+      let originalNoteIndex: number | undefined = undefined // Declare outside try for catch block access
       
       try {
-        // Only look for notes of the selected token
-        const currentNotes = getNotes().filter(n => 
-          n.leafIndex !== undefined && 
-          n.amount > 0n && 
-          (n.token || 'DOGE') === selectedToken
-        )
-        const noteIndex = currentNotes.findIndex(n => n.commitment === note.commitment)
-        if (noteIndex === -1) continue
+        const commitmentStr = typeof note.commitment === 'bigint'
+          ? '0x' + note.commitment.toString(16).padStart(64, '0')
+          : String(note.commitment)
+        // Use note's decimals if available, otherwise use tokenDecimals from selectedToken
+        const noteDecimals = note.decimals ?? tokenDecimals
+        console.log(`[Consolidate] Processing note ${i + 1}/${worthyNotes.length}:`, {
+          commitment: commitmentStr.slice(0, 12) + '...',
+          amountWei: note.amount.toString(),
+          amountHuman: formatUnits(note.amount, noteDecimals),
+          token: note.token || 'DOGE',
+          tokenAddress: note.tokenAddress || 'N/A',
+          noteDecimals: note.decimals ?? 'N/A',
+          selectedToken,
+          selectedTokenDecimals: tokenDecimals,
+        })
+        
+        // Find the note's index in the ORIGINAL walletState.notes array (not filtered)
+        // This is critical: prepareUnshield uses walletState.notes[noteIndex], so we need the original index
+        const allNotes = getNotes() // Get all notes (unfiltered)
+        originalNoteIndex = allNotes.findIndex(n => n.commitment === note.commitment)
+        if (originalNoteIndex === -1) {
+          console.warn(`[Consolidate] Note ${i + 1} not found in wallet notes, skipping (may have been removed)`)
+          setConsolidateProgress({ current: i + 1, total: worthyNotes.length, totalReceived })
+          continue
+        }
+        
+        // Verify the note at this index matches what we expect
+        const foundNote = allNotes[originalNoteIndex]
+        if (foundNote.commitment !== note.commitment || foundNote.amount !== note.amount) {
+          console.error(`[Consolidate] Note mismatch at index ${originalNoteIndex}:`, {
+            expected: { commitment: note.commitment.toString().slice(0, 20), amount: note.amount.toString() },
+            found: { commitment: foundNote.commitment.toString().slice(0, 20), amount: foundNote.amount.toString() },
+          })
+          setConsolidateProgress({ current: i + 1, total: worthyNotes.length, totalReceived })
+          continue
+        }
         
         // Get token address for consolidation
         const tokenAddress = selectedToken === 'DOGE' 
@@ -350,17 +447,26 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
         }
         
         // Check if note is already spent BEFORE generating proof
-        const { fee: relayerFeeWei } = calculateFeeForNote(note.amount)
+        // noteDecimals is already defined above, use it for fee calculation
+        const { fee: relayerFeeWei, error: feeError } = calculateFeeForNote(note.amount)
+        
+        if (feeError) {
+          console.warn(`[Consolidate] Note ${i + 1} too small: ${feeError}`)
+          setConsolidateProgress({ current: i + 1, total: worthyNotes.length, totalReceived })
+          continue // Skip this note, continue with others
+        }
+        
         // Pass fee directly in wei to avoid precision loss during conversion
-        const proofResult = await prepareUnshield(wallet.address, noteIndex, SHIELDED_POOL_ADDRESS, relayerInfo?.address || undefined, 0, relayerFeeWei)
+        // Use originalNoteIndex (index in walletState.notes array, not filtered array)
+        const proofResult = await prepareUnshield(wallet.address, originalNoteIndex, SHIELDED_POOL_ADDRESS, relayerInfo?.address || undefined, 0, relayerFeeWei)
         
         // Check if nullifier is already spent
         const isSpent = await checkNullifierSpent(proofResult.nullifierHash)
         if (isSpent) {
           console.warn(`[Consolidate] Note ${i + 1} already spent, removing from local state`)
           skippedNotes.push(i + 1)
-          // Remove the spent note from local state
-          completeUnshield(noteIndex)
+          // Remove the spent note from local state (use originalNoteIndex)
+          completeUnshield(originalNoteIndex)
           // Update progress (note was processed, just skipped)
           setConsolidateProgress({ current: i + 1, total: worthyNotes.length, totalReceived })
           continue
@@ -386,7 +492,7 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
           if (data.error?.includes('already') || data.error?.includes('spent') || data.message?.includes('already') || data.message?.includes('spent')) {
             console.warn(`[Consolidate] Note ${i + 1} already spent (from relayer), removing from local state`)
             skippedNotes.push(i + 1)
-            completeUnshield(noteIndex)
+            completeUnshield(originalNoteIndex) // Use originalNoteIndex
             setConsolidateProgress({ current: i + 1, total: worthyNotes.length, totalReceived })
             continue
           }
@@ -394,8 +500,15 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
         }
         txHashes.push(data.txHash)
         // Convert amountReceived from token base units to human-readable using token decimals
-        totalReceived += Number(formatUnits(BigInt(data.amountReceived), tokenDecimals))
-        completeUnshield(noteIndex)
+        const receivedAmount = Number(formatUnits(BigInt(data.amountReceived), tokenDecimals))
+        totalReceived += receivedAmount
+        completeUnshield(originalNoteIndex) // Use originalNoteIndex
+        
+        console.log(`[Consolidate] Successfully processed note ${i + 1}/${worthyNotes.length}:`, {
+          txHash: data.txHash,
+          received: receivedAmount,
+          totalReceived,
+        })
         
         // Add to transaction history
         addTransaction({
@@ -415,21 +528,22 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
         setConsolidateProgress({ current: i + 1, total: worthyNotes.length, totalReceived })
         setConsolidateTxHashes([...txHashes])
       } catch (error: any) {
-        console.error(`[Consolidate] Error on note ${i + 1}:`, error)
+        console.error(`[Consolidate] Error on note ${i + 1}/${worthyNotes.length}:`, error)
         // Check if error is due to already spent
         if (error.message?.includes('already') || error.message?.includes('spent') || error.message?.includes('NullifierAlreadySpent')) {
           console.warn(`[Consolidate] Note ${i + 1} already spent, removing from local state`)
           skippedNotes.push(i + 1)
-          // Try to remove the note if we can find it
+          // Try to remove the note if we can find it (use originalNoteIndex if available)
           try {
-            const currentNotes = getNotes().filter(n => 
-              n.leafIndex !== undefined && 
-              n.amount > 0n && 
-              (n.token || 'DOGE') === selectedToken
-            )
-            const noteIndex = currentNotes.findIndex(n => n.commitment === note.commitment)
-            if (noteIndex !== -1) {
-              completeUnshield(noteIndex)
+            if (originalNoteIndex !== undefined && originalNoteIndex !== -1) {
+              completeUnshield(originalNoteIndex)
+            } else {
+              // Fallback: find note in full array
+              const allNotes = getNotes()
+              const foundIndex = allNotes.findIndex(n => n.commitment === note.commitment)
+              if (foundIndex !== -1) {
+                completeUnshield(foundIndex)
+              }
             }
           } catch (e) {
             console.warn('[Consolidate] Could not remove spent note:', e)
@@ -437,7 +551,12 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
           setConsolidateProgress({ current: i + 1, total: worthyNotes.length, totalReceived })
           continue
         }
-        setErrorMessage(`Failed on note ${i + 1}: ${error.message}`)
+        // For other errors, log but continue processing remaining notes
+        console.error(`[Consolidate] Failed to process note ${i + 1}, continuing with remaining notes:`, error.message)
+        setErrorMessage(`Failed on note ${i + 1}: ${error.message}. Continuing with remaining notes...`)
+        setConsolidateProgress({ current: i + 1, total: worthyNotes.length, totalReceived })
+        // Continue to next note instead of stopping
+        continue
       }
     }
     
@@ -450,6 +569,16 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
         variant: "default",
       })
     }
+    
+    // Log final consolidation summary
+    console.log(`[Consolidate] Consolidation complete:`, {
+      totalNotes: worthyNotes.length,
+      processed: txHashes.length,
+      skipped: skippedNotes.length,
+      totalReceived,
+      txHashes,
+    })
+    
     setConsolidateTotalReceived(totalReceived)
     setWithdrawnAmount(totalReceived.toFixed(4))
     setStatus("success")

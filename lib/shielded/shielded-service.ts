@@ -540,13 +540,15 @@ export async function prepareUnshield(
   const withdrawAmount = note.amount - fee;
   
   if (withdrawAmount <= 0n) {
-    // Get token decimals for error message
-    const tokenDecimals = note.token ? (shieldedPool.supportedTokens[note.token as keyof typeof shieldedPool.supportedTokens]?.decimals || 18) : 18;
+    // Use note's decimals if available, otherwise fall back to token lookup
+    const tokenDecimals = note.decimals ?? (note.token ? (shieldedPool.supportedTokens[note.token as keyof typeof shieldedPool.supportedTokens]?.decimals || 18) : 18);
     const noteAmountHuman = formatWeiToAmount(note.amount, tokenDecimals);
     const feeAmountHuman = formatWeiToAmount(fee, tokenDecimals);
     console.error(`[prepareUnshield] Fee exceeds note amount:`, {
       token: note.token || 'DOGE',
+      tokenAddress: note.tokenAddress || 'N/A',
       decimals: tokenDecimals,
+      noteDecimals: note.decimals,
       noteAmount: note.amount.toString(),
       noteAmountHuman,
       fee: fee.toString(),
