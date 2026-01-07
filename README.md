@@ -1,122 +1,220 @@
-# Dogenado
+# zDoge.cash - Private Doge Transactions
 
-Privacy-preserving shielded transaction system for the DogeOS blockchain. Enables private token transfers using zero-knowledge proofs and Merkle tree commitments.
+**A Zcash-style privacy-preserving shielded transaction system for the DogeOS blockchain.**
 
-## Overview
+Enable private token transfers using zero-knowledge proofs and Merkle tree commitments. Shield tokens, transfer privately, and unshield—all with full privacy guarantees.
 
-Dogenado implements a Zcash-style shielded transaction system on DogeOS. Users can shield tokens (convert public tokens to private shielded notes), transfer tokens privately between shielded addresses, swap tokens within the shielded layer, and unshield tokens back to public addresses.
+---
 
-The system uses Groth16 zero-knowledge proofs to enable private transactions without revealing sender, recipient, or amount on-chain. All transactions are fully private and unlinkable.
+## 🎯 Overview
 
-## Architecture
+zDoge.cash implements a **Zcash-style shielded transaction system** on DogeOS. Users can:
+
+- **Shield (t→z)**: Convert public tokens to private shielded notes
+- **Transfer (z→z)**: Send tokens privately between shielded addresses
+- **Unshield (z→t)**: Withdraw shielded tokens back to public addresses
+- **Swap (z→z token exchange)**: ⚠️ Coming soon (requires DEX integration)
+
+The system uses **Groth16 zero-knowledge proofs** to enable private transactions without revealing sender, recipient, or amount on-chain. All transactions are fully private and unlinkable.
+
+---
+
+## ✨ Features
+
+### ✅ Core Privacy Features (Production Ready)
+
+- **Shield (t→z)**: Deposit any amount of DOGE or ERC20 tokens into shielded notes
+- **Transfer (z→z)**: Private transfers between shielded addresses with stealth addresses
+- **Unshield (z→t)**: Withdraw shielded tokens to any public address
+- **Auto-Discovery**: Recipients automatically discover incoming transfers via encrypted memos
+- **Consolidation**: Combine multiple small notes into larger ones
+- **Transaction History**: Client-side tracking of all shielded transactions
+- **Gasless Transactions**: Relayer pays gas fees for transfers and unshields
+
+### 🎨 User Experience
+
+- **Modern UI**: Clean, minimal interface focused on privacy
+- **Multi-Token Support**: DOGE, USDC, USDT, USD1, WETH, LBTC
+- **Variable Amounts**: Shield any amount (not limited to fixed denominations)
+- **Real-Time Balance**: Automatic balance updates after transactions
+- **USD Value Display**: See token values in USD
+- **Note Management**: View and manage all shielded notes
+
+### 🔐 Privacy Guarantees
+
+- **Zero-Knowledge Proofs**: Transactions verified without revealing details
+- **Merkle Tree Anonymity Set**: Blend with other users' transactions
+- **Stealth Addresses**: Recipient addresses are hidden
+- **Unlinkable Transactions**: No connection between deposit and withdrawal
+- **Encrypted Memos**: Private note discovery for recipients
+
+---
+
+## 🏗️ Architecture
 
 The system consists of four main components:
 
-- **Smart Contracts**: MixerPool contracts that manage deposits, withdrawals, and Merkle tree state
-- **Frontend**: Next.js web application for user interactions, note management, and proof generation
-- **Backend**: Indexer service for Merkle tree state management and optional relayer for gasless withdrawals
-- **ZK Circuits**: Circom circuits that generate proofs of valid withdrawals
+### 1. Smart Contracts
 
-### Smart Contracts
+**Main Contract: `ShieldedPoolMultiToken`**
+- **Address**: `0xc5F64faee07A6EFE235C12378101D62e370c0cD5` (DogeOS Testnet)
+- **Functions**:
+  - `shieldNative()` - Deposit native DOGE
+  - `shieldToken()` - Deposit ERC20 tokens
+  - `transfer()` - Private z→z transfer
+  - `unshieldNative()` - Withdraw native DOGE
+  - `unshieldToken()` - Withdraw ERC20 tokens
+  - `swap()` - Token exchange (⚠️ needs DEX integration)
 
-- **ShieldedPoolMultiToken**: Main shielded pool contract for shield/transfer/unshield/swap operations
-- **ShieldVerifier**: Shield proof verifier contract
-- **TransferVerifier**: Transfer proof verifier contract
-- **UnshieldVerifier**: Unshield proof verifier contract
-- **SwapVerifier**: Swap proof verifier contract
-- **MerkleTreeWithHistory**: Merkle tree implementation with historical root tracking
-- **Hasher**: MiMC hasher for Merkle tree operations
+**Verifier Contracts:**
+- `ShieldVerifier`: `0x8D5e77fa3FFc93dAf83F2A6B89D8a5C40aF850d2`
+- `TransferVerifier`: `0x4827a3CCAbFCbFaf320099363505FeBa8bb63b46`
+- `UnshieldVerifier`: `0x8DCBd817377d0ECB334a460ad220D2112d54c41C`
+- `SwapVerifier`: `0x96F8d2DFDb14B789397CBb9F810A158d60E996D3` (not used yet)
 
-### Frontend
+**Supporting Contracts:**
+- `MerkleTreeWithHistory`: Merkle tree with historical root tracking
+- `Hasher`: MiMC hasher for Merkle tree operations
 
-The frontend handles:
-- Wallet connection and transaction signing
-- Shielded identity and key management
-- Shielded note generation and management
-- Zero-knowledge proof generation (client-side)
+### 2. Frontend
+
+**Next.js Web Application** (`components/shielded/`)
+
+- **Shield Interface**: Deposit tokens into shielded pool
+- **Transfer Interface**: Send tokens privately to other shielded addresses
+- **Unshield Interface**: Withdraw tokens to public addresses
+- **Swap Interface**: Token exchange (placeholder - coming soon)
+
+**Key Features:**
+- Wallet connection (MetaMask, WalletConnect)
+- Shielded identity generation (permanent, deterministic)
+- Note management and storage
+- Client-side ZK proof generation
 - Auto-discovery of incoming transfers
 - Transaction history tracking
-- Merkle path fetching from indexer
-- Transaction submission (direct or via relayer)
 
-### Backend
+### 3. Backend
 
-The backend provides:
-- Event indexing from blockchain (Shield, Transfer, Unshield, Swap events)
-- Shielded Merkle tree state synchronization
-- Auto-discovery support via encrypted memos
-- REST API for shielded pool information and Merkle paths
-- Transaction history persistence (PostgreSQL)
-- Optional relayer service for gasless transactions
+**Indexer & Relayer Service** (`backend/src/`)
 
-## Network Configuration
+**Indexer Service:**
+- Event indexing from blockchain (Shield, Transfer, Unshield events)
+- Merkle tree state synchronization
+- Commitment tracking
+- Nullifier checking
+- Transfer memo storage/retrieval for auto-discovery
+
+**Relayer Service:**
+- Gasless transactions (relayer pays gas)
+- Transaction validation
+- Proof verification
+- Rate limiting
+
+**API Endpoints:**
+- `GET /api/shielded/pool/:address` - Pool information
+- `GET /api/shielded/pool/:address/root` - Latest Merkle root
+- `GET /api/shielded/pool/:address/path/:leafIndex` - Merkle path for proof
+- `GET /api/shielded/pool/:address/memos` - Transfer memos for discovery
+- `GET /api/shielded/pool/:address/nullifier/:hash` - Check if nullifier spent
+- `POST /api/shielded/relay/unshield` - Relay unshield transaction
+- `POST /api/shielded/relay/transfer` - Relay transfer transaction
+- `GET /api/shielded/relay/info` - Relayer information
+
+### 4. ZK Circuits
+
+**Circom Circuits** (for proof generation)
+
+- Shield circuit: Proves valid shield operation
+- Transfer circuit: Proves valid private transfer
+- Unshield circuit: Proves valid withdrawal
+- Swap circuit: Proves valid token swap (not used yet)
+
+---
+
+## 🌐 Network Configuration
 
 ### DogeOS Testnet (Chikyū)
 
-- Chain ID: 6281971
-- RPC URL: https://rpc.testnet.dogeos.com
-- WebSocket: wss://ws.rpc.testnet.dogeos.com
-- Block Explorer: https://blockscout.testnet.dogeos.com
-- Faucet: https://faucet.testnet.dogeos.com
+- **Chain ID**: `6281971`
+- **RPC URL**: `https://rpc.testnet.dogeos.com`
+- **WebSocket**: `wss://ws.rpc.testnet.dogeos.com`
+- **Block Explorer**: `https://blockscout.testnet.dogeos.com`
+- **Faucet**: `https://faucet.testnet.dogeos.com`
 
 ### Supported Tokens
 
-The system supports multiple token types with variable amounts (any amount can be shielded):
+All tokens support **variable amounts** (any amount can be shielded):
 
-- Native DOGE
-- USDC (18 decimals on DogeOS)
-- USDT (18 decimals on DogeOS)
-- USD1
-- WETH
-- LBTC
+| Token | Symbol | Address | Decimals | Status |
+|-------|--------|---------|----------|--------|
+| Dogecoin | DOGE | `0x0000...0000` (native) | 18 | ✅ Fully Supported |
+| USD Coin | USDC | `0xD19d2Ffb1c284668b7AFe72cddae1BAF3Bc03925` | 18 | ✅ Fully Supported |
+| Tether USD | USDT | `0xC81800b77D91391Ef03d7868cB81204E753093a9` | 18 | ✅ Fully Supported |
+| USD1 | USD1 | `0x25D5E5375e01Ed39Dc856bDCA5040417fD45eA3F` | 18 | ✅ Fully Supported |
+| Wrapped ETH | WETH | `0x1a6094Ac3ca3Fc9F1B4777941a5f4AAc16A72000` | 18 | ✅ Fully Supported |
+| Liquid BTC | LBTC | `0x29789F5A3e4c3113e7165c33A7E3bc592CF6fE0E` | 18 | ✅ Fully Supported |
 
-Token addresses are configured in `lib/dogeos-config.ts` for the frontend and `backend/src/config.ts` for the backend.
+**Note**: All tokens on DogeOS testnet use 18 decimals (not the same as mainnet).
 
-## Project Structure
+---
+
+## 📁 Project Structure
 
 ```
 dogenado/
-├── app/                    # Next.js application
-│   ├── dashboard/         # User dashboard routes
-│   └── api/               # API routes
-├── components/            # React components
-│   ├── deposit-interface.tsx
-│   ├── withdraw-interface.tsx
-│   ├── statistics.tsx
-│   └── dashboard-nav.tsx
-├── lib/                   # Frontend libraries
-│   ├── dogeos-config.ts   # Chain and contract configuration
-│   ├── note-service.ts    # Note generation and parsing
-│   ├── proof-service.ts   # ZK proof generation
-│   ├── contract-service.ts # Contract interaction utilities
-│   └── token-context.tsx  # Token selection and pricing
-├── contracts/             # Smart contracts
+├── app/                          # Next.js application
+│   ├── dashboard/               # User dashboard routes
+│   └── api/                     # API routes
+├── components/                   # React components
+│   ├── shielded/
+│   │   ├── shield-interface.tsx      # Shield UI
+│   │   ├── transfer-interface.tsx    # Transfer UI
+│   │   ├── unshield-interface.tsx    # Unshield UI
+│   │   ├── swap-interface.tsx        # Swap UI (placeholder)
+│   │   ├── shielded-header.tsx        # Wallet initialization
+│   │   ├── shielded-wallet.tsx        # Main wallet view
+│   │   └── shielded-notes-list.tsx   # Note display
+│   └── ...
+├── lib/                         # Frontend libraries
+│   ├── dogeos-config.ts         # Chain and contract configuration
+│   ├── shielded/
+│   │   ├── shielded-service.ts        # High-level shielded operations
+│   │   ├── shielded-note.ts            # Note management
+│   │   ├── shielded-address.ts        # Shielded identity
+│   │   ├── shielded-proof-service.ts   # ZK proof generation
+│   │   ├── shielded-receiving.ts      # Auto-discovery
+│   │   └── transaction-history.ts    # Transaction tracking
+│   └── ...
+├── contracts/                   # Smart contracts
 │   ├── src/
-│   │   ├── MixerPoolV2.sol
-│   │   ├── MixerPoolNative.sol
-│   │   ├── MerkleTreeWithHistory.sol
-│   │   └── interfaces/
-│   ├── scripts/           # Deployment scripts
+│   │   ├── ShieldedPoolMultiToken.sol  # Main pool contract
+│   │   ├── MerkleTreeWithHistory.sol    # Merkle tree
+│   │   ├── Hasher.sol                   # MiMC hasher
+│   │   └── interfaces/                 # Verifier interfaces
+│   ├── scripts/                 # Deployment scripts
 │   └── hardhat.config.ts
-├── backend/               # Backend services
+├── backend/                     # Backend services
 │   ├── src/
-│   │   ├── index.ts       # Combined indexer and relayer
-│   │   ├── config.ts      # Configuration
-│   │   ├── merkle/        # Merkle tree implementation
-│   │   └── database/      # Database storage layer
+│   │   ├── index.ts             # Main server
+│   │   ├── config.ts            # Configuration
+│   │   ├── shielded/
+│   │   │   ├── shielded-indexer.ts     # Merkle tree indexing
+│   │   │   └── shielded-routes.ts      # API routes
+│   │   └── database/            # Database storage
 │   └── package.json
-└── docs/                  # Documentation
-    └── docs/              # Docusaurus documentation site
+└── docs/                        # Documentation
 ```
 
-## Development Setup
+---
+
+## 🚀 Getting Started
 
 ### Prerequisites
 
-- Node.js 18 or higher
-- pnpm or npm
-- PostgreSQL (for backend database)
-- Rust (required for Circom circuit compilation)
+- **Node.js** 18 or higher
+- **pnpm** or **npm**
+- **PostgreSQL** (for backend database)
+- **MetaMask** or compatible wallet (for frontend)
 
 ### Frontend Development
 
@@ -126,13 +224,39 @@ npm install
 
 # Set environment variables
 cp .env.example .env.local
-# Edit .env.local with your configuration
+# Edit .env.local:
+# NEXT_PUBLIC_INDEXER_URL=http://localhost:3001  # For local backend
+# NEXT_PUBLIC_INDEXER_URL=https://dogenadocash.onrender.com  # For production
 
 # Run development server
 npm run dev
 ```
 
-The frontend will be available at http://localhost:3000
+The frontend will be available at `http://localhost:3000`
+
+### Backend Development
+
+```bash
+cd backend
+
+# Install dependencies
+npm install
+
+# Set environment variables
+cp .env.example .env
+# Configure:
+# DATABASE_URL=postgresql://...
+# DOGEOS_RPC_URL=https://rpc.testnet.dogeos.com
+# RELAYER_PRIVATE_KEY=0x...  # Optional, for relayer
+
+# Initialize database
+npm run db:setup
+
+# Run development server
+npm run dev
+```
+
+The backend will be available at `http://localhost:3001`
 
 ### Smart Contract Development
 
@@ -149,202 +273,381 @@ npx hardhat compile
 npx hardhat test
 
 # Deploy to testnet
-npx hardhat run scripts/deploy-all-tokens.ts --network dogeosTestnet
+npx hardhat run scripts/deploy.ts --network dogeosTestnet
 ```
 
-Environment variables required:
+**Required Environment Variables:**
 - `PRIVATE_KEY`: Deployer private key
 - `DOGEOS_RPC_URL`: RPC endpoint (optional, defaults to public testnet)
 
-### Backend Development
+---
 
-```bash
-cd backend
+## 🔄 How It Works
 
-# Install dependencies
-npm install
+### Shield Flow (t→z: Public → Private)
 
-# Set environment variables
-cp .env.example .env
-# Configure database and network settings
+1. **User connects wallet** and generates shielded identity (permanent, deterministic)
+2. **User selects token and amount** (any amount, variable)
+3. **Frontend generates shielded note** with:
+   - Secret (random 31 bytes)
+   - Nullifier (random 31 bytes)
+   - Commitment = MiMC(secret, nullifier)
+   - Token metadata (address, decimals)
+4. **For ERC20 tokens**: User approves token spending
+5. **Contract call**: `shieldNative()` or `shieldToken()`
+6. **Contract adds commitment** to Merkle tree
+7. **Note stored locally** and balance updates
 
-# Initialize database
-npm run db:setup
+**Privacy**: No link between deposit address and shielded note.
 
-# Run development server
-npm run dev
-```
+### Transfer Flow (z→z: Private → Private)
 
-Required environment variables:
-- `DATABASE_URL`: PostgreSQL connection string
-- `DOGEOS_RPC_URL`: RPC endpoint for blockchain access
-- `DOGEOS_WS_RPC_URL`: WebSocket RPC endpoint (optional, for real-time events)
-- `RELAYER_PRIVATE_KEY`: Private key for relayer wallet (optional)
+1. **User selects note** to spend (finds best note covering amount + fee)
+2. **User enters recipient's shielded address** (stealth address)
+3. **Frontend generates**:
+   - Output commitment for recipient
+   - Change commitment for sender
+   - Encrypted memo for auto-discovery
+4. **ZK proof generated** proving:
+   - User owns the input note
+   - Note exists in Merkle tree
+   - Output commitments are valid
+   - Amounts balance correctly
+5. **Relayer submits transaction** (user pays no gas)
+6. **Recipient auto-discovers** incoming transfer via encrypted memo
+7. **Both balances update** automatically
 
-### Circuit Compilation
+**Privacy**: Sender, recipient, and amount are all hidden. Only commitments visible on-chain.
 
-The ZK circuits are compiled separately. See the circuits directory for compilation instructions.
+### Unshield Flow (z→t: Private → Public)
 
-## Configuration
+1. **User selects note** to unshield
+2. **User enters recipient public address**
+3. **Frontend generates ZK proof** proving:
+   - User owns the note
+   - Note exists in Merkle tree
+   - Amount is correct
+4. **Relayer calls** `unshieldNative()` or `unshieldToken()`
+5. **Contract verifies proof** and transfers funds
+6. **Nullifier recorded** to prevent double-spending
+7. **Note marked as spent** locally
+
+**Privacy**: No link to original deposit. Amount and recipient visible (by design for withdrawals).
+
+### Consolidation Flow
+
+1. **User selects token** to consolidate
+2. **System finds all spendable notes** for that token
+3. **For each note**:
+   - Generates unshield proof
+   - Relayer submits transaction
+   - Note marked as spent
+4. **All amounts accumulate** into one larger note
+5. **Progress shown** (X of Y notes processed)
+
+**Use Case**: Combine many small notes into fewer large ones for easier management.
+
+---
+
+## 🔐 Privacy Model
+
+### Zcash-Style Privacy Guarantees
+
+**t→z (Shield):**
+- ✅ Public deposit → Private note
+- ✅ No link between deposit address and note
+- ✅ Commitment added to Merkle tree (anonymous)
+
+**z→z (Transfer):**
+- ✅ Private note → Private note
+- ✅ Sender identity hidden (nullifier prevents linking)
+- ✅ Recipient identity hidden (stealth address)
+- ✅ Amount hidden (only commitments visible)
+- ✅ Unlinkable (no connection to previous transactions)
+
+**z→t (Unshield):**
+- ✅ Private note → Public withdrawal
+- ✅ No link to original deposit
+- ✅ Amount visible (by design)
+- ✅ Recipient address visible (by design)
+
+### Anonymity Set
+
+The **anonymity set** is the number of other users' transactions in the Merkle tree. Larger anonymity sets provide better privacy:
+
+- **Shield**: Joins the anonymity set of all shielded notes
+- **Transfer**: Uses the anonymity set of all previous transfers
+- **Unshield**: Uses the anonymity set of all previous unshields
+
+**Best Practices:**
+- Wait between deposit and withdrawal to increase anonymity set
+- Use fresh addresses for withdrawals
+- Avoid withdrawing immediately after deposit
+- Store secret notes securely offline
+
+---
+
+## 🔧 Configuration
 
 ### Frontend Configuration
 
-Pool addresses and token configurations are defined in `lib/dogeos-config.ts`. This includes:
-- Token contract addresses
-- Pool contract addresses for each denomination
-- Chain configuration
-- API endpoints
+Pool addresses and token configurations are defined in `lib/dogeos-config.ts`:
+
+```typescript
+export const shieldedPool = {
+  address: '0xc5F64faee07A6EFE235C12378101D62e370c0cD5',
+  shieldVerifier: '0x8D5e77fa3FFc93dAf83F2A6B89D8a5C40aF850d2',
+  transferVerifier: '0x4827a3CCAbFCbFaf320099363505FeBa8bb63b46',
+  unshieldVerifier: '0x8DCBd817377d0ECB334a460ad220D2112d54c41C',
+  // ...
+}
+```
 
 ### Backend Configuration
 
-Backend configuration is in `backend/src/config.ts`. This includes:
+Backend configuration is in `backend/src/config.ts`:
+
 - Pool contract addresses
 - Merkle tree depth
 - Relayer settings
 - Rate limiting configuration
 
-Both configurations must be kept in sync when deploying new pools.
+**Both configurations must be kept in sync** when deploying new contracts.
 
-## Deployment
+---
+
+## 📊 API Documentation
+
+### Shielded Pool API
+
+**Base URL**: `https://dogenadocash.onrender.com/api/shielded`
+
+#### Pool Information
+
+```http
+GET /pool/:address
+```
+
+Get pool information and statistics.
+
+#### Merkle Root
+
+```http
+GET /pool/:address/root
+```
+
+Get the latest Merkle root for proof generation.
+
+#### Merkle Path
+
+```http
+GET /pool/:address/path/:leafIndex
+```
+
+Get Merkle path for a specific leaf index (required for proof generation).
+
+#### Transfer Memos
+
+```http
+GET /pool/:address/memos?since=<timestamp>
+```
+
+Get encrypted transfer memos for auto-discovery (since timestamp).
+
+#### Nullifier Check
+
+```http
+GET /pool/:address/nullifier/:hash
+```
+
+Check if a nullifier hash has been spent.
+
+#### Relay Unshield
+
+```http
+POST /relay/unshield
+Content-Type: application/json
+
+{
+  "poolAddress": "0x...",
+  "proof": [...],
+  "root": "0x...",
+  "nullifierHash": "0x...",
+  "recipient": "0x...",
+  "amount": "1000000000000000000",
+  "fee": "5000000000000000",
+  "token": "0x0000000000000000000000000000000000000000"  // or ERC20 address
+}
+```
+
+Submit an unshield transaction via relayer (gasless).
+
+#### Relay Transfer
+
+```http
+POST /relay/transfer
+Content-Type: application/json
+
+{
+  "poolAddress": "0x...",
+  "proof": [...],
+  "root": "0x...",
+  "nullifierHash": "0x...",
+  "outputCommitment1": "0x...",
+  "outputCommitment2": "0x...",
+  "encryptedMemo1": "0x...",
+  "encryptedMemo2": "0x...",
+  "fee": "5000000000000000"
+}
+```
+
+Submit a private transfer via relayer (gasless).
+
+#### Relayer Info
+
+```http
+GET /relay/info
+```
+
+Get relayer information (fee percentage, minimum fee, address).
+
+---
+
+## 🧪 Testing
+
+### Manual Testing
+
+1. **Shield**: Deposit tokens into shielded pool
+2. **Transfer**: Send tokens privately to another shielded address
+3. **Unshield**: Withdraw tokens to a public address
+4. **Consolidation**: Combine multiple notes
+
+### Test Tokens
+
+Get test tokens from the [DogeOS Testnet Faucet](https://faucet.testnet.dogeos.com).
+
+---
+
+## 🚢 Deployment
 
 ### Smart Contracts
 
-Contracts are deployed using Hardhat deployment scripts. Each token type has its own deployment script in `contracts/scripts/`.
-
-After deployment, update:
+Contracts are deployed using Hardhat deployment scripts. After deployment, update:
 - `lib/dogeos-config.ts` (frontend)
 - `backend/src/config.ts` (backend)
 
 ### Frontend
 
-The frontend can be deployed to Vercel or any static hosting service. Set the following environment variables:
+Deploy to **Vercel** or any static hosting service:
 
+**Environment Variables:**
 - `NEXT_PUBLIC_INDEXER_URL`: Backend API URL
-- `NEXT_PUBLIC_RELAYER_URL`: Relayer API URL (usually same as indexer)
 
 ### Backend
 
-The backend should be deployed as a persistent service (Render, Railway, or similar) with:
+Deploy to **Render**, **Railway**, or similar with:
 - PostgreSQL database
 - Persistent storage for Merkle tree state
 - WebSocket support for real-time event indexing
 
-## How It Works
+**Environment Variables:**
+- `DATABASE_URL`: PostgreSQL connection string
+- `DOGEOS_RPC_URL`: RPC endpoint
+- `RELAYER_PRIVATE_KEY`: Relayer wallet private key (optional)
 
-### Shield Flow (Public → Private)
+---
 
-1. User connects wallet and generates shielded identity
-2. User selects token and amount (any amount)
-3. Frontend generates a shielded note with commitment
-4. User approves token spending (ERC20) or sends native value (native DOGE)
-5. Shield transaction is submitted with the commitment
-6. Contract adds commitment to Merkle tree
-7. Note is stored locally and synced to backend
-
-### Transfer Flow (Private → Private)
-
-1. User selects a shielded note to spend
-2. User enters recipient's shielded address
-3. Frontend generates encrypted memo for auto-discovery
-4. Zero-knowledge proof is generated client-side
-5. Transfer transaction is submitted (directly or via relayer)
-6. Recipient's wallet auto-discovers the incoming transfer via encrypted memo
-7. Recipient's balance updates automatically
-
-### Unshield Flow (Private → Public)
-
-1. User selects a shielded note to unshield
-2. User enters recipient public address
-3. Zero-knowledge proof is generated client-side
-4. Unshield transaction is submitted (directly or via relayer)
-5. Contract verifies proof and transfers funds to recipient
-6. Nullifier is recorded to prevent double-spending
-
-### Merkle Tree State
-
-The backend indexer maintains Merkle tree state by:
-- Watching Deposit events from contracts
-- Inserting commitments into the Merkle tree
-- Serving Merkle paths to frontend for proof generation
-- Tracking nullifiers to prevent double-spends
-
-## Security Considerations
+## ⚠️ Security Considerations
 
 ### Trust Assumptions
 
-- Smart contracts are deployed correctly and audited
-- Zero-knowledge circuits are correctly implemented
-- Trusted setup ceremony was conducted honestly
-- Users properly secure their secret notes
+- ✅ Smart contracts are deployed correctly
+- ✅ Zero-knowledge circuits are correctly implemented
+- ✅ Trusted setup ceremony was conducted honestly
+- ✅ Users properly secure their secret notes
 
 ### Limitations
 
-- Anonymity set size depends on pool usage
-- Time correlation between deposit and withdrawal can reduce privacy
-- Large withdrawals may be linkable through amount analysis
-- Relayer transactions reveal relayer address (use direct transactions for maximum privacy)
+- ⚠️ Anonymity set size depends on pool usage
+- ⚠️ Time correlation between deposit and withdrawal can reduce privacy
+- ⚠️ Large withdrawals may be linkable through amount analysis
+- ⚠️ Relayer transactions reveal relayer address (use direct transactions for maximum privacy)
 
 ### Best Practices
 
-- Wait between deposit and withdrawal to increase anonymity set
-- Use fresh addresses for withdrawals
-- Avoid withdrawing immediately after deposit
-- Store secret notes securely offline
-- For maximum privacy, submit withdrawal transactions directly rather than through relayer
+- ✅ Wait between deposit and withdrawal to increase anonymity set
+- ✅ Use fresh addresses for withdrawals
+- ✅ Avoid withdrawing immediately after deposit
+- ✅ Store secret notes securely offline
+- ✅ For maximum privacy, submit transactions directly rather than through relayer
 
-## API Documentation
+---
 
-The backend provides REST API endpoints:
+## 📈 Current Status
 
-- `GET /api/pools` - List all pools
-- `GET /api/pool/:address` - Get pool information
-- `GET /api/pool/:address/root` - Get latest Merkle root
-- `GET /api/pool/:address/path/:leafIndex` - Get Merkle path for leaf
-- `POST /api/relay` - Submit withdrawal via relayer
-- `GET /api/health` - Health check
+### ✅ Working Features
 
-See the backend source code for detailed API documentation.
+- **Shield (t→z)**: ✅ Fully functional for all tokens
+- **Transfer (z→z)**: ✅ Fully functional for all tokens
+- **Unshield (z→t)**: ✅ Fully functional for all tokens
+- **Consolidation**: ✅ Working correctly
+- **Auto-Discovery**: ✅ Recipients find incoming transfers
+- **Transaction History**: ✅ Client-side tracking
 
-## Testing
+### ⚠️ Not Yet Implemented
 
-### Smart Contracts
+- **Swap (z→z token exchange)**: ❌ Requires DEX integration
+  - Contract function exists but needs DEX router
+  - Frontend shows "Coming Soon"
+  - Backend route not implemented
 
-```bash
-cd contracts
-npx hardhat test
-```
+### 🐛 Recent Fixes
 
-### Frontend
+- ✅ ERC20 unshield support added
+- ✅ Consolidation index mismatch fixed
+- ✅ USD calculation fixed (uses correct token)
+- ✅ Token metadata stored in notes
+- ✅ Legacy note migration support
+- ✅ Balance refresh after transactions
 
-```bash
-npm run test
-```
+---
 
-### Backend
+## 🤝 Contributing
 
-```bash
-cd backend
-npm run test
-```
-
-## Contributing
-
-Contributions are welcome. Please ensure:
+Contributions are welcome! Please ensure:
 - Code follows existing style conventions
 - Tests are added for new features
 - Documentation is updated
 - Security considerations are addressed
 
-## License
+---
+
+## 📄 License
 
 MIT License
 
-## Acknowledgments
+---
 
-This project is based on the privacy pool design pioneered by Tornado Cash. The implementation adapts the design for the DogeOS blockchain and adds improvements such as native token support and scheduled withdrawals.
+## 🙏 Acknowledgments
 
-Key technologies:
-- [DogeOS](https://docs.dogeos.com) - EVM-compatible L2 blockchain
-- [Circom](https://github.com/iden3/circom) - Zero-knowledge circuit compiler
-- [snarkjs](https://github.com/iden3/snarkjs) - JavaScript library for ZK proofs
-- [Hardhat](https://hardhat.org) - Ethereum development environment
+This project implements a **Zcash-style privacy model** adapted for the DogeOS blockchain. Key technologies:
+
+- **[DogeOS](https://docs.dogeos.com)** - EVM-compatible L2 blockchain
+- **[Circom](https://github.com/iden3/circom)** - Zero-knowledge circuit compiler
+- **[snarkjs](https://github.com/iden3/snarkjs)** - JavaScript library for ZK proofs
+- **[Hardhat](https://hardhat.org)** - Ethereum development environment
+- **[viem](https://viem.sh)** - TypeScript Ethereum library
+
+**Privacy Model**: Inspired by Zcash's shielded pool design, adapted for multi-token support and variable amounts.
+
+---
+
+## 📞 Support
+
+- **GitHub**: [Repository](https://github.com/yourusername/dogenado)
+- **Documentation**: See `PROJECT_STATUS_REPORT.md` for detailed status
+- **Issues**: Report bugs and feature requests on GitHub
+
+---
+
+**Built with ❤️ for privacy on DogeOS**
