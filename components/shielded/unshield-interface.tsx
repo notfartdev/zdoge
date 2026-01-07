@@ -783,23 +783,7 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
   
   // Don't return early if we're showing success state (even if no notes left)
   if (spendableNotes.length === 0 && status !== "success") {
-    return (
-      <div className="space-y-4">
-        <div>
-          <h3 className="text-lg font-display font-medium">Send to Public Address</h3>
-          <p className="text-sm font-body text-muted-foreground">Unshield your shielded {selectedToken} to any public wallet address</p>
-        </div>
-        <div className="p-8 rounded-lg bg-muted/30 border border-muted text-center">
-          <ShieldOff className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
-          <p className="text-sm font-body text-muted-foreground">
-            No shielded {selectedToken} balance available
-          </p>
-          <p className="text-xs font-body text-muted-foreground/70 mt-2">
-            Shield some {selectedToken} first to enable unshielding
-          </p>
-        </div>
-      </div>
-    )
+    return null
   }
   
   const selectedInfo = getSelectedNoteInfo()

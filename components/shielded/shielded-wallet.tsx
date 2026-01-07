@@ -505,19 +505,19 @@ export function ShieldedWallet() {
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsList className="grid w-full grid-cols-4">
               <TabsTrigger value="shield" className="flex items-center gap-2">
-                <ShieldPlus className="h-4 w-4" />
+                <ShieldPlus className="h-5 w-5" strokeWidth={2} />
                 Shield
               </TabsTrigger>
               <TabsTrigger value="swap" className="flex items-center gap-2">
-                <ArrowLeftRight className="h-4 w-4" />
+                <ArrowLeftRight className="h-5 w-5" strokeWidth={2} />
                 Swap
               </TabsTrigger>
               <TabsTrigger value="transfer" className="flex items-center gap-2">
-                <Send className="h-4 w-4" />
+                <Send className="h-5 w-5" strokeWidth={2} />
                 Send
               </TabsTrigger>
               <TabsTrigger value="unshield" className="flex items-center gap-2">
-                <Wallet className="h-4 w-4" />
+                <Wallet className="h-5 w-5" strokeWidth={2} />
                 To Public
               </TabsTrigger>
             </TabsList>

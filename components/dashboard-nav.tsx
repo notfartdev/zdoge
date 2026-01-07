@@ -53,7 +53,7 @@ export function DashboardNav() {
                         : "text-gray-400 hover:text-white hover:bg-white/10"
                     }`}
                   >
-                    <Icon className="w-3.5 h-3.5" strokeWidth={1.75} />
+                    <Icon className="w-5 h-5" strokeWidth={2} />
                     {link.label.toUpperCase()}
                   </Link>
                 )
