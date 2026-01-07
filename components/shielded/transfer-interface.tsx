@@ -334,7 +334,25 @@ export function TransferInterface({ notes, onSuccess, selectedToken = "DOGE", on
   }
   
   if (spendableNotes.length === 0) {
-    return null
+    return (
+      <div className="space-y-4">
+        <div>
+          <h3 className="text-lg font-display font-medium">Private Transfer</h3>
+          <p className="text-sm font-body text-muted-foreground">
+            Send shielded tokens to another shielded address privately
+          </p>
+        </div>
+        <div className="p-8 rounded-lg bg-muted/30 border border-muted text-center">
+          <Shield className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
+          <p className="text-sm font-body text-muted-foreground">
+            No shielded {selectedToken} balance available
+          </p>
+          <p className="text-xs font-body text-muted-foreground/70 mt-2">
+            Shield some {selectedToken} first to enable private transfers
+          </p>
+        </div>
+      </div>
+    )
   }
   
   return (
