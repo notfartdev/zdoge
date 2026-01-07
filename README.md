@@ -39,37 +39,6 @@ All tokens use 18 decimals on DogeOS testnet.
 - Explorer: https://blockscout.testnet.dogeos.com
 - Faucet: https://faucet.testnet.dogeos.com
 
-## Development
-
-### Frontend
-
-```bash
-npm install
-cp .env.example .env.local
-# Set NEXT_PUBLIC_INDEXER_URL=http://localhost:3001
-npm run dev
-```
-
-### Backend
-
-```bash
-cd backend
-npm install
-cp .env.example .env
-# Configure DATABASE_URL and DOGEOS_RPC_URL
-npm run db:setup
-npm run dev
-```
-
-### Contracts
-
-```bash
-cd contracts
-npm install
-npx hardhat compile
-npx hardhat test
-```
-
 ## How It Works
 
 **Shield (t→z)**: User deposits tokens, generates shielded note with commitment, contract adds commitment to Merkle tree.
@@ -84,37 +53,15 @@ All operations use zero-knowledge proofs to hide sender, recipient, and amount (
 
 Zcash-style privacy with Merkle tree anonymity set. Transactions are unlinkable - no connection between deposit and withdrawal. Shielded transfers hide sender, recipient, and amount.
 
-## API
+## Getting Started
 
-Backend API at `/api/shielded`:
+Please see our user guide for instructions on using zDoge.cash.
 
-- `GET /pool/:address` - Pool information
-- `GET /pool/:address/root` - Latest Merkle root
-- `GET /pool/:address/path/:leafIndex` - Merkle path for proof
-- `GET /pool/:address/memos` - Transfer memos for discovery
-- `POST /relay/unshield` - Relay unshield transaction
-- `POST /relay/transfer` - Relay transfer transaction
-- `GET /relay/info` - Relayer information
+## Need Help?
 
-## Status
-
-**Working:**
-- Shield for all tokens
-- Transfer for all tokens
-- Unshield for all tokens
-- Consolidation
-- Auto-discovery
-
-**Not Implemented:**
-- Swap (requires DEX integration)
-
-## Security
-
-- Smart contracts must be audited
-- ZK circuits must be correctly implemented
-- Users must secure their secret notes
-- Anonymity set size depends on pool usage
-- Time correlation can reduce privacy
+- See the documentation at [docs.zdoge.cash](https://docs.zdoge.cash) for help and more information
+- Ask for help on [zDoge Twitter](https://x.com/zdogecash)
+- Join our community on the zDoge Discord
 
 ## License
 
