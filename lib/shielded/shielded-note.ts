@@ -27,7 +27,7 @@ import {
  */
 export interface ShieldedNote {
   // Value
-  amount: bigint;           // Amount in wei (18 decimals for DOGE)
+  amount: bigint;           // Amount in token base units (e.g., wei for 18 decimals)
   
   // Ownership
   ownerPubkey: bigint;      // Shielded address that owns this note
@@ -42,8 +42,10 @@ export interface ShieldedNote {
   // Position in Merkle tree (set after shielding)
   leafIndex?: number;
   
-  // Metadata
-  token: string;            // Token symbol (e.g., "DOGE")
+  // Token metadata (REQUIRED - do not default to DOGE)
+  token: string;            // Token symbol (e.g., "DOGE", "USDC")
+  tokenAddress: `0x${string}`; // Token address (0x0...0 for native DOGE)
+  decimals: number;        // Token decimals (18 for DOGE, 6 for USDC, etc.)
   createdAt: number;        // Unix timestamp
 }
 
@@ -89,15 +91,19 @@ const NOTE_VERSION = 1;
 /**
  * Create a new shielded note
  * 
- * @param amount - Amount in wei
+ * @param amount - Amount in token base units
  * @param ownerPubkey - Recipient's shielded address (public key)
- * @param token - Token symbol
+ * @param token - Token symbol (e.g., 'DOGE', 'USDC')
+ * @param tokenAddress - Token address (0x0...0 for native DOGE)
+ * @param decimals - Token decimals (18 for DOGE, 6 for USDC, etc.)
  * @returns The new note
  */
 export async function createNote(
   amount: bigint,
   ownerPubkey: bigint,
-  token: string = 'DOGE'
+  token: string,
+  tokenAddress: `0x${string}`,
+  decimals: number
 ): Promise<ShieldedNote> {
   // Validate amount
   if (amount <= 0n) {
@@ -105,6 +111,11 @@ export async function createNote(
   }
   if (amount >= FIELD_SIZE) {
     throw new Error('Amount exceeds field size');
+  }
+  
+  // Validate token metadata
+  if (!token || !tokenAddress || decimals == null) {
+    throw new Error('Token metadata (token, tokenAddress, decimals) is required');
   }
   
   // Generate random values
@@ -121,6 +132,8 @@ export async function createNote(
     blinding,
     commitment,
     token,
+    tokenAddress,
+    decimals,
     createdAt: Date.now(),
   };
 }
@@ -133,8 +146,15 @@ export async function createNoteWithRandomness(
   ownerPubkey: bigint,
   secret: bigint,
   blinding: bigint,
-  token: string = 'DOGE'
+  token: string,
+  tokenAddress: `0x${string}`,
+  decimals: number
 ): Promise<ShieldedNote> {
+  // Validate token metadata
+  if (!token || !tokenAddress || decimals == null) {
+    throw new Error('Token metadata (token, tokenAddress, decimals) is required');
+  }
+  
   const commitment = await computeCommitment(amount, ownerPubkey, secret, blinding);
   
   return {
@@ -144,6 +164,8 @@ export async function createNoteWithRandomness(
     blinding,
     commitment,
     token,
+    tokenAddress,
+    decimals,
     createdAt: Date.now(),
   };
 }

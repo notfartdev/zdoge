@@ -375,9 +375,10 @@ export const shieldedPool = {
 };
 
 // Backend API URLs (indexer + relayer on same server)
+// Defaults to Render backend for production, can be overridden with .env.local for local development
 export const api = {
-  indexer: process.env.NEXT_PUBLIC_INDEXER_URL || 'http://localhost:3001',
-  relayer: process.env.NEXT_PUBLIC_RELAYER_URL || 'http://localhost:3001', // Same as indexer
+  indexer: process.env.NEXT_PUBLIC_INDEXER_URL || 'https://dogenadocash.onrender.com',
+  relayer: process.env.NEXT_PUBLIC_RELAYER_URL || 'https://dogenadocash.onrender.com', // Same as indexer
 };
 
 // External links

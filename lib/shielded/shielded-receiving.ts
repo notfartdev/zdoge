@@ -19,6 +19,7 @@ import {
   deserializeNote,
 } from './shielded-note';
 import { ShieldedIdentity } from './shielded-address';
+import { shieldedPool } from '../dogeos-config';
 import {
   mimcHash2,
   randomFieldElement,
@@ -106,12 +107,14 @@ export async function encryptNoteForRecipient(
   // Recipient will compute the SAME value: MiMC(ephemeralPubkey, theirShieldedAddress)
   const sharedSecret = await mimcHash2(ephemeralPubkey, recipientShieldedAddress);
   
-  // Prepare note data
+  // Prepare note data (include full token metadata)
   const memoData: NoteMemoData = {
     amount: note.amount.toString(),
     secret: note.secret.toString(16).padStart(64, '0'),
     blinding: note.blinding.toString(16).padStart(64, '0'),
     token: note.token,
+    tokenAddress: note.tokenAddress,
+    decimals: note.decimals,
   };
   
   // Serialize and encrypt
@@ -168,13 +171,39 @@ export async function tryDecryptMemo(
     const dataJson = new TextDecoder().decode(plaintext);
     const memoData: NoteMemoData = JSON.parse(dataJson);
     
-    // Reconstruct note
+    // Get token metadata - use memo data if available, otherwise look up from config
+    let tokenAddress: `0x${string}`;
+    let decimals: number;
+    
+    if (memoData.tokenAddress && memoData.decimals != null) {
+      // Modern memo with full metadata
+      tokenAddress = memoData.tokenAddress as `0x${string}`;
+      decimals = memoData.decimals;
+    } else {
+      // Legacy memo - look up from token symbol
+      const NATIVE_TOKEN = '0x0000000000000000000000000000000000000000' as `0x${string}`;
+      if (memoData.token === 'DOGE') {
+        tokenAddress = NATIVE_TOKEN;
+        decimals = 18;
+      } else {
+        const token = shieldedPool.supportedTokens[memoData.token as keyof typeof shieldedPool.supportedTokens];
+        if (!token) {
+          throw new Error(`Token ${memoData.token} not found in config`);
+        }
+        tokenAddress = token.address;
+        decimals = token.decimals;
+      }
+    }
+    
+    // Reconstruct note with full token metadata
     const note = await createNoteWithRandomness(
       BigInt(memoData.amount),
       identity.shieldedAddress,
       BigInt('0x' + memoData.secret),
       BigInt('0x' + memoData.blinding),
-      memoData.token
+      memoData.token,
+      tokenAddress,
+      decimals
     );
     
     return note;

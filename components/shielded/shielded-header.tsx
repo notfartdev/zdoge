@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -120,6 +120,99 @@ export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", onTokenC
     fetchAllBalances()
     const interval = setInterval(fetchAllBalances, 10000)
     return () => clearInterval(interval)
+  }, [mounted, wallet?.isConnected, wallet?.address])
+  
+  // Refresh balances when onStateChange is called (after shield/unshield)
+  useEffect(() => {
+    if (mounted && wallet?.isConnected && wallet?.address && onStateChange) {
+      // Trigger balance refresh after a delay to allow transaction confirmation
+      const fetchAllBalances = async () => {
+        // Wait 3 seconds for transaction to be confirmed
+        await new Promise(resolve => setTimeout(resolve, 3000))
+        
+        console.log('[ShieldedHeader] Refreshing balances via onStateChange')
+        const balances: Record<string, string> = {}
+        for (const [symbol, config] of Object.entries(TOKEN_CONFIG)) {
+          try {
+            if (config.isNative) {
+              const provider = (window as any).ethereum
+              if (provider) {
+                const balance = await provider.request({
+                  method: "eth_getBalance",
+                  params: [wallet.address, "latest"],
+                })
+                const balanceWei = BigInt(balance)
+                const balanceDoge = Number(balanceWei) / 1e18
+                balances[symbol] = balanceDoge.toFixed(4)
+              }
+            } else if (config.address) {
+              const balance = await publicClient.readContract({
+                address: config.address as Address,
+                abi: ERC20ABI,
+                functionName: 'balanceOf',
+                args: [wallet.address as Address],
+              })
+              balances[symbol] = (Number(balance) / 1e18).toFixed(4)
+            }
+          } catch (error) {
+            console.error(`[ShieldedHeader] Failed to fetch ${symbol} balance:`, error)
+            balances[symbol] = "0"
+          }
+        }
+        setAllPublicBalances(balances)
+        console.log('[ShieldedHeader] Balances refreshed via onStateChange:', balances)
+      }
+      fetchAllBalances()
+    }
+  }, [onStateChange, mounted, wallet?.isConnected, wallet?.address])
+  
+  // Listen for refresh-balance event (dispatched after successful unshield)
+  useEffect(() => {
+    if (!mounted || !wallet?.isConnected || !wallet?.address) {
+      return
+    }
+    
+    const handleRefreshBalance = async () => {
+      console.log('[ShieldedHeader] Refresh balance event received')
+      // Wait 3 seconds for transaction confirmation
+      await new Promise(resolve => setTimeout(resolve, 3000))
+      
+      const balances: Record<string, string> = {}
+      for (const [symbol, config] of Object.entries(TOKEN_CONFIG)) {
+        try {
+          if (config.isNative) {
+            const provider = (window as any).ethereum
+            if (provider) {
+              const balance = await provider.request({
+                method: "eth_getBalance",
+                params: [wallet.address, "latest"],
+              })
+              const balanceWei = BigInt(balance)
+              const balanceDoge = Number(balanceWei) / 1e18
+              balances[symbol] = balanceDoge.toFixed(4)
+            }
+          } else if (config.address) {
+            const balance = await publicClient.readContract({
+              address: config.address as Address,
+              abi: ERC20ABI,
+              functionName: 'balanceOf',
+              args: [wallet.address as Address],
+            })
+            balances[symbol] = (Number(balance) / 1e18).toFixed(4)
+          }
+        } catch (error) {
+          console.error(`[ShieldedHeader] Failed to fetch ${symbol} balance:`, error)
+          balances[symbol] = "0"
+        }
+      }
+      setAllPublicBalances(balances)
+      console.log('[ShieldedHeader] Balances refreshed:', balances)
+    }
+    
+    window.addEventListener('refresh-balance', handleRefreshBalance)
+    return () => {
+      window.removeEventListener('refresh-balance', handleRefreshBalance)
+    }
   }, [mounted, wallet?.isConnected, wallet?.address])
   
   // Initialize shielded wallet when wallet is connected

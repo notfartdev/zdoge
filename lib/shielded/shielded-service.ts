@@ -49,6 +49,31 @@ import {
   generateStealthAddress,
   scanStealthTransfer,
 } from './stealth-address';
+import { shieldedPool } from '../dogeos-config';
+
+// Helper to get token metadata from config
+function getTokenMetadata(tokenSymbol: string): { symbol: string; address: `0x${string}`; decimals: number } {
+  const NATIVE_TOKEN = '0x0000000000000000000000000000000000000000' as `0x${string}`;
+  
+  if (tokenSymbol === 'DOGE') {
+    return {
+      symbol: 'DOGE',
+      address: NATIVE_TOKEN,
+      decimals: 18,
+    };
+  }
+  
+  const token = shieldedPool.supportedTokens[tokenSymbol as keyof typeof shieldedPool.supportedTokens];
+  if (!token) {
+    throw new Error(`Token ${tokenSymbol} not found in shieldedPool.supportedTokens`);
+  }
+  
+  return {
+    symbol: token.symbol,
+    address: token.address,
+    decimals: token.decimals,
+  };
+}
 
 // Storage keys - now include wallet address for per-wallet identity
 const IDENTITY_STORAGE_PREFIX = 'dogenado_shielded_identity_';
@@ -321,13 +346,20 @@ export async function prepareShield(
     throw new Error('Wallet not initialized');
   }
   
-  const amountWei = parseAmountToWei(amount);
+  // Get token metadata
+  const tokenMeta = getTokenMetadata(token);
+  const tokenDecimals = tokenMeta.decimals;
   
-  // Create note for ourselves with the specified token
+  // Convert amount to token base units using token decimals
+  const amountWei = parseAmountToWei(amount, tokenDecimals);
+  
+  // Create note for ourselves with the specified token metadata
   const note = await createNote(
     amountWei,
     walletState.identity.shieldedAddress,
-    token
+    tokenMeta.symbol,
+    tokenMeta.address,
+    tokenMeta.decimals
   );
   
   return {
@@ -475,13 +507,18 @@ export function completeTransfer(
 
 /**
  * Prepare unshield (withdraw to public address)
+ * 
+ * @param feeWei - Fee in wei (already calculated for the token's decimals)
+ *                 If feeDoge is provided, it will be converted using 18 decimals
+ *                 For ERC20 tokens, pass feeWei directly to avoid precision issues
  */
 export async function prepareUnshield(
   recipientAddress: string,
   noteIndex: number,
   poolAddress: string,
   relayerAddress?: string,
-  feeDoge: number = 0
+  feeDoge: number = 0,
+  feeWei?: bigint  // Optional: pass fee directly in wei to avoid precision loss
 ): Promise<{
   proof: { proof: string[]; publicInputs: string[] };
   nullifierHash: `0x${string}`;
@@ -497,11 +534,26 @@ export async function prepareUnshield(
     throw new Error('Invalid note');
   }
   
-  const feeWei = parseAmountToWei(feeDoge);
-  const withdrawAmount = note.amount - feeWei;
+  // Use feeWei if provided (already in token base units), otherwise convert from feeDoge
+  // Fee must be in same units as note.amount (token base units)
+  const fee = feeWei !== undefined ? feeWei : parseAmountToWei(feeDoge);
+  const withdrawAmount = note.amount - fee;
   
   if (withdrawAmount <= 0n) {
-    throw new Error('Fee exceeds note amount');
+    // Get token decimals for error message
+    const tokenDecimals = note.token ? (shieldedPool.supportedTokens[note.token as keyof typeof shieldedPool.supportedTokens]?.decimals || 18) : 18;
+    const noteAmountHuman = formatWeiToAmount(note.amount, tokenDecimals);
+    const feeAmountHuman = formatWeiToAmount(fee, tokenDecimals);
+    console.error(`[prepareUnshield] Fee exceeds note amount:`, {
+      token: note.token || 'DOGE',
+      decimals: tokenDecimals,
+      noteAmount: note.amount.toString(),
+      noteAmountHuman,
+      fee: fee.toString(),
+      feeAmountHuman,
+      withdrawAmount: withdrawAmount.toString(),
+    });
+    throw new Error(`Fee exceeds note amount. Note: ${noteAmountHuman} ${note.token || 'DOGE'}, Fee: ${feeAmountHuman} ${note.token || 'DOGE'}`);
   }
   
   // Generate proof
@@ -512,7 +564,7 @@ export async function prepareUnshield(
     withdrawAmount,
     poolAddress,
     relayerAddress || '0x0000000000000000000000000000000000000000',
-    feeWei
+    fee
   );
   
   return {
@@ -893,6 +945,47 @@ function saveNotesToStorage(notes: ShieldedNote[]): void {
   localStorage.setItem(keys.notes, JSON.stringify(serialized));
 }
 
+// Migrate legacy notes to include tokenAddress and decimals
+function migrateLegacyNote(note: any): ShieldedNote {
+  // If note already has tokenAddress and decimals, return as-is
+  if (note.tokenAddress && note.decimals != null) {
+    return note as ShieldedNote;
+  }
+  
+  // Legacy note - add missing metadata
+  const NATIVE_TOKEN = '0x0000000000000000000000000000000000000000' as `0x${string}`;
+  const tokenSymbol = note.token || 'DOGE';
+  
+  if (tokenSymbol === 'DOGE') {
+    return {
+      ...note,
+      token: 'DOGE',
+      tokenAddress: NATIVE_TOKEN,
+      decimals: 18,
+    };
+  }
+  
+  // Look up token from config
+  const token = shieldedPool.supportedTokens[tokenSymbol as keyof typeof shieldedPool.supportedTokens];
+  if (token) {
+    return {
+      ...note,
+      token: token.symbol,
+      tokenAddress: token.address,
+      decimals: token.decimals,
+    };
+  }
+  
+  // Fallback: assume DOGE if token not found
+  console.warn(`[ShieldedService] Unknown token ${tokenSymbol} in legacy note, defaulting to DOGE`);
+  return {
+    ...note,
+    token: 'DOGE',
+    tokenAddress: NATIVE_TOKEN,
+    decimals: 18,
+  };
+}
+
 function loadNotesFromStorage(): ShieldedNote[] {
   if (typeof localStorage === 'undefined') return [];
   
@@ -902,17 +995,38 @@ function loadNotesFromStorage(): ShieldedNote[] {
   
   try {
     const serialized = JSON.parse(stored);
-    // Note: This is sync load, notes will be deserialized on first access
-    return serialized.map((s: any) => ({
-      amount: BigInt(s.amount),
-      ownerPubkey: BigInt('0x' + s.ownerPubkey),
-      secret: BigInt('0x' + s.secret),
-      blinding: BigInt('0x' + s.blinding),
-      commitment: BigInt('0x' + s.commitment),
-      leafIndex: s.leafIndex,
-      token: s.token,
-      createdAt: s.createdAt,
-    }));
+    // Deserialize and migrate legacy notes
+    const notes = serialized.map((s: any) => {
+      const note: any = {
+        amount: BigInt(s.amount),
+        ownerPubkey: BigInt('0x' + s.ownerPubkey),
+        secret: BigInt('0x' + s.secret),
+        blinding: BigInt('0x' + s.blinding),
+        commitment: BigInt('0x' + s.commitment),
+        leafIndex: s.leafIndex,
+        token: s.token || 'DOGE',
+        createdAt: s.createdAt,
+      };
+      
+      // Add tokenAddress and decimals if missing (legacy note migration)
+      if (!s.tokenAddress || s.decimals == null) {
+        return migrateLegacyNote(note);
+      }
+      
+      // Modern note - include all fields
+      note.tokenAddress = s.tokenAddress;
+      note.decimals = s.decimals;
+      return note as ShieldedNote;
+    });
+    
+    // Save migrated notes back to storage if any were migrated
+    const needsMigration = notes.some((n, i) => !serialized[i].tokenAddress || serialized[i].decimals == null);
+    if (needsMigration) {
+      saveNotesToStorage(notes);
+      console.log('[ShieldedService] Migrated legacy notes to include token metadata');
+    }
+    
+    return notes;
   } catch {
     return [];
   }

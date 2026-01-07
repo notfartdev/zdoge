@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "build": "npm run clean && tsc --skipLibCheck",
-    "clean": "rm -rf dist 2>/dev/null || true",
+    "clean": "node -e \"const fs = require('fs'); const path = require('path'); const distPath = path.join(__dirname, 'dist'); if (fs.existsSync(distPath)) { fs.rmSync(distPath, { recursive: true, force: true }); }\"",
     "start": "node dist/index.js",
     "dev": "tsc --watch",
     "db:init": "node dist/database/init.js",

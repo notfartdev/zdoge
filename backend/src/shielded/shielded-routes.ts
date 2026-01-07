@@ -10,7 +10,7 @@
  */
 
 import { Router, type Request, type Response } from 'express';
-import { type Address, createPublicClient, createWalletClient, http } from 'viem';
+import { type Address, createPublicClient, createWalletClient, http, parseUnits } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import {
   getShieldedPool,
@@ -27,7 +27,33 @@ export const shieldedRouter = Router();
 
 // Relayer fee: 0.5% of withdrawal amount (configurable)
 const RELAYER_FEE_PERCENT = 0.5;
-const MIN_RELAYER_FEE = BigInt(0.001 * 1e18); // Minimum 0.001 DOGE
+// Minimum fee in human-readable form (will be converted to token base units)
+const MIN_RELAYER_FEE_HUMAN = '0.001'; // 0.001 tokens (DOGE, USDC, etc.)
+
+// Helper to get token decimals (defaults to 18 for native DOGE and most tokens)
+// For production, you might want to read this from the token contract
+function getTokenDecimals(tokenAddress: Address, isNative: boolean): number {
+  if (isNative) return 18; // Native DOGE uses 18 decimals
+  
+  // Token decimals mapping (should match frontend config)
+  // For now, all tokens on DogeOS testnet use 18 decimals
+  // If you have tokens with different decimals, add them here or read from contract
+  const tokenDecimalsMap: Record<string, number> = {
+    '0xD19d2Ffb1c284668b7AFe72cddae1BAF3Bc03925': 18, // USDC
+    '0xC81800b77D91391Ef03d7868cB81204E753093a9': 18, // USDT
+    '0x25D5E5375e01Ed39Dc856bDCA5040417fD45eA3F': 18, // USD1
+    '0x1a6094Ac3ca3Fc9F1B4777941a5f4AAc16A72000': 18, // WETH
+    '0x29789F5A3e4c3113e7165c33A7E3bc592CF6fE0E': 18, // LBTC
+  };
+  
+  return tokenDecimalsMap[tokenAddress.toLowerCase()] || 18;
+}
+
+// Get minimum fee in token base units
+function getMinRelayerFee(tokenAddress: Address, isNative: boolean): bigint {
+  const decimals = getTokenDecimals(tokenAddress, isNative);
+  return parseUnits(MIN_RELAYER_FEE_HUMAN, decimals);
+}
 
 // Initialize relayer wallet
 let relayerWallet: ReturnType<typeof createWalletClient> | null = null;
@@ -73,6 +99,29 @@ const ShieldedPoolABI = [
     ],
     outputs: [],
     stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    name: 'unshieldToken',
+    inputs: [
+      { name: '_proof', type: 'uint256[8]' },
+      { name: '_root', type: 'bytes32' },
+      { name: '_nullifierHash', type: 'bytes32' },
+      { name: '_recipient', type: 'address' },
+      { name: '_token', type: 'address' },
+      { name: '_amount', type: 'uint256' },
+      { name: '_relayer', type: 'address' },
+      { name: '_fee', type: 'uint256' },
+    ],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    name: 'supportedTokens',
+    inputs: [{ name: '_token', type: 'address' }],
+    outputs: [{ name: '', type: 'bool' }],
+    stateMutability: 'view',
   },
   {
     type: 'function',
@@ -296,7 +345,7 @@ shieldedRouter.get('/relay/info', async (req: Request, res: Response) => {
     address: relayerAddress || null,
     balance: relayerBalance,
     feePercent: RELAYER_FEE_PERCENT,
-    minFee: (Number(MIN_RELAYER_FEE) / 1e18).toString(),
+    minFee: MIN_RELAYER_FEE_HUMAN, // Human-readable form (0.001 tokens)
     supportedTokens: ['DOGE'], // Native DOGE for now
   });
 });
@@ -321,7 +370,33 @@ shieldedRouter.post('/relay/unshield', async (req: Request, res: Response) => {
     });
   }
   
-  const { poolAddress, proof, root, nullifierHash, recipient, amount, fee: requestFee } = req.body;
+  // Log the raw request body for debugging
+  console.log(`[ShieldedRelayer] Raw request body:`, {
+    poolAddress: req.body.poolAddress,
+    hasProof: !!req.body.proof,
+    proofLength: req.body.proof?.length,
+    root: req.body.root,
+    nullifierHash: req.body.nullifierHash,
+    recipient: req.body.recipient,
+    amount: req.body.amount,
+    fee: req.body.fee,
+    token: req.body.token,  // This is the critical field
+    tokenType: typeof req.body.token,
+    tokenIsUndefined: req.body.token === undefined,
+    tokenIsNull: req.body.token === null,
+    tokenIsEmpty: req.body.token === '',
+  });
+  
+  const { 
+    poolAddress, 
+    proof, 
+    root, 
+    nullifierHash, 
+    recipient, 
+    amount, 
+    fee: requestFee,
+    token  // Optional token address (undefined = native DOGE)
+  } = req.body;
   
   // Validate inputs
   if (!poolAddress || !proof || !root || !nullifierHash || !recipient || !amount) {
@@ -335,40 +410,80 @@ shieldedRouter.post('/relay/unshield', async (req: Request, res: Response) => {
     return res.status(400).json({ error: 'Proof must be array of 8 elements' });
   }
   
+  // Determine if native or ERC20 token
+  // Amount semantics: amount = recipient net amount (already has fee subtracted by frontend)
+  // Fee is separate parameter
+  const NATIVE_TOKEN = '0x0000000000000000000000000000000000000000';
+  
+  // Log the received token parameter for debugging
+  console.log(`[ShieldedRelayer] Received token parameter:`, token);
+  console.log(`[ShieldedRelayer] Token type check:`, {
+    token,
+    isUndefined: token === undefined,
+    isNull: token === null,
+    isEmpty: token === '',
+    isNativeToken: token === NATIVE_TOKEN,
+  });
+  
+  // Check if token is missing, null, empty string, or native token address
+  const isNative = !token || token === '' || token === NATIVE_TOKEN || token.toLowerCase() === NATIVE_TOKEN.toLowerCase();
+  const tokenAddress = isNative ? NATIVE_TOKEN : (token as Address);
+  
+  console.log(`[ShieldedRelayer] Token determination:`, {
+    isNative,
+    tokenAddress,
+    originalToken: token,
+  });
+  
   const amountBigInt = BigInt(amount);
   
-  // Use fee from request if provided (proof was generated with this fee!)
-  // Otherwise calculate (but this will likely fail proof verification)
+  // Use fee from request (proof was generated with this fee!)
+  // Amount is already net (recipient amount), fee is separate
   let fee: bigint;
   if (requestFee !== undefined && requestFee !== null) {
     fee = BigInt(requestFee);
-    console.log(`[ShieldedRelayer] Using fee from request: ${Number(fee) / 1e18} DOGE`);
   } else {
     // Fallback: calculate fee (may not match proof!)
     console.warn('[ShieldedRelayer] No fee in request, calculating (may cause InvalidProof!)');
     const feePercent = BigInt(Math.floor(RELAYER_FEE_PERCENT * 100));
     fee = (amountBigInt * feePercent) / 10000n;
-    if (fee < MIN_RELAYER_FEE) {
-      fee = MIN_RELAYER_FEE;
+    // Use token-aware minimum fee
+    const minFee = getMinRelayerFee(tokenAddress, isNative);
+    if (fee < minFee) {
+      fee = minFee;
     }
   }
   
-  // Ensure fee doesn't exceed amount
-  if (fee >= amountBigInt) {
+  // Validate: amount must be > 0 (recipient receives this)
+  if (amountBigInt <= 0n) {
     return res.status(400).json({ 
-      error: 'Amount too small',
-      message: `Minimum withdrawal is ${(Number(MIN_RELAYER_FEE) / 1e18 * 2).toFixed(4)} DOGE`,
+      error: 'Invalid amount',
+      message: 'Amount must be greater than zero',
     });
   }
   
-  const amountAfterFee = amountBigInt - fee;
+  // Validate: fee must be >= 0
+  if (fee < 0n) {
+    return res.status(400).json({ 
+      error: 'Invalid fee',
+      message: 'Fee cannot be negative',
+    });
+  }
+  
+  // Skip pre-validation for ERC20 tokens
+  // DogeOS RPC rejects readContract calls with authorizationList for view functions
+  // The contract will validate the token and revert with UnsupportedToken if invalid
+  // We already handle UnsupportedToken errors in the catch block below
+  if (!isNative) {
+    console.log(`[ShieldedRelayer] ERC20 token ${tokenAddress} - validation will be done by contract`);
+  }
   
   console.log(`[ShieldedRelayer] Processing unshield:`);
   console.log(`  Pool: ${poolAddress}`);
+  console.log(`  Token: ${isNative ? 'Native DOGE' : tokenAddress}`);
   console.log(`  Recipient: ${recipient}`);
-  console.log(`  Amount: ${Number(amountBigInt) / 1e18} DOGE`);
-  console.log(`  Fee: ${Number(fee) / 1e18} DOGE (${RELAYER_FEE_PERCENT}%)`);
-  console.log(`  After fee: ${Number(amountAfterFee) / 1e18} DOGE`);
+  console.log(`  Amount (recipient receives): ${amountBigInt.toString()}`);
+  console.log(`  Fee (relayer receives): ${fee.toString()}`);
   
   try {
     // Check relayer balance
@@ -384,23 +499,51 @@ shieldedRouter.post('/relay/unshield', async (req: Request, res: Response) => {
     // Convert proof strings to bigints
     const proofBigInts = proof.map((p: string) => BigInt(p)) as [bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint];
     
-    // Submit transaction
-    const txHash = await relayerWallet.writeContract({
-      chain: dogeosTestnet,
-      account: relayerAccount!,
-      address: poolAddress as Address,
-      abi: ShieldedPoolABI,
-      functionName: 'unshieldNative',
-      args: [
-        proofBigInts,
-        root as `0x${string}`,
-        nullifierHash as `0x${string}`,
-        recipient as Address,
-        amountBigInt,
-        relayerAddress!,
-        fee,
-      ],
-    });
+    // Submit transaction - route to correct function based on token type
+    // Amount semantics: amountBigInt = recipient net amount, fee = relayer fee
+    // Contract transfers: amount to recipient, fee to relayer
+    let txHash: `0x${string}`;
+    
+    if (isNative) {
+      // Native DOGE unshield
+      console.log(`[ShieldedRelayer] Calling unshieldNative()`);
+      txHash = await relayerWallet.writeContract({
+        chain: dogeosTestnet,
+        account: relayerAccount!,
+        address: poolAddress as Address,
+        abi: ShieldedPoolABI,
+        functionName: 'unshieldNative',
+        args: [
+          proofBigInts,
+          root as `0x${string}`,
+          nullifierHash as `0x${string}`,
+          recipient as Address,
+          amountBigInt,  // Recipient net amount
+          relayerAddress!,
+          fee,  // Relayer fee
+        ],
+      });
+    } else {
+      // ERC20 token unshield
+      console.log(`[ShieldedRelayer] Calling unshieldToken() for ${tokenAddress}`);
+      txHash = await relayerWallet.writeContract({
+        chain: dogeosTestnet,
+        account: relayerAccount!,
+        address: poolAddress as Address,
+        abi: ShieldedPoolABI,
+        functionName: 'unshieldToken',
+        args: [
+          proofBigInts,
+          root as `0x${string}`,
+          nullifierHash as `0x${string}`,
+          recipient as Address,
+          tokenAddress as Address,  // Token address parameter
+          amountBigInt,  // Recipient net amount
+          relayerAddress!,
+          fee,  // Relayer fee (paid in same token)
+        ],
+      });
+    }
     
     console.log(`[ShieldedRelayer] TX submitted: ${txHash}`);
     
@@ -425,8 +568,9 @@ shieldedRouter.post('/relay/unshield', async (req: Request, res: Response) => {
       txHash,
       blockNumber: Number(receipt.blockNumber),
       recipient,
-      amountReceived: amountAfterFee.toString(),
-      fee: fee.toString(),
+      token: tokenAddress,  // Token address (native = 0x0...0)
+      amountReceived: amountBigInt.toString(),  // Recipient net amount
+      fee: fee.toString(),  // Relayer fee
       relayer: relayerAddress,
     });
     
@@ -444,6 +588,12 @@ shieldedRouter.post('/relay/unshield', async (req: Request, res: Response) => {
     }
     if (errorMsg.includes('NullifierAlreadySpent') || errorMsg.includes('already spent')) {
       return res.status(400).json({ error: 'Already spent', message: 'This note has already been withdrawn' });
+    }
+    if (errorMsg.includes('UnsupportedToken')) {
+      return res.status(400).json({ 
+        error: 'Unsupported token', 
+        message: 'This token is not supported by the pool' 
+      });
     }
     if (errorMsg.includes('insufficient funds')) {
       return res.status(503).json({ error: 'Relayer out of gas', message: 'Please try again later' });

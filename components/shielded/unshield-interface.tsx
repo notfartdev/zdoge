@@ -14,11 +14,44 @@ import { addTransaction, initTransactionHistory } from "@/lib/shielded/transacti
 import { useWallet } from "@/lib/wallet-context"
 import { shieldedPool } from "@/lib/dogeos-config"
 import { getUSDValue, formatUSD } from "@/lib/price-service"
+import { parseUnits, formatUnits } from "viem"
+
+const NATIVE_TOKEN = '0x0000000000000000000000000000000000000000'
 import Link from "next/link"
 import { ShieldPlus } from "lucide-react"
 
 const SHIELDED_POOL_ADDRESS = shieldedPool.address
 const RELAYER_URL = process.env.NEXT_PUBLIC_INDEXER_URL || 'https://dogenadocash.onrender.com'
+
+// Helper to get token decimals
+function getTokenDecimals(tokenSymbol: string): number {
+  const token = shieldedPool.supportedTokens[tokenSymbol as keyof typeof shieldedPool.supportedTokens]
+  return token?.decimals || 18 // Default to 18 if not found
+}
+
+// Helper to get token metadata
+function getTokenMetadata(tokenSymbol: string): { symbol: string; address: `0x${string}`; decimals: number } {
+  const NATIVE_TOKEN = '0x0000000000000000000000000000000000000000' as `0x${string}`;
+  
+  if (tokenSymbol === 'DOGE') {
+    return {
+      symbol: 'DOGE',
+      address: NATIVE_TOKEN,
+      decimals: 18,
+    };
+  }
+  
+  const token = shieldedPool.supportedTokens[tokenSymbol as keyof typeof shieldedPool.supportedTokens];
+  if (!token) {
+    throw new Error(`Token ${tokenSymbol} not found in shieldedPool.supportedTokens`);
+  }
+  
+  return {
+    symbol: token.symbol,
+    address: token.address,
+    decimals: token.decimals,
+  };
+}
 
 interface RelayerInfo {
   available: boolean
@@ -61,11 +94,28 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
   const [consolidateTotalReceived, setConsolidateTotalReceived] = useState<number>(0)
   const [usdValue, setUsdValue] = useState<string | null>(null)
   
-  const spendableNotes = useMemo(() => 
-    notes.filter(n => n.leafIndex !== undefined && n.amount > 0n && (n.token || 'DOGE') === selectedToken)
-      .sort((a, b) => Number(b.amount - a.amount)),
-    [notes, selectedToken]
-  )
+  const spendableNotes = useMemo(() => {
+    // Get token metadata for filtering
+    const tokenMeta = getTokenMetadata(selectedToken)
+    
+    return notes
+      .filter(note => {
+        // Handle legacy notes (without tokenAddress/decimals)
+        if (!note.tokenAddress || note.decimals == null) {
+          // Legacy note: match by token symbol
+          // For USDC, check if note.token is 'USDC'
+          // For DOGE, check if note.token is 'DOGE' or missing
+          if (selectedToken === 'DOGE') {
+            return !note.token || note.token === 'DOGE'
+          }
+          return note.token === selectedToken
+        }
+        // Modern note: match by tokenAddress (more reliable)
+        return note.tokenAddress.toLowerCase() === tokenMeta.address.toLowerCase()
+      })
+      .filter(n => n.leafIndex !== undefined && n.amount > 0n)
+      .sort((a, b) => Number(b.amount - a.amount))
+  }, [notes, selectedToken])
   
   const totalBalance = useMemo(() => 
     spendableNotes.reduce((sum, n) => sum + n.amount, 0n),
@@ -77,22 +127,39 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
     [spendableNotes]
   )
   
-  const calculateFeeForNote = (amountWei: bigint): { fee: bigint; received: bigint } => {
+  // Get token decimals for fee calculation
+  const tokenDecimals = getTokenDecimals(selectedToken)
+  
+  const calculateFeeForNote = (amountWei: bigint): { fee: bigint; received: bigint; error?: string } => {
     if (!relayerInfo) return { fee: 0n, received: amountWei }
     const feePercent = BigInt(Math.floor(relayerInfo.feePercent * 100))
     let feeAmt = (amountWei * feePercent) / 10000n
-    const minFee = BigInt(Math.floor(parseFloat(relayerInfo.minFee) * 1e18))
+    // Convert minFee from human-readable to token base units using token decimals
+    const minFee = parseUnits(relayerInfo.minFee, tokenDecimals)
     if (feeAmt < minFee) feeAmt = minFee
-    if (amountWei <= feeAmt) return { fee: amountWei, received: 0n }
+    
+    // Check if note is too small to unshield (fee would exceed or equal note amount)
+    if (amountWei <= feeAmt) {
+      const noteAmountHuman = formatUnits(amountWei, tokenDecimals)
+      const feeAmountHuman = formatUnits(feeAmt, tokenDecimals)
+      return { 
+        fee: amountWei, 
+        received: 0n,
+        error: `Note too small to unshield. Note: ${noteAmountHuman} ${selectedToken}, Minimum fee: ${feeAmountHuman} ${selectedToken}`
+      }
+    }
     return { fee: feeAmt, received: amountWei - feeAmt }
   }
   
   const totalReceivableAfterFees = useMemo(() => {
     if (!relayerInfo) return totalBalance
     let total = 0n
+    // Filter out notes that are too small to unshield
     for (const note of spendableNotes) {
-      const { received } = calculateFeeForNote(note.amount)
-      total += received
+      const feeResult = calculateFeeForNote(note.amount)
+      if (!feeResult.error) {
+        total += feeResult.received
+      }
     }
     return total
   }, [spendableNotes, relayerInfo])
@@ -100,7 +167,7 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
   // Calculate USD value
   useEffect(() => {
     async function calculateUSD() {
-      const dogeAmount = formatWeiToAmount(totalReceivableAfterFees)
+      const dogeAmount = Number(formatUnits(totalReceivableAfterFees, tokenDecimals))
       try {
         const usd = await getUSDValue(dogeAmount, "DOGE")
         setUsdValue(formatUSD(usd))
@@ -139,30 +206,56 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
   
   const calculateMaxUnshieldable = (): bigint => {
     if (!largestNote || !relayerInfo) return 0n
-    const minFee = BigInt(Math.floor(parseFloat(relayerInfo.minFee) * 1e18))
+    // Use token decimals for minFee
+    const minFee = parseUnits(relayerInfo.minFee, tokenDecimals)
     if (largestNote.amount <= minFee) return 0n
-    const { received } = calculateFeeForNote(largestNote.amount)
-    return received
+    const feeResult = calculateFeeForNote(largestNote.amount)
+    if (feeResult.error) return 0n
+    return feeResult.received
   }
   
   const findBestNote = (requestedAmount: bigint): { note: ShieldedNote; noteIndex: number } | null => {
     if (!relayerInfo) return null
+    
+    // Get token metadata for filtering
+    const tokenMeta = getTokenMetadata(selectedToken)
+    
     const feePercent = BigInt(Math.floor(relayerInfo.feePercent * 100))
-    const minFee = BigInt(Math.floor(parseFloat(relayerInfo.minFee) * 1e18))
+    // Use token decimals for minFee
+    const minFee = parseUnits(relayerInfo.minFee, tokenDecimals)
     let requiredFee = (requestedAmount * feePercent) / 10000n
     if (requiredFee < minFee) requiredFee = minFee
     const requiredNoteAmount = requestedAmount + requiredFee
-    // Only use notes for the selected token
-    const freshNotes = getNotes().filter(n => 
-      n.leafIndex !== undefined && 
-      n.amount > 0n && 
-      (n.token || 'DOGE') === selectedToken
-    )
-    const sortedAsc = [...freshNotes].sort((a, b) => Number(a.amount - b.amount))
-    for (const note of sortedAsc) {
+    
+    // Get all notes and filter by token address (not just symbol)
+    const allNotes = getNotes()
+    const candidateNotes = allNotes
+      .map((note, originalIndex) => ({ note, originalIndex }))
+      .filter(({ note }) => {
+        // Filter by token address - handle missing tokenAddress (legacy notes)
+        if (!note.tokenAddress) {
+          // Legacy note: check if it's DOGE and selectedToken is DOGE
+          if (selectedToken === 'DOGE' && (!note.token || note.token === 'DOGE')) {
+            return true
+          }
+          return false
+        }
+        // Modern note: match by tokenAddress
+        return note.tokenAddress.toLowerCase() === tokenMeta.address.toLowerCase()
+      })
+      .filter(({ note }) => note.leafIndex !== undefined && note.amount > 0n)
+    
+    if (candidateNotes.length === 0) {
+      return null
+    }
+    
+    // Sort by amount ascending (smallest first that covers the amount)
+    const sortedCandidates = [...candidateNotes].sort((a, b) => Number(a.note.amount - b.note.amount))
+    
+    for (const { note, originalIndex } of sortedCandidates) {
       if (note.amount >= requiredNoteAmount) {
-        const actualIndex = freshNotes.findIndex(n => n.commitment === note.commitment)
-        return { note, noteIndex: actualIndex }
+        // Return the original index in allNotes array (not filtered array index)
+        return { note, noteIndex: originalIndex }
       }
     }
     return null
@@ -171,7 +264,8 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
   const parseInputAmount = (): bigint => {
     const amountNum = parseFloat(amount)
     if (isNaN(amountNum) || amountNum <= 0) return 0n
-    return BigInt(Math.floor(amountNum * 1e18))
+    // Use token decimals for parsing
+    return parseUnits(amountNum.toString(), tokenDecimals)
   }
   
   const getSelectedNoteInfo = () => {
@@ -217,7 +311,8 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
       n.amount > 0n && 
       (n.token || 'DOGE') === selectedToken
     )
-    const minFee = BigInt(Math.floor(parseFloat(relayerInfo.minFee) * 1e18))
+    // Use token decimals for minFee
+    const minFee = parseUnits(relayerInfo.minFee, tokenDecimals)
     const worthyNotes = freshNotes.filter(n => n.amount > minFee)
     if (worthyNotes.length === 0) {
       toast({ title: "No Notes to Consolidate", description: "All notes are too small (dust)", variant: "destructive" })
@@ -245,12 +340,19 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
         const noteIndex = currentNotes.findIndex(n => n.commitment === note.commitment)
         if (noteIndex === -1) continue
         
+        // Get token address for consolidation
+        const tokenAddress = selectedToken === 'DOGE' 
+          ? NATIVE_TOKEN
+          : shieldedPool.supportedTokens[selectedToken]?.address
+        
+        if (!tokenAddress && selectedToken !== 'DOGE') {
+          throw new Error(`Token ${selectedToken} not configured`)
+        }
+        
         // Check if note is already spent BEFORE generating proof
         const { fee: relayerFeeWei } = calculateFeeForNote(note.amount)
-        const relayerFeeDoge = Number(relayerFeeWei) / 1e18
-        
-        // Generate proof to get nullifierHash for checking
-        const proofResult = await prepareUnshield(wallet.address, noteIndex, SHIELDED_POOL_ADDRESS, relayerInfo?.address || undefined, relayerFeeDoge)
+        // Pass fee directly in wei to avoid precision loss during conversion
+        const proofResult = await prepareUnshield(wallet.address, noteIndex, SHIELDED_POOL_ADDRESS, relayerInfo?.address || undefined, 0, relayerFeeWei)
         
         // Check if nullifier is already spent
         const isSpent = await checkNullifierSpent(proofResult.nullifierHash)
@@ -273,8 +375,9 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
             root: proofResult.root,
             nullifierHash: proofResult.nullifierHash,
             recipient: wallet.address,
-            amount: proofResult.amount.toString(),
-            fee: relayerFeeWei.toString(),
+            amount: proofResult.amount.toString(),  // Recipient net amount
+            fee: relayerFeeWei.toString(),  // Relayer fee
+            token: tokenAddress,  // Token address (native = 0x0...0)
           }),
         })
         const data = await response.json()
@@ -290,7 +393,8 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
           throw new Error(data.message || data.error || 'Relayer failed')
         }
         txHashes.push(data.txHash)
-        totalReceived += Number(data.amountReceived) / 1e18
+        // Convert amountReceived from token base units to human-readable using token decimals
+        totalReceived += Number(formatUnits(BigInt(data.amountReceived), tokenDecimals))
         completeUnshield(noteIndex)
         
         // Add to transaction history
@@ -298,11 +402,11 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
           type: 'unshield',
           txHash: data.txHash,
           timestamp: Math.floor(Date.now() / 1000),
-          token: 'DOGE',
-          amount: (Number(data.amountReceived) / 1e18).toFixed(4),
+          token: selectedToken,
+          amount: formatUnits(BigInt(data.amountReceived), tokenDecimals),
           amountWei: data.amountReceived,
           recipientPublicAddress: wallet.address,
-          relayerFee: (Number(relayerFeeWei) / 1e18).toFixed(4),
+          relayerFee: formatUnits(relayerFeeWei, tokenDecimals),
           status: 'confirmed',
         })
         
@@ -370,32 +474,109 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
       return
     }
     const { note: selectedNote, noteIndex: actualNoteIndex } = result
+    
+    // Check if note is too small to unshield
+    const feeCheck = calculateFeeForNote(selectedNote.amount)
+    if (feeCheck.error) {
+      toast({
+        title: "Note Too Small",
+        description: feeCheck.error,
+        variant: "destructive",
+      })
+      return
+    }
+    
     try {
       setStatus("proving")
-      const { fee: relayerFeeWei } = calculateFeeForNote(selectedNote.amount)
-      const relayerFeeDoge = Number(relayerFeeWei) / 1e18
-      const proofResult = await prepareUnshield(recipientAddress, actualNoteIndex, SHIELDED_POOL_ADDRESS, relayerInfo?.address || undefined, relayerFeeDoge)
+      const { fee: relayerFeeWei } = feeCheck
+      // Pass fee directly in wei to avoid precision loss during conversion
+      // All tokens on DogeOS testnet use 18 decimals, so this works for all tokens
+      const proofResult = await prepareUnshield(recipientAddress, actualNoteIndex, SHIELDED_POOL_ADDRESS, relayerInfo?.address || undefined, 0, relayerFeeWei)
+      
+      // Get token address for the request
+      const tokenAddress = selectedToken === 'DOGE' 
+        ? NATIVE_TOKEN
+        : shieldedPool.supportedTokens[selectedToken]?.address
+      
+      // Log for debugging
+      console.log(`[Unshield] Token selection:`, {
+        selectedToken,
+        tokenAddress,
+        isNative: selectedToken === 'DOGE',
+        supportedTokens: Object.keys(shieldedPool.supportedTokens),
+        tokenConfig: shieldedPool.supportedTokens[selectedToken],
+      })
+      
+      if (!tokenAddress && selectedToken !== 'DOGE') {
+        console.error(`[Unshield] Token ${selectedToken} not found in config:`, shieldedPool.supportedTokens)
+        throw new Error(`Token ${selectedToken} not configured`)
+      }
+      
+      // Validate token address format
+      if (tokenAddress && !tokenAddress.startsWith('0x')) {
+        console.error(`[Unshield] Invalid token address format:`, tokenAddress)
+        throw new Error(`Invalid token address format for ${selectedToken}`)
+      }
+      
       setStatus("relaying")
+      
+      // Prepare request body - ALWAYS include token parameter
+      // This is critical: backend uses token parameter to determine which function to call
+      const requestBody = {
+        poolAddress: SHIELDED_POOL_ADDRESS,
+        proof: proofResult.proof.proof,
+        root: proofResult.root,
+        nullifierHash: proofResult.nullifierHash,
+        recipient: recipientAddress,
+        amount: proofResult.amount.toString(),  // Recipient net amount
+        fee: relayerFeeWei.toString(),  // Relayer fee
+        token: tokenAddress || NATIVE_TOKEN,  // Token address - ALWAYS include (native = 0x0...0)
+      }
+      
+      // Validate token address is set
+      if (!requestBody.token) {
+        console.error(`[Unshield] CRITICAL: token address is missing!`, {
+          selectedToken,
+          tokenAddress,
+          supportedTokens: Object.keys(shieldedPool.supportedTokens),
+        })
+        throw new Error(`Token address is missing for ${selectedToken}`)
+      }
+      
+      // Log the exact request being sent - EXPANDED to show full token info
+      console.log(`[Unshield] Sending request to relayer:`, {
+        poolAddress: requestBody.poolAddress,
+        proof: `[${requestBody.proof.length} elements]`, // Don't log full proof
+        root: requestBody.root,
+        nullifierHash: requestBody.nullifierHash,
+        recipient: requestBody.recipient,
+        amount: requestBody.amount,
+        fee: requestBody.fee,
+        token: requestBody.token,  // CRITICAL: This must be the USDC address for USDC unshield
+        tokenType: requestBody.token === NATIVE_TOKEN ? 'NATIVE' : 'ERC20',
+        selectedToken,
+        expectedToken: selectedToken === 'DOGE' ? NATIVE_TOKEN : shieldedPool.supportedTokens[selectedToken]?.address,
+      })
+      
+      // Also log the FULL request body as JSON to verify token is included
+      console.log(`[Unshield] FULL REQUEST BODY (JSON):`, JSON.stringify({
+        ...requestBody,
+        proof: `[${requestBody.proof.length} elements]`, // Don't log full proof array
+      }, null, 2))
+      
       const response = await fetch(`${RELAYER_URL}/api/shielded/relay/unshield`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          poolAddress: SHIELDED_POOL_ADDRESS,
-          proof: proofResult.proof.proof,
-          root: proofResult.root,
-          nullifierHash: proofResult.nullifierHash,
-          recipient: recipientAddress,
-          amount: proofResult.amount.toString(),
-          fee: relayerFeeWei.toString(),
-        }),
+        body: JSON.stringify(requestBody),
       })
       const data = await response.json()
       if (!response.ok) throw new Error(data.message || data.error || 'Relayer failed')
       setTxHash(data.txHash)
-      const receivedAmount = (Number(data.amountReceived) / 1e18).toFixed(4)
-      const feeAmount = (Number(data.fee) / 1e18).toFixed(4)
-      setWithdrawnAmount(receivedAmount)
-      setFee(feeAmount)
+      // Convert from token base units to human-readable using token decimals
+      const receivedAmount = formatUnits(BigInt(data.amountReceived), tokenDecimals)
+      const feeAmount = formatUnits(BigInt(data.fee), tokenDecimals)
+      setWithdrawnAmount(Number(receivedAmount).toFixed(4))
+      setFee(Number(feeAmount).toFixed(4))
       completeUnshield(actualNoteIndex)
       
       // Add to transaction history
@@ -414,6 +595,12 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
       setStatus("success")
       // Don't show toast - the green success UI box will show instead
       onSuccess?.()
+      
+      // Trigger balance refresh after a delay to allow transaction confirmation
+      setTimeout(() => {
+        // Dispatch custom event to trigger balance refresh
+        window.dispatchEvent(new Event('refresh-balance'))
+      }, 3000)
     } catch (error: any) {
       setStatus("error")
       
@@ -459,14 +646,31 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
   const handleSetMax = () => {
     const maxReceivable = calculateMaxUnshieldable()
     if (maxReceivable > 0n) {
-      const maxDoge = Math.floor(formatWeiToAmount(maxReceivable) * 10000) / 10000
-      setAmount(maxDoge.toFixed(4))
+      // Convert from token base units to human-readable using token decimals
+      const maxAmount = formatUnits(maxReceivable, tokenDecimals)
+      setAmount(Number(maxAmount).toFixed(4))
     }
   }
   
   // Don't return early if we're showing success state (even if no notes left)
   if (spendableNotes.length === 0 && status !== "success") {
-    return null
+    return (
+      <div className="space-y-4">
+        <div>
+          <h3 className="text-lg font-display font-medium">Send to Public Address</h3>
+          <p className="text-sm font-body text-muted-foreground">Unshield your shielded {selectedToken} to any public wallet address</p>
+        </div>
+        <div className="p-8 rounded-lg bg-muted/30 border border-muted text-center">
+          <ShieldOff className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
+          <p className="text-sm font-body text-muted-foreground">
+            No shielded {selectedToken} balance available
+          </p>
+          <p className="text-xs font-body text-muted-foreground/70 mt-2">
+            Shield some {selectedToken} first to enable unshielding
+          </p>
+        </div>
+      </div>
+    )
   }
   
   const selectedInfo = getSelectedNoteInfo()
@@ -476,7 +680,7 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
     <div className="space-y-4">
       <div>
         <h3 className="text-lg font-display font-medium">Send to Public Address</h3>
-        <p className="text-sm font-body text-muted-foreground">Unshield your shielded DOGE to any public wallet address</p>
+        <p className="text-sm font-body text-muted-foreground">Unshield your shielded {selectedToken} to any public wallet address</p>
       </div>
       
       <div className="p-4 rounded-lg bg-gradient-to-r from-primary/10 to-transparent border">
@@ -486,13 +690,13 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
             <span className="font-medium">Available to Unshield</span>
           </div>
           <div className="text-right">
-            <div className="text-xl font-mono font-bold tracking-[-0.01em]">{formatWeiToAmount(totalBalance).toFixed(4)} <span className="font-body text-sm text-white/70">DOGE</span></div>
+            <div className="text-xl font-mono font-bold tracking-[-0.01em]">{formatUnits(totalBalance, tokenDecimals)} <span className="font-body text-sm text-white/70">{selectedToken}</span></div>
           </div>
         </div>
         {largestNote && (
           <div className="mt-2 pt-2 border-t border-muted text-xs text-muted-foreground">
             <Info className="h-3 w-3 inline mr-1" />
-            Max single unshield: {formatWeiToAmount(largestNote.amount).toFixed(4)} DOGE
+            Max single unshield: {formatUnits(largestNote.amount, tokenDecimals)} {selectedToken}
           </div>
         )}
       </div>
@@ -519,7 +723,7 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
                   <>
                     <div className="flex items-center gap-2">
                       <span className="text-muted-foreground">You'll receive:</span>
-                      <span className="font-medium text-green-500">~{formatWeiToAmount(totalReceivableAfterFees).toFixed(4)} {selectedToken}</span>
+                      <span className="font-medium text-green-500">~{formatUnits(totalReceivableAfterFees, tokenDecimals)} {selectedToken}</span>
                     </div>
                     {usdValue && (
                       <div className="text-muted-foreground mt-1">
@@ -567,7 +771,7 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
             <div className="flex items-center justify-between">
               <Label htmlFor="amount">Amount to Unshield</Label>
               <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={handleSetMax}>
-                Max: {formatWeiToAmount(calculateMaxUnshieldable()).toFixed(4)}
+                Max: {formatUnits(calculateMaxUnshieldable(), tokenDecimals)}
               </Button>
             </div>
             <Input id="amount" type="number" placeholder="Enter amount" value={amount} onChange={(e) => setAmount(e.target.value)} />
@@ -586,10 +790,10 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
                 <div className="text-sm text-red-500 flex items-center gap-2"><AlertCircle className="h-4 w-4" />{selectedInfo.error}</div>
               ) : selectedInfo ? (
                 <>
-                  <div className="flex justify-between text-sm"><span className="text-muted-foreground">Using note:</span><span>#{selectedInfo.note.leafIndex} ({formatWeiToAmount(selectedInfo.noteAmount).toFixed(4)} DOGE)</span></div>
-                  <div className="flex justify-between text-sm"><span className="text-muted-foreground">Relayer fee:</span><span className="text-orange-500">-{formatWeiToAmount(selectedInfo.fee).toFixed(4)} DOGE</span></div>
-                  <div className="flex justify-between text-sm font-medium border-t pt-1 mt-1"><span>You receive:</span><span className="text-green-500">{amount} DOGE</span></div>
-                  {selectedInfo.change > 0n && <div className="flex justify-between text-xs text-muted-foreground"><span>Remaining:</span><span>{formatWeiToAmount(selectedInfo.change).toFixed(4)} DOGE</span></div>}
+                  <div className="flex justify-between text-sm"><span className="text-muted-foreground">Using note:</span><span>#{selectedInfo.note.leafIndex} ({formatUnits(selectedInfo.noteAmount, tokenDecimals)} {selectedToken})</span></div>
+                  <div className="flex justify-between text-sm"><span className="text-muted-foreground">Relayer fee:</span><span className="text-orange-500">-{formatUnits(selectedInfo.fee, tokenDecimals)} {selectedToken}</span></div>
+                  <div className="flex justify-between text-sm font-medium border-t pt-1 mt-1"><span>You receive:</span><span className="text-green-500">{amount} {selectedToken}</span></div>
+                  {selectedInfo.change > 0n && <div className="flex justify-between text-xs text-muted-foreground"><span>Remaining:</span><span>{formatUnits(selectedInfo.change, tokenDecimals)} {selectedToken}</span></div>}
                   <div className="flex justify-between text-xs text-muted-foreground"><span>Gas you pay:</span><span className="text-primary">0 ✓</span></div>
                 </>
               ) : null}
