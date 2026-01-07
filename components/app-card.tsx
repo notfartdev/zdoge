@@ -44,7 +44,7 @@ function AppCardContent() {
   }
 
   return (
-    <Card className="p-6 sm:p-8 bg-white/[0.03] border border-white/15 backdrop-blur-sm rounded-2xl shadow-xl relative" style={{ 
+    <Card className="p-4 sm:p-6 md:p-8 bg-white/[0.03] border border-white/15 backdrop-blur-sm rounded-2xl shadow-xl relative" style={{ 
       boxShadow: '0 20px 60px -15px rgba(194, 166, 51, 0.08), 0 0 0 1px rgba(194, 166, 51, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.05)',
     }}>
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
@@ -52,42 +52,42 @@ function AppCardContent() {
         <TabsList className="w-full grid grid-cols-3 sm:grid-cols-6 p-1 h-auto bg-transparent border-0 rounded-2xl mb-6 overflow-x-auto gap-1 app-tabs-list">
           <TabsTrigger
             value="shield"
-            className="flex-1 flex items-center justify-center py-3 sm:py-4 rounded-xl transition-all duration-300 hover:opacity-80 data-[state=active]:text-[#C2A633] data-[state=inactive]:opacity-50 data-[state=inactive]:text-white/60 app-tab-trigger"
+            className="flex-1 flex items-center justify-center py-3.5 sm:py-4 rounded-xl transition-all duration-300 hover:opacity-80 data-[state=active]:text-[#C2A633] data-[state=inactive]:opacity-50 data-[state=inactive]:text-white/60 app-tab-trigger min-h-[44px] sm:min-h-0"
             title="Shield"
           >
             <Shield className="w-7 h-7 sm:w-8 sm:h-8" strokeWidth={1.5} />
           </TabsTrigger>
           <TabsTrigger
             value="send"
-            className="flex-1 flex items-center justify-center py-3 sm:py-4 rounded-xl transition-all duration-300 hover:opacity-80 data-[state=active]:text-[#C2A633] data-[state=inactive]:opacity-50 data-[state=inactive]:text-white/60 app-tab-trigger"
+            className="flex-1 flex items-center justify-center py-3.5 sm:py-4 rounded-xl transition-all duration-300 hover:opacity-80 data-[state=active]:text-[#C2A633] data-[state=inactive]:opacity-50 data-[state=inactive]:text-white/60 app-tab-trigger min-h-[44px] sm:min-h-0"
             title="Send"
           >
             <Send className="w-7 h-7 sm:w-8 sm:h-8" strokeWidth={1.5} />
           </TabsTrigger>
           <TabsTrigger
             value="swap"
-            className="flex-1 flex items-center justify-center py-3 sm:py-4 rounded-xl transition-all duration-300 hover:opacity-80 data-[state=active]:text-[#C2A633] data-[state=inactive]:opacity-50 data-[state=inactive]:text-white/60 app-tab-trigger"
+            className="flex-1 flex items-center justify-center py-3.5 sm:py-4 rounded-xl transition-all duration-300 hover:opacity-80 data-[state=active]:text-[#C2A633] data-[state=inactive]:opacity-50 data-[state=inactive]:text-white/60 app-tab-trigger min-h-[44px] sm:min-h-0"
             title="Swap"
           >
             <ArrowLeftRight className="w-7 h-7 sm:w-8 sm:h-8" strokeWidth={1.5} />
           </TabsTrigger>
           <TabsTrigger
             value="unshield"
-            className="flex-1 flex items-center justify-center py-3 sm:py-4 rounded-xl transition-all duration-300 hover:opacity-80 data-[state=active]:text-[#C2A633] data-[state=inactive]:opacity-50 data-[state=inactive]:text-white/60 app-tab-trigger"
+            className="flex-1 flex items-center justify-center py-3.5 sm:py-4 rounded-xl transition-all duration-300 hover:opacity-80 data-[state=active]:text-[#C2A633] data-[state=inactive]:opacity-50 data-[state=inactive]:text-white/60 app-tab-trigger min-h-[44px] sm:min-h-0"
             title="Unshield"
           >
             <ShieldOff className="w-7 h-7 sm:w-8 sm:h-8" strokeWidth={1.5} />
           </TabsTrigger>
           <TabsTrigger
             value="receive"
-            className="flex-1 flex items-center justify-center py-3 sm:py-4 rounded-xl transition-all duration-300 hover:opacity-80 data-[state=active]:text-[#C2A633] data-[state=inactive]:opacity-50 data-[state=inactive]:text-white/60 app-tab-trigger"
+            className="flex-1 flex items-center justify-center py-3.5 sm:py-4 rounded-xl transition-all duration-300 hover:opacity-80 data-[state=active]:text-[#C2A633] data-[state=inactive]:opacity-50 data-[state=inactive]:text-white/60 app-tab-trigger min-h-[44px] sm:min-h-0"
             title="Receive"
           >
             <QrCode className="w-7 h-7 sm:w-8 sm:h-8" strokeWidth={1.5} />
           </TabsTrigger>
           <TabsTrigger
             value="activity"
-            className="flex-1 flex items-center justify-center py-3 sm:py-4 rounded-xl transition-all duration-300 hover:opacity-80 data-[state=active]:text-[#C2A633] data-[state=inactive]:opacity-50 data-[state=inactive]:text-white/60 app-tab-trigger"
+            className="flex-1 flex items-center justify-center py-3.5 sm:py-4 rounded-xl transition-all duration-300 hover:opacity-80 data-[state=active]:text-[#C2A633] data-[state=inactive]:opacity-50 data-[state=inactive]:text-white/60 app-tab-trigger min-h-[44px] sm:min-h-0"
             title="Activity"
           >
             <Activity className="w-7 h-7 sm:w-8 sm:h-8" strokeWidth={1.5} />

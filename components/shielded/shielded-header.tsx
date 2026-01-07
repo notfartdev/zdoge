@@ -338,10 +338,10 @@ export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", onTokenC
   return (
     <Card className={`${compact ? 'p-4' : 'p-6'} mb-6 bg-card/50 backdrop-blur border-primary/20`}>
       
-      <div className={`grid grid-cols-1 md:grid-cols-2 gap-3 ${compact ? '' : 'mb-4'}`}>
-        <div className={`${compact ? 'p-3' : 'p-4'} rounded-lg bg-muted/30 border`}>
-          <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.14em] text-white/60 mb-1">
-            <Wallet className="h-3.5 w-3.5 opacity-85" strokeWidth={1.75} />
+      <div className={`grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 ${compact ? '' : 'mb-4'}`}>
+        <div className={`${compact ? 'p-3 sm:p-4' : 'p-4 sm:p-5'} rounded-lg bg-muted/30 border`}>
+          <div className="flex items-center gap-2 font-mono text-[11px] sm:text-[10px] uppercase tracking-[0.14em] text-white/60 mb-1.5 sm:mb-1">
+            <Wallet className="h-3.5 w-3.5 sm:h-3 w-3 opacity-85" strokeWidth={1.75} />
             Public Balance
           </div>
           {onTokenChange ? (
@@ -352,10 +352,10 @@ export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", onTokenC
                     <img 
                       src={tokenConfig.logo} 
                       alt={selectedToken} 
-                      className={`${compact ? 'w-5 h-5' : 'w-6 h-6'} rounded-full`}
+                      className={`${compact ? 'w-5 h-5' : 'w-6 h-6 sm:w-7 sm:h-7'} rounded-full flex-shrink-0`}
                     />
-                    <span className={`${compact ? 'text-lg' : 'text-2xl'} font-mono font-bold tracking-[-0.01em]`}>{publicBalance}</span>
-                    <span className="font-body text-sm text-white/70">{selectedToken}</span>
+                    <span className={`${compact ? 'text-lg sm:text-xl' : 'text-xl sm:text-2xl'} font-mono font-bold tracking-[-0.01em] break-words`}>{publicBalance}</span>
+                    <span className="font-body text-sm sm:text-base text-white/70 flex-shrink-0">{selectedToken}</span>
                   </div>
                 </SelectValue>
               </SelectTrigger>
@@ -375,33 +375,33 @@ export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", onTokenC
               </SelectContent>
             </Select>
           ) : (
-            <div className={`${compact ? 'text-lg' : 'text-2xl'} font-bold flex items-center gap-2`}>
+            <div className={`${compact ? 'text-lg sm:text-xl' : 'text-xl sm:text-2xl'} font-bold flex items-center gap-2 flex-wrap`}>
               <img 
                 src={tokenConfig.logo} 
                 alt={selectedToken} 
-                className={`${compact ? 'w-5 h-5' : 'w-6 h-6'} rounded-full`}
+                className={`${compact ? 'w-5 h-5' : 'w-6 h-6 sm:w-7 sm:h-7'} rounded-full flex-shrink-0`}
               />
-              {publicBalance} {selectedToken}
+              <span className="break-words">{publicBalance}</span> <span className="flex-shrink-0">{selectedToken}</span>
             </div>
           )}
           {!compact && <div className="text-xs font-body text-white/60">Available to shield</div>}
         </div>
         
-        <div className={`${compact ? 'p-3' : 'p-4'} rounded-lg bg-primary/5 border border-primary/20`}>
-          <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.14em] text-white/60 mb-1">
-            <Lock className="h-3.5 w-3.5 opacity-85" strokeWidth={1.75} />
+        <div className={`${compact ? 'p-3 sm:p-4' : 'p-4 sm:p-5'} rounded-lg bg-primary/5 border border-primary/20`}>
+          <div className="flex items-center gap-2 font-mono text-[11px] sm:text-[10px] uppercase tracking-[0.14em] text-white/60 mb-1.5 sm:mb-1">
+            <Lock className="h-3.5 w-3.5 sm:h-3 w-3 opacity-85" strokeWidth={1.75} />
             Shielded Balance
           </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <img 
                 src={tokenConfig.logo} 
                 alt={selectedToken} 
-                className={`${compact ? 'w-5 h-5' : 'w-6 h-6'} rounded-full`}
+                className={`${compact ? 'w-5 h-5' : 'w-6 h-6 sm:w-7 sm:h-7'} rounded-full flex-shrink-0`}
               />
-              <span className="font-body text-sm text-white/70">{selectedToken}</span>
-              <span className={`ml-auto ${compact ? 'text-lg' : 'text-2xl'} font-mono font-bold tracking-[-0.01em]`}>{formatWeiToAmount(shieldedBalance[selectedToken] || 0n).toFixed(4)}</span>
+              <span className="font-body text-sm sm:text-base text-white/70 flex-shrink-0">{selectedToken}</span>
+              <span className={`ml-auto ${compact ? 'text-lg sm:text-xl' : 'text-xl sm:text-2xl'} font-mono font-bold tracking-[-0.01em] break-words`}>{formatWeiToAmount(shieldedBalance[selectedToken] || 0n).toFixed(4)}</span>
             </div>
-          {!compact && <div className="text-xs font-body text-white/60">Private balance</div>}
+          {!compact && <div className="text-xs font-body text-white/60 mt-1">Private balance</div>}
         </div>
       </div>
       

@@ -307,3 +307,41 @@ html {
 .animate-marquee-right {
   animation: marquee-right 50s linear infinite;
 }
+
+/* Mobile optimizations */
+@media (max-width: 640px) {
+  /* Prevent text zoom on iOS inputs */
+  input[type="number"],
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+  
+  /* Ensure touch targets are at least 44x44px */
+  button,
+  a,
+  [role="button"],
+  input[type="submit"],
+  input[type="button"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  
+  /* Improve text readability on mobile */
+  body {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+  
+  /* Better spacing for mobile */
+  .space-y-4 > * + * {
+    margin-top: 1rem;
+  }
+  
+  .space-y-6 > * + * {
+    margin-top: 1.25rem;
+  }
+}

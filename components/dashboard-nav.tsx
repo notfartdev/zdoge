@@ -72,7 +72,7 @@ export function DashboardNav() {
           <div className="lg:hidden ml-auto">
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="p-2 text-gray-400 hover:text-white transition-colors"
+              className="p-2.5 min-w-[44px] min-h-[44px] flex items-center justify-center text-gray-400 hover:text-white transition-colors"
               aria-label="Toggle menu"
             >
               {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
@@ -94,7 +94,7 @@ export function DashboardNav() {
                   key={link.href}
                   href={link.href}
                   onClick={() => setMobileMenuOpen(false)}
-                  className={`font-body text-sm tracking-[0.08em] uppercase transition-all duration-300 flex items-center gap-3 py-3 px-4 rounded ${
+                  className={`font-body text-base sm:text-sm tracking-[0.08em] uppercase transition-all duration-300 flex items-center gap-3 py-3.5 px-4 rounded min-h-[44px] ${
                     isActive 
                       ? "bg-[#C2A633] text-black font-bold" 
                       : "text-gray-400 hover:text-white hover:bg-white/5"
