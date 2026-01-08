@@ -15,6 +15,7 @@ import { createSecureWallet, createErrorResponse, getSecurityWarnings } from './
 import { getMetrics, recordTransaction, updateRelayerBalance } from './utils/monitoring.js';
 import { getEndpointStatus } from './utils/rpc-fallback.js';
 import { initStorage } from './database/storage.js';
+import * as db from './database/db.js';
 import { shieldedRouter } from './shielded/shielded-routes.js';
 import { initializeShieldedPool, syncShieldedPool, watchShieldedPool, } from './shielded/shielded-indexer.js';
 console.log(`
@@ -35,22 +36,27 @@ console.log(`
 const app = express();
 // CORS configuration - allow frontend domains
 const allowedOrigins = [
-    'https://dogenado.cash',
-    'https://www.dogenado.cash',
+    'https://zdoge.cash',
+    'https://www.zdoge.cash',
     'http://localhost:3000', // Development
     'http://localhost:3001', // Development
 ];
+// Allow all Vercel preview URLs
+const isVercelPreview = (origin) => origin.includes('.vercel.app') ||
+    origin.includes('vercel.app');
 app.use(cors({
     origin: (origin, callback) => {
         // Allow requests with no origin (like mobile apps or curl)
         if (!origin)
             return callback(null, true);
-        if (allowedOrigins.includes(origin)) {
+        // Allow all listed origins and Vercel previews
+        if (allowedOrigins.includes(origin) || isVercelPreview(origin)) {
             callback(null, true);
         }
         else {
-            console.warn(`[CORS] Blocked request from: ${origin}`);
-            callback(null, true); // Still allow for now, just log
+            // Still allow but log for monitoring
+            console.log(`[CORS] Allowing unlisted origin: ${origin}`);
+            callback(null, true);
         }
     },
     credentials: true,
@@ -955,6 +961,210 @@ app.get('/api/network', apiLimiter, (req, res) => {
         tokens: config.tokens,
     });
 });
+// ============ Temporary Migration Endpoint ============
+// TODO: Remove this endpoint after migration is complete
+app.post('/api/admin/migrate-shielded-transactions', apiLimiter, async (req, res) => {
+    try {
+        if (!db.isDatabaseAvailable()) {
+            return res.status(503).json({ error: 'Database not available' });
+        }
+        console.log('[Migration] Running shielded_transactions table migration...');
+        // Create table
+        await db.query(`
+      CREATE TABLE IF NOT EXISTS shielded_transactions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        wallet_address VARCHAR(42) NOT NULL,
+        tx_id VARCHAR(128) NOT NULL,
+        tx_type VARCHAR(20) NOT NULL,
+        tx_hash VARCHAR(66) NOT NULL,
+        timestamp BIGINT NOT NULL,
+        token VARCHAR(20) NOT NULL,
+        amount TEXT NOT NULL,
+        amount_wei TEXT NOT NULL,
+        status VARCHAR(20) NOT NULL DEFAULT 'pending',
+        block_number INTEGER,
+        transaction_data JSONB,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        UNIQUE(wallet_address, tx_id)
+      );
+    `);
+        // Create indexes
+        await db.query(`CREATE INDEX IF NOT EXISTS idx_shielded_tx_wallet ON shielded_transactions(wallet_address);`);
+        await db.query(`CREATE INDEX IF NOT EXISTS idx_shielded_tx_type ON shielded_transactions(tx_type);`);
+        await db.query(`CREATE INDEX IF NOT EXISTS idx_shielded_tx_timestamp ON shielded_transactions(timestamp DESC);`);
+        await db.query(`CREATE INDEX IF NOT EXISTS idx_shielded_tx_status ON shielded_transactions(status);`);
+        await db.query(`CREATE INDEX IF NOT EXISTS idx_shielded_tx_hash ON shielded_transactions(tx_hash);`);
+        // Create trigger function if it doesn't exist
+        await db.query(`
+      CREATE OR REPLACE FUNCTION update_updated_at_column()
+      RETURNS TRIGGER AS $$
+      BEGIN
+        NEW.updated_at = NOW();
+        RETURN NEW;
+      END;
+      $$ language 'plpgsql';
+    `);
+        // Create trigger
+        await db.query(`
+      DROP TRIGGER IF EXISTS update_shielded_transactions_updated_at ON shielded_transactions;
+      CREATE TRIGGER update_shielded_transactions_updated_at
+        BEFORE UPDATE ON shielded_transactions
+        FOR EACH ROW 
+        EXECUTE FUNCTION update_updated_at_column();
+    `);
+        // Verify
+        const result = await db.query(`
+      SELECT table_name 
+      FROM information_schema.tables 
+      WHERE table_schema = 'public' 
+      AND table_name = 'shielded_transactions'
+    `);
+        if (result.rows.length > 0) {
+            console.log('[Migration] ✅ shielded_transactions table created successfully');
+            res.json({
+                success: true,
+                message: 'Migration complete. shielded_transactions table created.',
+                tableExists: true
+            });
+        }
+        else {
+            res.status(500).json({ error: 'Table creation failed verification' });
+        }
+    }
+    catch (error) {
+        console.error('[Migration] Error:', error.message);
+        res.status(500).json({ error: error.message });
+    }
+});
+// ============ Shielded Transaction History Routes ============
+// Get shielded transactions for a wallet
+app.get('/api/wallet/:address/shielded-transactions', apiLimiter, async (req, res) => {
+    const walletAddress = req.params.address.toLowerCase();
+    const limit = parseInt(req.query.limit) || 500;
+    try {
+        if (db.isDatabaseAvailable()) {
+            const transactions = await db.getShieldedTransactionsForWallet(walletAddress, limit);
+            res.json({
+                wallet: walletAddress,
+                count: transactions.length,
+                transactions: transactions.map(tx => ({
+                    id: tx.tx_id,
+                    type: tx.tx_type,
+                    txHash: tx.tx_hash,
+                    timestamp: tx.timestamp,
+                    token: tx.token,
+                    amount: tx.amount,
+                    amountWei: tx.amount_wei,
+                    status: tx.status,
+                    blockNumber: tx.block_number,
+                    ...tx.transaction_data, // Spread flexible fields
+                })),
+            });
+        }
+        else {
+            // Database not available - return empty
+            res.json({
+                wallet: walletAddress,
+                count: 0,
+                transactions: [],
+            });
+        }
+    }
+    catch (error) {
+        console.error('[API] Error fetching shielded transactions:', error.message);
+        res.status(500).json({ error: error.message });
+    }
+});
+// Sync shielded transactions (upsert)
+app.post('/api/wallet/:address/shielded-transactions', apiLimiter, async (req, res) => {
+    const walletAddress = req.params.address.toLowerCase();
+    const transactions = req.body.transactions || [];
+    if (!Array.isArray(transactions)) {
+        return res.status(400).json({ error: 'transactions must be an array' });
+    }
+    try {
+        if (db.isDatabaseAvailable()) {
+            // Transform frontend format to database format
+            const dbTransactions = transactions.map((tx) => {
+                const txId = `${tx.txHash}-${tx.type}`;
+                // Calculate amountWei if not provided (convert from amount string)
+                let amountWei = tx.amountWei;
+                if (!amountWei && tx.amount) {
+                    // Try to parse amount and convert to wei (assuming 18 decimals for most tokens)
+                    try {
+                        const amountNum = parseFloat(tx.amount);
+                        amountWei = Math.floor(amountNum * 1e18).toString();
+                    }
+                    catch (e) {
+                        console.warn(`[API] Could not calculate amountWei for tx ${txId}, using 0`);
+                        amountWei = '0';
+                    }
+                }
+                if (!amountWei) {
+                    amountWei = '0';
+                }
+                // Extract flexible fields into transaction_data
+                const transactionData = {};
+                if (tx.commitment)
+                    transactionData.commitment = tx.commitment;
+                if (tx.leafIndex !== undefined)
+                    transactionData.leafIndex = tx.leafIndex;
+                if (tx.recipientAddress)
+                    transactionData.recipientAddress = tx.recipientAddress;
+                if (tx.recipientPublic)
+                    transactionData.recipientPublic = tx.recipientPublic;
+                if (tx.fee)
+                    transactionData.fee = tx.fee;
+                if (tx.changeAmount)
+                    transactionData.changeAmount = tx.changeAmount;
+                if (tx.inputToken)
+                    transactionData.inputToken = tx.inputToken;
+                if (tx.outputToken)
+                    transactionData.outputToken = tx.outputToken;
+                if (tx.outputAmount)
+                    transactionData.outputAmount = tx.outputAmount;
+                if (tx.recipientPublicAddress)
+                    transactionData.recipientPublicAddress = tx.recipientPublicAddress;
+                if (tx.relayerFee)
+                    transactionData.relayerFee = tx.relayerFee;
+                return {
+                    tx_id: txId,
+                    tx_type: tx.type,
+                    tx_hash: tx.txHash,
+                    timestamp: tx.timestamp,
+                    token: tx.token || 'DOGE',
+                    amount: tx.amount || '0',
+                    amount_wei: amountWei,
+                    status: tx.status || 'completed',
+                    block_number: tx.blockNumber,
+                    transaction_data: Object.keys(transactionData).length > 0 ? transactionData : null,
+                };
+            });
+            await db.upsertShieldedTransactions(walletAddress, dbTransactions);
+            res.json({
+                success: true,
+                synced: dbTransactions.length,
+                wallet: walletAddress,
+            });
+        }
+        else {
+            // Database not available
+            res.status(503).json({
+                error: 'Database not available',
+                message: 'Transaction history sync requires database. Data stored locally only.'
+            });
+        }
+    }
+    catch (error) {
+        console.error('[API] Error syncing shielded transactions:', error);
+        console.error('[API] Error stack:', error.stack);
+        res.status(500).json({
+            error: error.message || 'Internal server error',
+            details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        });
+    }
+});
 // ============ Shielded Pool Routes ============
 // Mount shielded pool API routes
 app.use('/api/shielded', apiLimiter, shieldedRouter);
@@ -987,6 +1197,9 @@ async function main() {
         console.log('  GET  /api/shielded/pool/:addr/path/:idx - Merkle path');
         console.log('  GET  /api/shielded/pool/:addr/memos - Transfer memos (discovery)');
         console.log('  POST /api/shielded/discover - Discover notes');
+        console.log('  POST /api/shielded/relay/swap - Relay swap transaction');
+        console.log('  POST /api/shielded/relay/transfer - Relay transfer transaction');
+        console.log('  POST /api/shielded/relay/unshield - Relay unshield transaction');
     });
     // Initialize pools in background (non-blocking)
     const poolAddresses = Object.values(config.contracts.pools).filter(Boolean);

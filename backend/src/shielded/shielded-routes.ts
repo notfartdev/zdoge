@@ -778,7 +778,18 @@ shieldedRouter.post('/relay/swap', async (req: Request, res: Response) => {
       });
     } catch (simError: any) {
       console.error('[ShieldedRelayer] Simulation error:', simError.message);
-      console.error('[ShieldedRelayer] Full error:', JSON.stringify(simError, null, 2));
+      
+      // Safely serialize error (convert BigInt to string to avoid serialization error)
+      try {
+        const safeError = JSON.parse(JSON.stringify(simError, (key, value) => 
+          typeof value === 'bigint' ? value.toString() : value
+        ));
+        console.error('[ShieldedRelayer] Full error:', JSON.stringify(safeError, null, 2));
+      } catch (e) {
+        // If serialization still fails, just log message
+        console.error('[ShieldedRelayer] Error message:', simError.message);
+        if (simError.shortMessage) console.error('[ShieldedRelayer] Short message:', simError.shortMessage);
+      }
       
       // Extract revert reason if available
       let errorMsg = simError.message || 'Unknown error';
@@ -809,7 +820,13 @@ shieldedRouter.post('/relay/swap', async (req: Request, res: Response) => {
           }
           // Handle error object
           else if (typeof errorData === 'object') {
-            if (errorData.errorName) errorMsg = `${errorData.errorName}: ${errorData.errorArgs?.join(', ') || ''}`;
+            if (errorData.errorName) {
+              // Safely stringify error args (convert BigInt to string)
+              const errorArgs = errorData.errorArgs?.map((arg: any) => 
+                typeof arg === 'bigint' ? arg.toString() : String(arg)
+              ).join(', ') || '';
+              errorMsg = `${errorData.errorName}: ${errorArgs}`;
+            }
           }
         } catch (decodeError) {
           console.error('[ShieldedRelayer] Error decoding failed:', decodeError);
@@ -831,7 +848,16 @@ shieldedRouter.post('/relay/swap', async (req: Request, res: Response) => {
         });
       }
       
-      return res.status(400).json({ error: 'Transaction simulation failed', message: errorMsg });
+      // Ensure errorMsg is a string (no BigInt values) - handle InvalidProof specially
+      if (errorMsg.includes('InvalidProof') || errorMsg.includes('0x815e1d64')) {
+        return res.status(400).json({ 
+          error: 'InvalidProof', 
+          message: 'ZK proof verification failed. This could mean: (1) The circuit WASM/zkey files are out of sync with the contract verifier, (2) The Merkle root is stale, or (3) The proof generation had an error. Please ensure the frontend has the latest circuit files.'
+        });
+      }
+      
+      const safeErrorMessage = String(errorMsg).slice(0, 500);
+      return res.status(400).json({ error: 'Transaction simulation failed', message: safeErrorMessage });
     }
     
     // Submit transaction
@@ -960,7 +986,9 @@ shieldedRouter.post('/relay/swap', async (req: Request, res: Response) => {
       });
     }
     
-    res.status(500).json({ error: 'Transaction failed', message: errorMsg.slice(0, 200) });
+    // Ensure errorMsg is a string (convert BigInt to string if needed)
+    const safeErrorMessage = String(errorMsg).slice(0, 200);
+    res.status(500).json({ error: 'Transaction failed', message: safeErrorMessage });
   }
 });
 
