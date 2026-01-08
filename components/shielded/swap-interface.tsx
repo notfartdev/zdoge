@@ -258,35 +258,28 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
       return
     }
     
-    // IMPORTANT: Regenerate quote for the exact note amount to avoid mismatch
-    // The quote might have been generated for a capped amount, but we're using a larger note
-    let finalQuote = quote
-    if (noteToSpend.amount !== quote.inputAmount) {
-      // Note is larger than quote amount - regenerate quote for exact note amount
-      console.log(`[Swap] Note amount (${noteToSpend.amount.toString()}) differs from quote amount (${quote.inputAmount.toString()}), regenerating quote...`)
-      try {
-        finalQuote = await getSwapQuote(inputToken, outputToken, noteToSpend.amount)
-        // Update the displayed quote amount
-        setQuote(finalQuote)
-      } catch (error) {
-        console.error('[Swap] Failed to regenerate quote:', error)
-        toast({
-          title: "Quote Error",
-          description: "Failed to generate quote for selected note. Please try again.",
-          variant: "destructive",
-        })
-        return
-      }
+    // Use the quote as-is - prepareShieldedSwap will handle partial swaps with change notes
+    // If note.amount > quote.inputAmount, a change note will be created automatically
+    const finalQuote = quote
+    
+    // Verify the note can cover the swap amount
+    if (noteToSpend.amount < quote.inputAmount) {
+      toast({
+        title: "Insufficient Balance",
+        description: `Selected note (${formatWeiToAmount(noteToSpend.amount, SWAP_TOKENS[inputToken].decimals).toFixed(4)} ${inputToken}) is smaller than requested swap amount (${formatWeiToAmount(quote.inputAmount, SWAP_TOKENS[inputToken].decimals).toFixed(4)} ${inputToken})`,
+        variant: "destructive",
+      })
+      return
     }
     
     try {
       setStatus("proving")
       
-      // Prepare swap (in production, this would generate real proof)
+      // Prepare swap - this will create a change note if note.amount > quote.inputAmount
       const result = await prepareShieldedSwap(
         noteToSpend,
         identity,
-        finalQuote, // Use the regenerated quote that matches the note amount
+        finalQuote, // quote.inputAmount is the swapAmount (can be less than note.amount)
         shieldedPool.address
       )
       
@@ -468,16 +461,22 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
       }
       
       // Add to transaction history
-      // Use note amount for input (what was actually spent) and finalQuote for output
-      const inputAmountWei = noteToSpend.amount
+      // Use swapAmount from quote (what was actually swapped) and finalQuote for output
+      // If there's a change note, only the swapAmount was swapped, not the full note
+      const swapAmountWei = finalQuote.inputAmount  // This is the swapAmount (can be less than note.amount)
       const outputAmountWei = finalQuote.outputAmount
+      
+      // Format the swapped amount for display (not the full note amount)
+      const decimals = SWAP_TOKENS[inputToken].decimals
+      const swappedAmount = formatWeiToAmount(swapAmountWei, decimals)
+      
       addTransaction({
         type: 'swap',
         txHash: data.txHash,
         timestamp: Math.floor(Date.now() / 1000),
         token: inputToken,
-        amount: inputAmount,
-        amountWei: inputAmountWei.toString(),
+        amount: swappedAmount.toFixed(4),  // Use the actual swapped amount, not the input field value
+        amountWei: swapAmountWei.toString(),
         inputToken,
         outputToken,
         outputAmount: formatWeiToAmount(outputAmountWei, SWAP_TOKENS[outputToken].decimals).toFixed(6),
