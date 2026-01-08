@@ -140,6 +140,25 @@ const ShieldedPoolABI = [
     outputs: [],
     stateMutability: 'nonpayable',
   },
+  {
+    type: 'function',
+    name: 'swap',
+    inputs: [
+      { name: '_proof', type: 'uint256[8]' },
+      { name: '_root', type: 'bytes32' },
+      { name: '_inputNullifier', type: 'bytes32' },
+      { name: '_outputCommitment1', type: 'bytes32' },
+      { name: '_outputCommitment2', type: 'bytes32' },
+      { name: '_tokenIn', type: 'address' },
+      { name: '_tokenOut', type: 'address' },
+      { name: '_swapAmount', type: 'uint256' },
+      { name: '_outputAmount', type: 'uint256' },
+      { name: '_minAmountOut', type: 'uint256' },
+      { name: '_encryptedMemo', type: 'bytes' },
+    ],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
   // Custom Errors
   { type: 'error', name: 'InvalidProof', inputs: [] },
   { type: 'error', name: 'NullifierAlreadySpent', inputs: [] },
@@ -589,6 +608,18 @@ shieldedRouter.post('/relay/unshield', async (req: Request, res: Response) => {
     if (errorMsg.includes('NullifierAlreadySpent') || errorMsg.includes('already spent')) {
       return res.status(400).json({ error: 'Already spent', message: 'This note has already been withdrawn' });
     }
+    if (errorMsg.includes('InsufficientPoolBalance')) {
+      return res.status(400).json({ 
+        error: 'Insufficient liquidity', 
+        message: 'The contract does not have enough tokens to fulfill this unshield. Someone must shield tokens first to provide liquidity.' 
+      });
+    }
+    if (errorMsg.includes('SafeERC20FailedOperation') || errorMsg.includes('e450d38c')) {
+      return res.status(400).json({ 
+        error: 'Token transfer failed', 
+        message: 'The contract does not have enough tokens to fulfill this unshield. This is likely due to insufficient liquidity in the contract.' 
+      });
+    }
     if (errorMsg.includes('UnsupportedToken')) {
       return res.status(400).json({ 
         error: 'Unsupported token', 
@@ -603,6 +634,333 @@ shieldedRouter.post('/relay/unshield', async (req: Request, res: Response) => {
       error: 'Transaction failed',
       message: errorMsg.slice(0, 200),
     });
+  }
+});
+
+/**
+ * POST /api/shielded/relay/swap
+ * Relay a private swap (z→z, different token) - USER PAYS NO GAS
+ */
+shieldedRouter.post('/relay/swap', async (req: Request, res: Response) => {
+  if (!relayerWallet || !relayerAddress) {
+    return res.status(503).json({ 
+      error: 'Relayer not available',
+      message: 'Relayer wallet not configured. Please try again later.',
+    });
+  }
+  
+  // Log received body for debugging
+  console.log('[ShieldedRelayer] Received swap request:', {
+    hasBody: !!req.body,
+    bodyKeys: req.body ? Object.keys(req.body) : [],
+    poolAddress: req.body?.poolAddress,
+    hasProof: !!req.body?.proof && Array.isArray(req.body.proof),
+    proofLength: req.body?.proof?.length,
+    swapAmount: req.body?.swapAmount,
+    outputAmount: req.body?.outputAmount,
+    minAmountOut: req.body?.minAmountOut,
+  });
+  
+  const { 
+    poolAddress, 
+    proof, 
+    root, 
+    inputNullifierHash,
+    outputCommitment1,
+    outputCommitment2,  // Change note commitment (can be 0x0 if no change)
+    tokenIn,
+    tokenOut,
+    swapAmount,  // Amount being swapped (can be less than note amount)
+    outputAmount,  // outputAmount from proof's public signals
+    minAmountOut,
+    encryptedMemo,
+  } = req.body;
+  
+  // Validate inputs with detailed error reporting
+  const missingParams: string[] = [];
+  if (!poolAddress) missingParams.push('poolAddress');
+  if (!proof || !Array.isArray(proof) || proof.length !== 8) missingParams.push('proof (must be array of 8 elements)');
+  if (!root) missingParams.push('root');
+  if (!inputNullifierHash) missingParams.push('inputNullifierHash');
+  if (!outputCommitment1) missingParams.push('outputCommitment1');
+  if (!tokenIn) missingParams.push('tokenIn');
+  if (!tokenOut) missingParams.push('tokenOut');
+  // Convert to string and check - handle both string and number types
+  const swapAmountStr = String(swapAmount || '');
+  const outputAmountStr = String(outputAmount || '');
+  const minAmountOutStr = String(minAmountOut || '');
+  
+  if (!swapAmount || swapAmountStr === '0' || swapAmountStr === '' || swapAmountStr === 'null' || swapAmountStr === 'undefined') {
+    missingParams.push(`swapAmount (received: ${swapAmountStr}, type: ${typeof swapAmount})`);
+  }
+  if (!outputAmount || outputAmountStr === '0' || outputAmountStr === '' || outputAmountStr === 'null' || outputAmountStr === 'undefined') {
+    missingParams.push(`outputAmount (received: ${outputAmountStr}, type: ${typeof outputAmount})`);
+  }
+  if (!minAmountOut || minAmountOutStr === '0' || minAmountOutStr === '' || minAmountOutStr === 'null' || minAmountOutStr === 'undefined') {
+    missingParams.push(`minAmountOut (received: ${minAmountOutStr}, type: ${typeof minAmountOut})`);
+  }
+  
+  if (missingParams.length > 0) {
+    console.error('[ShieldedRelayer] Missing parameters:', missingParams);
+    console.error('[ShieldedRelayer] Received body:', JSON.stringify(req.body, null, 2));
+    return res.status(400).json({ 
+      error: 'Missing parameters',
+      missing: missingParams,
+      required: ['poolAddress', 'proof', 'root', 'inputNullifierHash', 'outputCommitment1', 'tokenIn', 'tokenOut', 'swapAmount', 'outputAmount', 'minAmountOut'],
+    });
+  }
+  
+  // outputCommitment2 can be 0x0 if no change (partial swap)
+  const outputCommitment2Final = outputCommitment2 || '0x0000000000000000000000000000000000000000000000000000000000000000';
+  
+  if (!Array.isArray(proof) || proof.length !== 8) {
+    return res.status(400).json({ error: 'Proof must be array of 8 elements' });
+  }
+  
+  console.log(`[ShieldedRelayer] Processing swap:`);
+  console.log(`  Pool: ${poolAddress}`);
+  console.log(`  TokenIn: ${tokenIn}, TokenOut: ${tokenOut}`);
+  console.log(`  SwapAmount: ${swapAmount}, MinAmountOut: ${minAmountOut}`);
+  console.log(`  OutputCommitment1: ${outputCommitment1.slice(0, 18)}...`);
+  console.log(`  OutputCommitment2 (change): ${outputCommitment2Final.slice(0, 18)}...`);
+  
+  try {
+    // Check relayer balance
+    const relayerBalance = await publicClient.getBalance({ address: relayerAddress });
+    if (relayerBalance < BigInt(0.01 * 1e18)) {
+      return res.status(503).json({ 
+        error: 'Relayer temporarily unavailable',
+        message: 'Relayer needs more gas. Please try again later.',
+      });
+    }
+    
+    // Verify root is known on-chain
+    try {
+      const selector = '0x6d9833e3';
+      const rootPadded = (root as string).slice(2).padStart(64, '0');
+      const callData = `${selector}${rootPadded}` as `0x${string}`;
+      const result = await publicClient.call({ to: poolAddress as Address, data: callData });
+      const isRootKnown = result.data && result.data !== '0x' && result.data.endsWith('1');
+      if (!isRootKnown) {
+        return res.status(400).json({ error: 'Invalid root', message: 'Merkle root does not exist on-chain' });
+      }
+    } catch (rootCheckError: any) {
+      console.warn('[ShieldedRelayer] Could not verify root:', rootCheckError.message);
+    }
+    
+    // Convert proof and amounts
+    const proofBigInts = proof.map((p: string) => BigInt(p)) as [bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint];
+    const memo = encryptedMemo ? (encryptedMemo.startsWith('0x') ? encryptedMemo : `0x${encryptedMemo}`) as `0x${string}` : '0x' as `0x${string}`;
+    const swapAmountBigInt = BigInt(swapAmount);
+    const outputAmountBigInt = BigInt(outputAmount);
+    const minAmountOutBigInt = BigInt(minAmountOut);
+    
+    // Simulate transaction first to catch errors early
+    try {
+      await publicClient.simulateContract({
+        address: poolAddress as Address,
+        abi: ShieldedPoolABI,
+        functionName: 'swap',
+        args: [
+          proofBigInts,
+          root as `0x${string}`,
+          inputNullifierHash as `0x${string}`,
+          outputCommitment1 as `0x${string}`,
+          outputCommitment2Final as `0x${string}`,  // Change commitment (can be 0x0)
+          tokenIn as Address,
+          tokenOut as Address,
+          swapAmountBigInt,  // Amount being swapped (can be less than note amount)
+          outputAmountBigInt,  // outputAmount from proof (required for proof verification)
+          minAmountOutBigInt,
+          memo,
+        ],
+        account: relayerAccount!,
+      });
+    } catch (simError: any) {
+      console.error('[ShieldedRelayer] Simulation error:', simError.message);
+      console.error('[ShieldedRelayer] Full error:', JSON.stringify(simError, null, 2));
+      
+      // Extract revert reason if available
+      let errorMsg = simError.message || 'Unknown error';
+      if (simError.shortMessage) errorMsg = simError.shortMessage;
+      
+      // Try to decode custom error from multiple possible locations
+      let errorData = null;
+      if (simError.cause?.data) errorData = simError.cause.data;
+      else if (simError.data) errorData = simError.data;
+      else if (simError.reason) errorData = simError.reason;
+      
+      if (errorData) {
+        try {
+          // Handle string error data (error selector)
+          if (typeof errorData === 'string' && errorData.startsWith('0x')) {
+            const selector = errorData.slice(0, 10);
+            console.log('[ShieldedRelayer] Error selector:', selector);
+            
+            if (selector === '0x815e1d64') errorMsg = 'InvalidProof: ZK proof verification failed or Merkle root not known';
+            else if (selector === '0x5e0d443f') errorMsg = 'NullifierAlreadySpent: This note has already been used';
+            else if (selector === '0x4e7b11b8') errorMsg = 'UnsupportedToken: Token not supported';
+            else if (selector === '0x2fb15b83') errorMsg = 'InvalidSwapRate: Swap rate check failed. The deployed contract may need to be updated with the swap rate fix.';
+            else if (selector === '0x82b42900') errorMsg = 'InvalidAmount: Amount is zero or invalid';
+            else if (selector === '0x9e5d7727') errorMsg = 'InsufficientPoolBalance: Contract does not have enough liquidity for the output token';
+            else {
+              errorMsg = `Contract reverted with selector ${selector}. This may indicate the contract needs redeployment with updated swap logic.`;
+            }
+          }
+          // Handle error object
+          else if (typeof errorData === 'object') {
+            if (errorData.errorName) errorMsg = `${errorData.errorName}: ${errorData.errorArgs?.join(', ') || ''}`;
+          }
+        } catch (decodeError) {
+          console.error('[ShieldedRelayer] Error decoding failed:', decodeError);
+        }
+      }
+      
+      // Check error message for known patterns
+      if (errorMsg.includes('InvalidSwapRate') || errorMsg.includes('0x2fb15b83')) {
+        return res.status(400).json({ 
+          error: 'InvalidSwapRate', 
+          message: 'The contract rejected the swap rate. This usually means the deployed contract has old swap logic that checks mock rates. The contract needs to be redeployed with the updated swap fix that trusts the proof\'s outputAmount.',
+          details: 'See docs/SWAP_RATE_FIX.md for details on the fix.'
+        });
+      }
+      if (errorMsg.includes('InsufficientPoolBalance') || errorMsg.includes('0x9e5d7727')) {
+        return res.status(400).json({ 
+          error: 'Insufficient liquidity', 
+          message: 'The contract does not have enough tokens to fulfill this swap. Someone must shield the output token first to provide liquidity.' 
+        });
+      }
+      
+      return res.status(400).json({ error: 'Transaction simulation failed', message: errorMsg });
+    }
+    
+    // Submit transaction
+    const txHash = await relayerWallet.writeContract({
+      chain: dogeosTestnet,
+      account: relayerAccount!,
+      address: poolAddress as Address,
+      abi: ShieldedPoolABI,
+      functionName: 'swap',
+      args: [
+        proofBigInts,
+        root as `0x${string}`,
+        inputNullifierHash as `0x${string}`,
+        outputCommitment1 as `0x${string}`,
+        outputCommitment2Final as `0x${string}`,  // Change commitment (can be 0x0)
+        tokenIn as Address,
+        tokenOut as Address,
+        swapAmountBigInt,  // Amount being swapped (can be less than note amount)
+        outputAmountBigInt,  // outputAmount from proof (required for proof verification)
+        minAmountOutBigInt,
+        memo,
+      ],
+    });
+    
+    console.log(`[ShieldedRelayer] Swap TX submitted: ${txHash}`);
+    const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash, confirmations: 1 });
+    
+    if (receipt.status === 'reverted') {
+      // Try to get revert reason from receipt
+      let revertReason = 'Swap was rejected by contract';
+      try {
+        // Try to decode revert reason from transaction call
+        const tx = await publicClient.getTransaction({ hash: txHash });
+        const callResult = await publicClient.call({
+          to: poolAddress as Address,
+          data: tx.input,
+        });
+        if (callResult.data) {
+          revertReason = `Transaction reverted. The deployed contract may need to be updated. Current error: ${callResult.data}`;
+        }
+      } catch (e) {
+        console.warn('[ShieldedRelayer] Could not decode revert reason:', e);
+      }
+      return res.status(500).json({ 
+        error: 'Transaction reverted', 
+        message: revertReason,
+        hint: 'This usually indicates the contract has old swap logic. Redeploy with the swap rate fix.'
+      });
+    }
+    
+    // Parse LeafInserted event to get output leaf index
+    // LeafInserted(bytes32 indexed leaf, uint256 indexed leafIndex, bytes32 newRoot)
+    // Event signature: keccak256("LeafInserted(bytes32,uint256,bytes32)")
+    let outputLeafIndex: number | null = null;
+    for (const log of receipt.logs) {
+      const logWithTopics = log as typeof log & { topics?: readonly `0x${string}`[]; data?: `0x${string}` };
+      if (log.address.toLowerCase() === poolAddress.toLowerCase() && 
+          logWithTopics.topics && 
+          logWithTopics.topics.length >= 3) {
+        // Check if this is LeafInserted event (topic[0] = event signature, topic[1] = leaf (commitment), topic[2] = leafIndex)
+        const leafFromEvent = logWithTopics.topics[1];
+        const leafIndex = parseInt(logWithTopics.topics[2] || '0', 16);
+        
+        // Check for outputCommitment1 (swapped token note)
+        if (leafFromEvent && leafFromEvent.toLowerCase() === outputCommitment1.toLowerCase()) {
+          outputLeafIndex = leafIndex;
+          console.log(`[ShieldedRelayer] Found output leaf index 1: ${outputLeafIndex}`);
+          break;
+        }
+      }
+    }
+    
+    // Also check for change note leaf index
+    let outputLeafIndex2: number | null = null;
+    if (outputCommitment2Final !== '0x0000000000000000000000000000000000000000000000000000000000000000') {
+      for (const log of receipt.logs) {
+        const logWithTopics = log as typeof log & { topics?: readonly `0x${string}`[]; data?: `0x${string}` };
+        if (log.address.toLowerCase() === poolAddress.toLowerCase() && 
+            logWithTopics.topics && 
+            logWithTopics.topics.length >= 3) {
+          const leafFromEvent = logWithTopics.topics[1];
+          const leafIndex = parseInt(logWithTopics.topics[2] || '0', 16);
+          if (leafFromEvent && leafFromEvent.toLowerCase() === outputCommitment2Final.toLowerCase()) {
+            outputLeafIndex2 = leafIndex;
+            console.log(`[ShieldedRelayer] Found output leaf index 2 (change): ${outputLeafIndex2}`);
+            break;
+          }
+        }
+      }
+    }
+    
+    res.json({
+      success: true,
+      txHash,
+      blockNumber: Number(receipt.blockNumber),
+      tokenIn,
+      tokenOut,
+      swapAmount: swapAmountBigInt.toString(),
+      minAmountOut: minAmountOutBigInt.toString(),
+      outputLeafIndex1: outputLeafIndex,  // Swapped token note leaf index
+      outputLeafIndex2,  // Change note leaf index (null if no change)
+      outputLeafIndex,  // Legacy field (for backwards compatibility)
+    });
+    
+  } catch (error: any) {
+    console.error('[ShieldedRelayer] Swap Error:', error.message);
+    const errorMsg = error.message || String(error);
+    
+    if (errorMsg.includes('InvalidProof')) {
+      return res.status(400).json({ error: 'Invalid proof', message: 'ZK proof verification failed' });
+    }
+    if (errorMsg.includes('NullifierAlreadySpent')) {
+      return res.status(400).json({ error: 'Already spent', message: 'This note has already been used' });
+    }
+    if (errorMsg.includes('InvalidSwapRate') || errorMsg.includes('slippage') || errorMsg.includes('0x2fb15b83')) {
+      return res.status(400).json({ 
+        error: 'InvalidSwapRate', 
+        message: 'The contract rejected the swap rate. The deployed contract likely has old swap logic. Redeploy with the swap rate fix that trusts the proof\'s outputAmount.',
+        hint: 'See docs/SWAP_RATE_FIX.md for the fix details.'
+      });
+    }
+    if (errorMsg.includes('InsufficientPoolBalance') || errorMsg.includes('0x9e5d7727')) {
+      return res.status(400).json({ 
+        error: 'Insufficient liquidity', 
+        message: 'The contract does not have enough tokens to fulfill this swap. Someone must shield the output token first.' 
+      });
+    }
+    
+    res.status(500).json({ error: 'Transaction failed', message: errorMsg.slice(0, 200) });
   }
 });
 

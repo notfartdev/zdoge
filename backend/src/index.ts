@@ -1440,6 +1440,9 @@ async function main() {
     console.log('  GET  /api/shielded/pool/:addr/path/:idx - Merkle path');
     console.log('  GET  /api/shielded/pool/:addr/memos - Transfer memos (discovery)');
     console.log('  POST /api/shielded/discover - Discover notes');
+    console.log('  POST /api/shielded/relay/swap - Relay swap transaction');
+    console.log('  POST /api/shielded/relay/transfer - Relay transfer transaction');
+    console.log('  POST /api/shielded/relay/unshield - Relay unshield transaction');
   });
 
   // Initialize pools in background (non-blocking)

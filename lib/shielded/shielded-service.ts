@@ -587,6 +587,40 @@ export function completeUnshield(noteIndex: number): void {
 }
 
 /**
+ * Complete swap: remove spent input note and add output note
+ */
+export function completeSwap(
+  spentNoteIndex: number,
+  outputNote: ShieldedNote,
+  outputLeafIndex?: number,
+  changeNote?: ShieldedNote | null,
+  changeLeafIndex?: number
+): void {
+  // Remove spent input note
+  walletState.notes.splice(spentNoteIndex, 1);
+  
+  // Add output note 1 (swapped token)
+  if (outputNote.amount > 0n) {
+    if (outputLeafIndex !== undefined) {
+      outputNote.leafIndex = outputLeafIndex;
+    }
+    walletState.notes.push(outputNote);
+    console.log('[Swap] Added output note:', outputLeafIndex || 'pending');
+  }
+  
+  // Add change note (if present)
+  if (changeNote && changeNote.amount > 0n) {
+    if (changeLeafIndex !== undefined) {
+      changeNote.leafIndex = changeLeafIndex;
+    }
+    walletState.notes.push(changeNote);
+    console.log('[Swap] Added change note:', changeLeafIndex || 'pending');
+  }
+  
+  saveNotesToStorage(walletState.notes);
+}
+
+/**
  * Scan for incoming transfers (auto-discovery)
  * 
  * This scans Transfer events and tries to decrypt the memos.
@@ -855,6 +889,26 @@ export function clearNotes(): void {
     const keys = getStorageKeys();
     localStorage.removeItem(keys.notes);
   }
+}
+
+/**
+ * Remove notes for a specific token
+ * Useful for removing old notes from previous contracts
+ */
+export function removeNotesForToken(tokenSymbol: string): number {
+  const initialCount = walletState.notes.length;
+  walletState.notes = walletState.notes.filter(note => note.token !== tokenSymbol);
+  const removedCount = initialCount - walletState.notes.length;
+  
+  if (removedCount > 0) {
+    saveNotesToStorage(walletState.notes);
+    // Dispatch event to refresh UI
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('shielded-wallet-updated'));
+    }
+  }
+  
+  return removedCount;
 }
 
 /**

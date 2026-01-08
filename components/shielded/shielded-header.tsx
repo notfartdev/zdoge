@@ -166,10 +166,16 @@ export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", onTokenC
     }
   }, [onStateChange, mounted, wallet?.isConnected, wallet?.address])
   
-  // Listen for refresh-balance event (dispatched after successful unshield)
+  // Listen for refresh-balance event (dispatched after successful unshield/swap)
+  // Also listen for shielded-wallet-updated event (for swap/transfer)
   useEffect(() => {
     if (!mounted || !wallet?.isConnected || !wallet?.address) {
       return
+    }
+    
+    const handleShieldedWalletUpdate = () => {
+      // Refresh shielded wallet state from storage
+      refreshState()
     }
     
     const handleRefreshBalance = async () => {
@@ -210,8 +216,10 @@ export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", onTokenC
     }
     
     window.addEventListener('refresh-balance', handleRefreshBalance)
+    window.addEventListener('shielded-wallet-updated', handleShieldedWalletUpdate)
     return () => {
       window.removeEventListener('refresh-balance', handleRefreshBalance)
+      window.removeEventListener('shielded-wallet-updated', handleShieldedWalletUpdate)
     }
   }, [mounted, wallet?.isConnected, wallet?.address])
   

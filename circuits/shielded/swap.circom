@@ -1,4 +1,4 @@
-pragma circom 2.0.0;
+pragma circom 2.1.8;
 
 include "../node_modules/circomlib/circuits/mimcsponge.circom";
 include "../node_modules/circomlib/circuits/bitify.circom";
@@ -11,8 +11,12 @@ include "../node_modules/circomlib/circuits/comparators.circom";
  * 1. Input note exists in Merkle tree
  * 2. Prover owns the input note (knows spending key)
  * 3. Nullifier is correctly computed
- * 4. Output commitment is correctly formed
- * 5. Amounts satisfy swap rate: inputAmount * rate ≈ outputAmount (with tolerance)
+ * 4. Output commitment 1 (swapped token) is correctly formed
+ * 5. Output commitment 2 (change note, same token as input) is correctly formed (can be 0)
+ * 6. Value conservation: inputAmount = swapAmount + changeAmount
+ * 7. Amounts satisfy swap rate: swapAmount * rate ≈ outputAmount
+ * 
+ * Supports partial swaps: spend part of a note, get change back (Zcash-style)
  */
 
 // MiMC hash helper for 2 inputs
@@ -107,15 +111,16 @@ template Swap(levels) {
     // ============ Public Inputs ============
     signal input root;                      // Merkle root
     signal input inputNullifierHash;        // Nullifier of input note
-    signal input outputCommitment;          // New note commitment
+    signal input outputCommitment1;         // Output token note (swapped)
+    signal input outputCommitment2;         // Change note (same token as input, can be 0)
     signal input tokenInAddress;            // Input token (for public verification)
     signal input tokenOutAddress;           // Output token
-    signal input inputAmount;               // Amount being swapped
-    signal input outputAmount;              // Amount received
+    signal input swapAmount;                // Amount being swapped (part of input note)
+    signal input outputAmount;              // Amount received in output token
     
     // ============ Private Inputs ============
     // Input note
-    signal input inAmount;
+    signal input inAmount;                  // Full input note amount
     signal input inOwnerPubkey;
     signal input inSecret;
     signal input inBlinding;
@@ -126,11 +131,16 @@ template Swap(levels) {
     // Ownership proof
     signal input spendingKey;
     
-    // Output note
-    signal input outAmount;
-    signal input outOwnerPubkey;
-    signal input outSecret;
-    signal input outBlinding;
+    // Output note 1 (swapped token)
+    signal input out1Amount;
+    signal input out1OwnerPubkey;
+    signal input out1Secret;
+    signal input out1Blinding;
+    
+    // Output note 2 (change - same token as input, can be 0)
+    signal input changeAmount;              // Change amount (inAmount - swapAmount)
+    signal input changeSecret;
+    signal input changeBlinding;
     
     // ============ Constraints ============
     
@@ -150,9 +160,10 @@ template Swap(levels) {
     }
     
     // 2. Verify ownership (pubkey derived from spending key)
+    // Must use DOMAIN.SHIELDED_ADDRESS = 2 to match note creation
     component ownerHash = MiMC2();
     ownerHash.in[0] <== spendingKey;
-    ownerHash.in[1] <== 0;
+    ownerHash.in[1] <== 2;  // DOMAIN.SHIELDED_ADDRESS (matches transfer.circom and note creation)
     inOwnerPubkey === ownerHash.out;
     
     // 3. Verify nullifier
@@ -163,25 +174,52 @@ template Swap(levels) {
     
     component nullifierHash = MiMC2();
     nullifierHash.in[0] <== nullifier.nullifier;
-    nullifierHash.in[1] <== 0;
+    nullifierHash.in[1] <== nullifier.nullifier;  // Match transfer.circom: hash nullifier with itself
     inputNullifierHash === nullifierHash.out;
     
-    // 4. Verify output commitment
-    component outCommitment = NoteCommitment();
-    outCommitment.amount <== outAmount;
-    outCommitment.ownerPubkey <== outOwnerPubkey;
-    outCommitment.secret <== outSecret;
-    outCommitment.blinding <== outBlinding;
-    outputCommitment === outCommitment.commitment;
+    // 4. Verify output commitment 1 (swapped token)
+    component outCommitment1 = NoteCommitment();
+    outCommitment1.amount <== out1Amount;
+    outCommitment1.ownerPubkey <== out1OwnerPubkey;
+    outCommitment1.secret <== out1Secret;
+    outCommitment1.blinding <== out1Blinding;
+    outputCommitment1 === outCommitment1.commitment;
     
-    // 5. Verify amounts match public inputs
-    inAmount === inputAmount;
-    outAmount === outputAmount;
+    // 5. Verify output commitment 2 (change note - same token as input)
+    component changeCommitment = NoteCommitment();
+    changeCommitment.amount <== changeAmount;
+    changeCommitment.ownerPubkey <== inOwnerPubkey;  // Change goes back to sender
+    changeCommitment.secret <== changeSecret;
+    changeCommitment.blinding <== changeBlinding;
     
-    // 6. Verify output note owned by same person (self-swap)
-    // The owner of the output can be the same or different
-    // For self-swap, we verify it's the same owner
-    outOwnerPubkey === ownerHash.out;
+    // Verify output commitment 2 matches public input
+    // If changeAmount > 0, outputCommitment2 must match changeCommitment.commitment
+    // If changeAmount == 0, outputCommitment2 must be 0
+    component changeIsZero = IsZero();
+    changeIsZero.in <== changeAmount;
+    
+    // When changeAmount > 0, enforce outputCommitment2 == changeCommitment.commitment
+    (1 - changeIsZero.out) * (outputCommitment2 - changeCommitment.commitment) === 0;
+    
+    // When changeAmount == 0, enforce outputCommitment2 == 0
+    changeIsZero.out * outputCommitment2 === 0;
+    
+    // 6. Verify value conservation: inputAmount = swapAmount + changeAmount
+    component valueConservation = IsEqual();
+    valueConservation.in[0] <== inAmount;
+    valueConservation.in[1] <== swapAmount + changeAmount;
+    valueConservation.out === 1;
+    
+    // 7. Verify output note 1 amount matches public input
+    out1Amount === outputAmount;  // Output note amount matches public input
+    
+    // 8. Verify output note 1 owned by same person (self-swap)
+    out1OwnerPubkey === ownerHash.out;
+    
+    // 9. Ensure swapAmount > 0 (must swap something)
+    component swapAmountPositive = IsZero();
+    swapAmountPositive.in <== swapAmount;
+    swapAmountPositive.out === 0;  // swapAmount != 0
     
     // Note: The swap rate verification happens on-chain
     // The contract checks that outputAmount matches oracle rate
@@ -189,6 +227,7 @@ template Swap(levels) {
 }
 
 // Instantiate with 20-level Merkle tree (1M+ notes capacity)
-component main {public [root, inputNullifierHash, outputCommitment, tokenInAddress, tokenOutAddress, inputAmount, outputAmount]} = Swap(20);
+// Public inputs: [root, inputNullifierHash, outputCommitment1, outputCommitment2, tokenInAddress, tokenOutAddress, swapAmount, outputAmount]
+component main {public [root, inputNullifierHash, outputCommitment1, outputCommitment2, tokenInAddress, tokenOutAddress, swapAmount, outputAmount]} = Swap(20);
 
 

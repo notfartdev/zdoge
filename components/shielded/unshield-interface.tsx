@@ -777,7 +777,21 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
     if (maxReceivable > 0n) {
       // Convert from token base units to human-readable using token decimals
       const maxAmount = formatUnits(maxReceivable, tokenDecimals)
-      setAmount(Number(maxAmount).toFixed(4))
+      // Round DOWN to avoid exceeding the actual receivable amount
+      // Parse the string to avoid floating-point precision issues
+      const parts = maxAmount.split('.')
+      if (parts.length === 1) {
+        // No decimal part
+        setAmount(parts[0])
+      } else {
+        // Has decimal part - truncate to tokenDecimals places (no rounding)
+        const integerPart = parts[0]
+        const decimalPart = parts[1].slice(0, tokenDecimals).padEnd(Math.min(tokenDecimals, parts[1].length), '0')
+        // Format with appropriate decimal places (max 8 for display)
+        const displayDecimals = Math.min(tokenDecimals, 8)
+        const truncatedDecimal = decimalPart.slice(0, displayDecimals)
+        setAmount(`${integerPart}.${truncatedDecimal}`)
+      }
     }
   }
   

@@ -294,16 +294,17 @@ export const contracts = {
 };
 
 // Shielded Pool (Zcash-style private transfers + swaps)
-// Redeployed to DogeOS Testnet on Jan 3, 2026 with circomlibjs-compatible MiMC
+// Redeployed to DogeOS Testnet on Jan 8, 2026 with change notes support for swaps
 export const shieldedPool = {
-  // Main pool contract - handles shield/transfer/unshield/swap
-  address: '0xc5F64faee07A6EFE235C12378101D62e370c0cD5' as `0x${string}`,
+  // Main pool contract - handles shield/transfer/unshield/swap (with change notes support)
+  // NEW CONTRACT (supports partial swaps with change notes - full Zcash-style)
+  address: '0x40c74Fd9B171D34d971B182bDd5756fe39e477E9' as `0x${string}`,
   
-  // Real ZK verifier contracts (production-ready)
-  shieldVerifier: '0x8D5e77fa3FFc93dAf83F2A6B89D8a5C40aF850d2' as `0x${string}`,
-  transferVerifier: '0x4827a3CCAbFCbFaf320099363505FeBa8bb63b46' as `0x${string}`,
-  unshieldVerifier: '0x8DCBd817377d0ECB334a460ad220D2112d54c41C' as `0x${string}`,
-  swapVerifier: '0x96F8d2DFDb14B789397CBb9F810A158d60E996D3' as `0x${string}`,
+  // Real ZK verifier contracts (production-ready) - All verifiers match their circuits
+  shieldVerifier: '0x87AF401E2a466670feF1Be37CF31f25354e441Ca' as `0x${string}`,
+  transferVerifier: '0xE276220c975158C54a9b852A6aec45eE7670d497' as `0x${string}`,
+  unshieldVerifier: '0xD0d14Ff3D806145210C2A9A880d4e45C7A5878eC' as `0x${string}`,
+  swapVerifier: '0x8677F89bc4ccc4a6eb9Eb28070a558A1358B8640' as `0x${string}`, // Supports change notes (outputCommitment2)
   
   // Circuit files for frontend proof generation
   circuitFiles: {

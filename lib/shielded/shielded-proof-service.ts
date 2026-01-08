@@ -302,7 +302,7 @@ async function buildMerkleTreeAndGetPath(
 /**
  * Fetch commitments from blockchain events
  */
-async function fetchCommitmentsFromChain(poolAddress: string): Promise<{ commitment: bigint; leafIndex: number }[]> {
+export async function fetchCommitmentsFromChain(poolAddress: string): Promise<{ commitment: bigint; leafIndex: number }[]> {
   try {
     // First, fetch ALL logs from the contract to find the actual event signature
     console.log(`Fetching all events from pool ${poolAddress}...`);
@@ -887,6 +887,237 @@ export async function generateUnshieldProof(
       proof: formatProofForContract(proof),
       publicInputs: publicSignals,
     },
+    nullifierHash,
+    root,
+  };
+}
+
+/**
+ * Generate proof for Swap operation (z→z, different token)
+ * Supports partial swaps with change notes (Zcash-style)
+ */
+export async function generateSwapProof(
+  inputNote: ShieldedNote,
+  identity: ShieldedIdentity,
+  swapAmount: bigint,  // Amount to swap (can be less than note amount)
+  outputToken: string,
+  outputAmount: bigint,
+  poolAddress: string
+): Promise<{
+  proof: Proof;
+  outputNote: ShieldedNote;
+  changeNote: ShieldedNote | null;  // Change note (null if no change)
+  nullifierHash: bigint;
+  root: bigint;
+}> {
+  const snarks = await loadSnarkJS();
+  
+  if (inputNote.leafIndex === undefined) {
+    throw new Error('Input note has no leaf index');
+  }
+  
+  // Fetch Merkle path
+  const { pathElements, pathIndices, root } = await fetchMerklePath(
+    poolAddress,
+    inputNote.leafIndex
+  );
+  
+  // Verify swapAmount <= inputNote.amount
+  if (swapAmount > inputNote.amount) {
+    throw new Error('Swap amount cannot exceed input note amount');
+  }
+  if (swapAmount <= 0n) {
+    throw new Error('Swap amount must be positive');
+  }
+  
+  // Calculate change amount
+  const changeAmount = inputNote.amount - swapAmount;
+  
+  // Compute nullifier
+  const nullifier = await computeNullifier(
+    inputNote.secret,
+    BigInt(inputNote.leafIndex),
+    identity.spendingKey
+  );
+  const nullifierHash = await computeNullifierHash(nullifier);
+  
+  // Create output note 1 (swapped token)
+  const outputSecret = randomFieldElement();
+  const outputBlinding = randomFieldElement();
+  const outputCommitment1 = await computeCommitment(
+    outputAmount,
+    identity.shieldedAddress, // Same owner for self-swap
+    outputSecret,
+    outputBlinding
+  );
+  
+  // Create change note (if needed) - same token as input, goes back to sender
+  let changeNote: ShieldedNote | null = null;
+  let changeCommitment = 0n;
+  if (changeAmount > 0n) {
+    const changeSecret = randomFieldElement();
+    const changeBlinding = randomFieldElement();
+    changeCommitment = await computeCommitment(
+      changeAmount,
+      identity.shieldedAddress, // Change goes back to sender
+      changeSecret,
+      changeBlinding
+    );
+    
+    changeNote = {
+      amount: changeAmount,
+      ownerPubkey: identity.shieldedAddress,
+      secret: changeSecret,
+      blinding: changeBlinding,
+      commitment: changeCommitment,
+      token: inputNote.token,  // Same token as input
+      tokenAddress: inputNote.tokenAddress,
+      decimals: inputNote.decimals,
+      createdAt: Date.now(),
+    };
+  }
+  
+  // Get token metadata for output note and circuit
+  // Use shieldedPool config instead of importing from shielded-swap-service to avoid circular dependency
+  const { shieldedPool } = await import('../dogeos-config');
+  const outputTokenConfig = shieldedPool.supportedTokens[outputToken as keyof typeof shieldedPool.supportedTokens];
+  if (!outputTokenConfig) {
+    throw new Error(`Token ${outputToken} not found in supportedTokens`);
+  }
+  
+  const outputTokenAddressString = outputToken === 'DOGE' 
+    ? '0x0000000000000000000000000000000000000000' as `0x${string}`
+    : outputTokenConfig.address as `0x${string}`;
+  const outputDecimals = outputTokenConfig.decimals || 18;
+  
+  // Convert to bigint for circuit (reuse the same address)
+  const outputTokenAddress = outputToken === 'DOGE'
+    ? 0n
+    : addressToBigInt(outputTokenAddressString);
+  
+  const outputNote: ShieldedNote = {
+    amount: outputAmount,
+    ownerPubkey: identity.shieldedAddress,
+    secret: outputSecret,
+    blinding: outputBlinding,
+    commitment: outputCommitment1,
+    token: outputToken,
+    tokenAddress: outputTokenAddressString,
+    decimals: outputDecimals,
+    createdAt: Date.now(),
+  };
+  
+  // DEBUG: Verify note ownerPubkey matches identity shieldedAddress
+  const expectedOwner = identity.shieldedAddress;
+  console.log('[Swap] Verifying note ownership...');
+  console.log('  Note ownerPubkey:', inputNote.ownerPubkey.toString(16).slice(0, 16) + '...');
+  console.log('  Identity shieldedAddress:', expectedOwner.toString(16).slice(0, 16) + '...');
+  console.log('  Match:', inputNote.ownerPubkey === expectedOwner);
+  
+  if (inputNote.ownerPubkey !== expectedOwner) {
+    console.error('[Swap] CRITICAL: Note ownerPubkey does NOT match identity!');
+    console.error('  This note was created with an old/wrong shieldedAddress.');
+    console.error('  Please clear notes from localStorage and re-shield.');
+    throw new Error('Note ownership mismatch. This note was created with an outdated identity. Please clear your notes and re-shield.');
+  }
+  
+  // Get token addresses (convert to bigint for circuit)
+  const inputTokenAddress = inputNote.token === 'DOGE' 
+    ? 0n 
+    : addressToBigInt(shieldedPool.supportedTokens[inputNote.token as keyof typeof shieldedPool.supportedTokens]?.address || '0x0000000000000000000000000000000000000000');
+  
+  // NOTE: Circuit uses MiMC2(spendingKey, 0) for ownership verification
+  // This matches the circuit constraint: ownerHash.in[1] <== 2 (DOMAIN.SHIELDED_ADDRESS)
+  // We need to compute the owner hash with domain 2 to match circuit (same as transfer.circom)
+  const { mimcHash2, DOMAIN } = await import('./shielded-crypto');
+  const ownerHashFromSpendingKey = await mimcHash2(identity.spendingKey, DOMAIN.SHIELDED_ADDRESS);
+  
+  // Verify the note's ownerPubkey matches what circuit will compute
+  if (inputNote.ownerPubkey !== ownerHashFromSpendingKey) {
+    console.error('[Swap] CRITICAL: Note ownerPubkey does not match circuit computation!');
+    console.error('  Note ownerPubkey:', inputNote.ownerPubkey.toString());
+    console.error('  Circuit will compute MiMC2(spendingKey, 2):', ownerHashFromSpendingKey.toString());
+    console.error('  Expected shielded address:', identity.shieldedAddress.toString());
+    throw new Error('Note ownership mismatch. The note was created with an identity that uses a different address calculation. Please clear your notes and re-shield with the current identity.');
+  }
+  
+  // Prepare circuit input
+  const circuitInput = {
+    // Public inputs (8 total): [root, inputNullifierHash, outputCommitment1, outputCommitment2, tokenInAddress, tokenOutAddress, swapAmount, outputAmount]
+    root: root.toString(),
+    inputNullifierHash: nullifierHash.toString(),
+    outputCommitment1: outputCommitment1.toString(),
+    outputCommitment2: changeCommitment.toString(),  // 0 if no change
+    tokenInAddress: inputTokenAddress.toString(),
+    tokenOutAddress: outputTokenAddress.toString(),
+    swapAmount: swapAmount.toString(),
+    outputAmount: outputAmount.toString(),
+    
+    // Private inputs
+    inAmount: inputNote.amount.toString(),  // Full input note amount
+    inOwnerPubkey: inputNote.ownerPubkey.toString(),
+    inSecret: inputNote.secret.toString(),
+    inBlinding: inputNote.blinding.toString(),
+    inLeafIndex: inputNote.leafIndex.toString(),
+    pathElements: pathElements.map(e => e.toString()),
+    pathIndices: pathIndices,
+    spendingKey: identity.spendingKey.toString(),
+    
+    // Output note 1 (swapped token)
+    out1Amount: outputAmount.toString(),
+    out1OwnerPubkey: identity.shieldedAddress.toString(), // Same as input owner for self-swap
+    out1Secret: outputSecret.toString(),
+    out1Blinding: outputBlinding.toString(),
+    
+    // Output note 2 (change - same token as input, can be 0)
+    changeAmount: changeAmount.toString(),
+    changeSecret: changeNote?.secret.toString() || '0',
+    changeBlinding: changeNote?.blinding.toString() || '0',
+  };
+  
+  console.log('[Swap] Generating ZK proof...');
+  console.log('[Swap] Circuit input verification:');
+  console.log('  spendingKey:', identity.spendingKey.toString(16).slice(0, 16) + '...');
+  console.log('  inOwnerPubkey:', inputNote.ownerPubkey.toString(16).slice(0, 16) + '...');
+  console.log('  computed owner (MiMC(sk, 0)):', ownerHashFromSpendingKey.toString(16).slice(0, 16) + '...');
+  console.log('  Match:', inputNote.ownerPubkey === ownerHashFromSpendingKey);
+  console.log('  inLeafIndex:', inputNote.leafIndex);
+  console.log('  inputAmount:', inputNote.amount.toString());
+  console.log('  outputAmount:', outputAmount.toString());
+  console.log('  inputToken:', inputNote.token);
+  console.log('  outputToken:', outputToken);
+  
+  // Generate proof
+  const { proof, publicSignals } = await snarks.groth16.fullProve(
+    circuitInput,
+    `${CIRCUITS_PATH}/swap.wasm`,
+    `${CIRCUITS_PATH}/swap_final.zkey`
+  );
+  
+  console.log('[Swap] ✓ Proof generated successfully');
+  console.log('[Swap] Public signals:', publicSignals.map((s: string) => s.slice(0, 20) + '...'));
+  
+  // Verify public signals match what we computed
+  if (publicSignals[0] !== root.toString()) {
+    console.error('[Swap] ❌ Root mismatch!');
+  }
+  if (publicSignals[1] !== nullifierHash.toString()) {
+    console.error('[Swap] ❌ Nullifier hash mismatch!');
+  }
+  if (publicSignals[2] !== outputCommitment1.toString()) {
+    console.error('[Swap] ❌ Output commitment 1 mismatch!');
+  }
+  if (publicSignals[3] !== changeCommitment.toString()) {
+    console.error('[Swap] ❌ Output commitment 2 (change) mismatch!');
+  }
+  
+  return {
+    proof: {
+      proof: formatProofForContract(proof),
+      publicInputs: publicSignals,
+    },
+    outputNote,
+    changeNote,  // null if no change
     nullifierHash,
     root,
   };

@@ -14,14 +14,30 @@ import {
   getSwapQuote, 
   prepareShieldedSwap,
   getShieldedBalances,
-  getNotesForToken,
+  getNotesForToken, filterValidNotes,
   formatSwapDetails,
+  checkSwapLiquidity,
   SWAP_TOKENS,
   type SwapToken,
   type SwapQuote,
 } from "@/lib/shielded/shielded-swap-service"
-import { getIdentity, getNotes, completeUnshield } from "@/lib/shielded/shielded-service"
+import { getIdentity, getNotes, completeUnshield, completeSwap } from "@/lib/shielded/shielded-service"
 import { addTransaction } from "@/lib/shielded/transaction-history"
+import { shieldedPool } from "@/lib/dogeos-config"
+
+// Use local backend for development, production URL for deployed
+const RELAYER_URL = process.env.NEXT_PUBLIC_INDEXER_URL || 
+  (typeof window !== 'undefined' && window.location.hostname === 'localhost' 
+    ? 'http://localhost:3001' 
+    : 'https://dogenadocash.onrender.com')
+
+// Token logos for swap interface
+const TOKEN_LOGOS: Record<string, string> = {
+  DOGE: "https://assets.coingecko.com/coins/images/5/large/dogecoin.png",
+  USDC: "https://assets.coingecko.com/coins/images/6319/large/usdc.png",
+  USDT: "https://assets.coingecko.com/coins/images/325/large/Tether.png",
+  WETH: "https://assets.coingecko.com/coins/images/2518/large/weth.png",
+}
 
 interface SwapInterfaceProps {
   notes: ShieldedNote[]
@@ -46,10 +62,40 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
   const [isLoadingQuote, setIsLoadingQuote] = useState(false)
   const [status, setStatus] = useState<"idle" | "quoting" | "proving" | "relaying" | "success" | "error">("idle")
   const [txHash, setTxHash] = useState<string | null>(null)
+  const [liquidityCheck, setLiquidityCheck] = useState<{
+    hasLiquidity: boolean;
+    availableBalance: bigint;
+    requiredAmount: bigint;
+  } | null>(null)
   
   // Get balances
   const balances = getShieldedBalances(notes)
   const inputBalance = balances[inputToken] || 0n
+  
+  // Calculate largest single note (for Max button display and capping)
+  const [largestNoteAmount, setLargestNoteAmount] = useState<bigint>(0n)
+  
+  useEffect(() => {
+    const updateLargestNote = async () => {
+      try {
+        const identity = getIdentity()
+        const validNotes = await filterValidNotes(notes, shieldedPool.address, identity || undefined)
+        const availableNotes = getNotesForToken(validNotes, inputToken)
+        if (availableNotes.length > 0) {
+          const largest = availableNotes.reduce((max, note) => 
+            note.amount > max.amount ? note : max
+          )
+          setLargestNoteAmount(largest.amount)
+        } else {
+          setLargestNoteAmount(0n)
+        }
+      } catch (error) {
+        console.error('[Swap] Error calculating largest note:', error)
+        setLargestNoteAmount(0n)
+      }
+    }
+    updateLargestNote()
+  }, [notes, inputToken])
   
   // Fetch quote when input changes
   useEffect(() => {
@@ -61,12 +107,74 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
       
       try {
         setIsLoadingQuote(true)
-        const amountWei = parseAmountToWei(parseFloat(inputAmount))
-        const newQuote = await getSwapQuote(inputToken, outputToken, amountWei)
+        const decimals = SWAP_TOKENS[inputToken].decimals
+        const amountWei = parseAmountToWei(parseFloat(inputAmount), decimals)
+        
+        // Get identity for filtering spent notes (optional - if not available, will skip spent check)
+        const identity = getIdentity()
+        
+        // Filter notes to only those that exist in the current contract and are not spent
+        const validNotes = await filterValidNotes(notes, shieldedPool.address, identity || undefined)
+        
+        // Get available notes for the token (from valid notes only)
+        const availableNotes = getNotesForToken(validNotes, inputToken)
+        if (availableNotes.length === 0) {
+          setQuote(null)
+          return
+        }
+        
+        // Find largest note
+        const largestNote = availableNotes.reduce((max, note) => 
+          note.amount > max.amount ? note : max
+        )
+        
+        // Cap amount to largest single note (swap can only use one note at a time)
+        // Use largestNoteAmount if available, otherwise calculate on the fly
+        const maxNoteAmount = largestNoteAmount > 0n && largestNoteAmount <= largestNote.amount 
+          ? largestNoteAmount 
+          : largestNote.amount
+        const maxAvailableWei = inputBalance < maxNoteAmount ? inputBalance : maxNoteAmount
+        const cappedAmountWei = amountWei > maxAvailableWei ? maxAvailableWei : amountWei
+        
+        // Only generate quote if we have a valid amount
+        if (cappedAmountWei <= 0n) {
+          setQuote(null)
+          return
+        }
+        
+        // Update input field if it was capped (but avoid infinite loop)
+        const cappedAmount = formatWeiToAmount(cappedAmountWei, decimals)
+        const inputAmountNum = parseFloat(inputAmount)
+        // Check if amount was capped (allowing small floating point differences)
+        if (cappedAmountWei < amountWei) {
+          // Amount was capped - update input field
+          const difference = Math.abs(cappedAmount - inputAmountNum)
+          if (difference > 0.00001) {
+            // Update to capped value - this will trigger useEffect again with corrected value
+            setInputAmount(cappedAmount.toFixed(4))
+            return // Will trigger useEffect again with corrected value
+          }
+        }
+        
+        // Generate quote with capped amount
+        const newQuote = await getSwapQuote(inputToken, outputToken, cappedAmountWei)
         setQuote(newQuote)
+        
+        // Check liquidity for output token
+        if (newQuote) {
+          const liquidity = await checkSwapLiquidity(
+            outputToken,
+            newQuote.outputAmount,
+            shieldedPool.address
+          )
+          setLiquidityCheck(liquidity)
+        } else {
+          setLiquidityCheck(null)
+        }
       } catch (error) {
         console.error("Quote error:", error)
         setQuote(null)
+        setLiquidityCheck(null)
       } finally {
         setIsLoadingQuote(false)
       }
@@ -74,7 +182,7 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
     
     const debounce = setTimeout(fetchQuote, 500)
     return () => clearTimeout(debounce)
-  }, [inputAmount, inputToken, outputToken])
+  }, [inputAmount, inputToken, outputToken, inputBalance, notes])
   
   // Swap tokens
   const handleSwapTokens = () => {
@@ -85,24 +193,17 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
     setQuote(null)
   }
   
-  // Set max amount
+  // Set max amount (based on largest single note, since swaps use one note at a time)
   const handleSetMax = () => {
-    if (inputBalance > 0n) {
-      const maxAmount = formatWeiToAmount({ amount: inputBalance } as any)
+    if (largestNoteAmount > 0n) {
+      const decimals = SWAP_TOKENS[inputToken].decimals
+      const maxAmount = formatWeiToAmount(largestNoteAmount, decimals)
       setInputAmount(maxAmount.toString())
     }
   }
   
   // Execute swap
   const handleSwap = async () => {
-    // Swap functionality requires DEX integration
-    // The circuit and contract are ready, but we need liquidity
-    toast({
-      title: "Coming Soon",
-      description: "Private swaps require DEX liquidity integration. Available in next release.",
-    })
-    return
-    
     if (!quote) {
       toast({
         title: "No Quote",
@@ -122,17 +223,60 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
       return
     }
     
-    // Find note to spend
-    const availableNotes = getNotesForToken(notes, inputToken)
-    const noteToSpend = availableNotes.find(n => n.amount >= quote.inputAmount)
+    // Find note to spend - use largest available note
+    // Filter notes to only those that exist in the current contract and are not spent
+    const validNotes = await filterValidNotes(notes, shieldedPool.address, identity)
     
-    if (!noteToSpend) {
+    // Get available notes for the token (from valid notes only)
+    const availableNotes = getNotesForToken(validNotes, inputToken)
+    
+    if (availableNotes.length === 0) {
       toast({
         title: "Insufficient Balance",
-        description: `Not enough ${inputToken} in a single note`,
+        description: `No ${inputToken} notes available in the current contract`,
         variant: "destructive",
       })
       return
+    }
+    
+    // Find largest note that can cover the swap amount
+    const sortedNotes = [...availableNotes].sort((a, b) => {
+      if (a.amount > b.amount) return -1
+      if (a.amount < b.amount) return 1
+      return 0
+    })
+    
+    const noteToSpend = sortedNotes.find(n => n.amount >= quote.inputAmount)
+    
+    if (!noteToSpend) {
+      const largestNoteAmount = formatWeiToAmount(sortedNotes[0].amount, SWAP_TOKENS[inputToken].decimals)
+      toast({
+        title: "Insufficient Balance",
+        description: `Not enough ${inputToken} in a single note. Largest note: ${largestNoteAmount.toFixed(4)} ${inputToken}`,
+        variant: "destructive",
+      })
+      return
+    }
+    
+    // IMPORTANT: Regenerate quote for the exact note amount to avoid mismatch
+    // The quote might have been generated for a capped amount, but we're using a larger note
+    let finalQuote = quote
+    if (noteToSpend.amount !== quote.inputAmount) {
+      // Note is larger than quote amount - regenerate quote for exact note amount
+      console.log(`[Swap] Note amount (${noteToSpend.amount.toString()}) differs from quote amount (${quote.inputAmount.toString()}), regenerating quote...`)
+      try {
+        finalQuote = await getSwapQuote(inputToken, outputToken, noteToSpend.amount)
+        // Update the displayed quote amount
+        setQuote(finalQuote)
+      } catch (error) {
+        console.error('[Swap] Failed to regenerate quote:', error)
+        toast({
+          title: "Quote Error",
+          description: "Failed to generate quote for selected note. Please try again.",
+          variant: "destructive",
+        })
+        return
+      }
     }
     
     try {
@@ -142,33 +286,201 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
       const result = await prepareShieldedSwap(
         noteToSpend,
         identity,
-        quote,
-        "0x0000000000000000000000000000000000000000" // TODO: Pool address
+        finalQuote, // Use the regenerated quote that matches the note amount
+        shieldedPool.address
       )
       
       setStatus("relaying")
       
-      // In production: Send transaction to contract
-      // For now: Simulate success
-      await new Promise(resolve => setTimeout(resolve, 2000))
+      // Get token addresses
+      const inputTokenAddress = inputToken === 'DOGE' 
+        ? '0x0000000000000000000000000000000000000000'
+        : SWAP_TOKENS[inputToken].address
+      const outputTokenAddress = outputToken === 'DOGE'
+        ? '0x0000000000000000000000000000000000000000'
+        : SWAP_TOKENS[outputToken].address
       
-      const mockTxHash = "0x" + "1234".repeat(16) // Mock
-      setTxHash(mockTxHash)
+      // Extract public inputs from proof (they contain the data needed for contract)
+      // Public inputs order: [root, inputNullifierHash, outputCommitment1, outputCommitment2, tokenInAddress, tokenOutAddress, swapAmount, outputAmount]
+      const publicInputs = result.proof.publicInputs
+      if (!publicInputs || publicInputs.length < 8) {
+        throw new Error(`Invalid proof public inputs: expected 8, got ${publicInputs?.length || 0}`);
+      }
+      
+      // outputCommitment2 is at index 3, swapAmount is at index 6, outputAmount is at index 7
+      const outputCommitment2FromProof = publicInputs[3] || '0'  // Change commitment (0 if no change)
+      const swapAmountFromProof = publicInputs[6] || finalQuote.inputAmount.toString()  // Amount being swapped (from proof)
+      const outputAmount = publicInputs[7] || finalQuote.outputAmount.toString()
+      
+      // Use changeCommitment from result if available, otherwise use the one from public inputs
+      // result.changeCommitment should be properly formatted as hex string
+      const changeCommitmentValue = result.changeCommitment || 
+        (outputCommitment2FromProof === '0' || outputCommitment2FromProof === '0x0' 
+          ? '0x0000000000000000000000000000000000000000000000000000000000000000'
+          : `0x${BigInt(outputCommitment2FromProof).toString(16).padStart(64, '0')}`)
+      
+      console.log('[Swap] Commitments:', {
+        outputCommitment1: result.outputCommitment?.slice(0, 18) + '...',
+        changeCommitment: result.changeCommitment?.slice(0, 18) + '...',
+        changeCommitmentFromProof: outputCommitment2FromProof?.slice(0, 20),
+        finalChangeCommitment: changeCommitmentValue?.slice(0, 18) + '...',
+        hasChangeNote: !!result.changeNote,
+      });
+      
+      // Validate all required parameters before sending
+      if (!result.outputCommitment || !result.inputNullifierHash || !result.merkleRoot || !result.proof?.proof) {
+        console.error('[Swap] Missing proof data:', {
+          hasOutputCommitment: !!result.outputCommitment,
+          hasInputNullifierHash: !!result.inputNullifierHash,
+          hasMerkleRoot: !!result.merkleRoot,
+          hasProof: !!result.proof?.proof,
+        });
+        throw new Error('Missing proof data - please try again');
+      }
+      
+      if (!inputTokenAddress || !outputTokenAddress) {
+        throw new Error('Missing token addresses');
+      }
+      
+      if (!finalQuote.inputAmount || !outputAmount) {
+        throw new Error('Missing swap amounts');
+      }
+      
+      // Send to relayer
+      const swapRequestBody = {
+        poolAddress: shieldedPool.address,
+        proof: result.proof.proof,
+        root: result.merkleRoot,
+        inputNullifierHash: result.inputNullifierHash,
+        outputCommitment1: result.outputCommitment,  // Swapped token note
+        outputCommitment2: changeCommitmentValue,  // Change note (0x0...0 if no change)
+        tokenIn: inputTokenAddress,
+        tokenOut: outputTokenAddress,
+        swapAmount: swapAmountFromProof, // Amount being swapped (from proof's public signals - index 6)
+        outputAmount: outputAmount, // outputAmount from proof's public signals (required for proof verification - index 7)
+        minAmountOut: finalQuote.outputAmount.toString(), // Use finalQuote's outputAmount as minAmountOut for slippage protection
+        encryptedMemo: '', // TODO: Add memo encryption if needed
+      };
+      
+      console.log('[Swap] Request body validation:', {
+        swapAmountFromProof,
+        outputAmount,
+        finalQuoteInputAmount: finalQuote.inputAmount.toString(),
+        finalQuoteOutputAmount: finalQuote.outputAmount.toString(),
+      });
+      
+      // Validate request body before sending
+      const requiredFields = [
+        'poolAddress', 'proof', 'root', 'inputNullifierHash', 
+        'outputCommitment1', 'tokenIn', 'tokenOut', 'swapAmount', 
+        'outputAmount', 'minAmountOut'
+      ];
+      const missingFields = requiredFields.filter(field => !swapRequestBody[field as keyof typeof swapRequestBody]);
+      
+      if (missingFields.length > 0) {
+        console.error('[Swap] Missing required fields:', missingFields);
+        console.error('[Swap] Request body:', swapRequestBody);
+        throw new Error(`Missing required fields: ${missingFields.join(', ')}`);
+      }
+      
+      console.log('[Swap] Sending to relayer:', {
+        poolAddress: swapRequestBody.poolAddress,
+        hasProof: !!swapRequestBody.proof && swapRequestBody.proof.length === 8,
+        root: swapRequestBody.root?.slice(0, 18) + '...',
+        inputNullifierHash: swapRequestBody.inputNullifierHash?.slice(0, 18) + '...',
+        outputCommitment1: swapRequestBody.outputCommitment1?.slice(0, 18) + '...',
+        outputCommitment2: swapRequestBody.outputCommitment2?.slice(0, 18) + '...',
+        tokenIn: swapRequestBody.tokenIn,
+        tokenOut: swapRequestBody.tokenOut,
+        swapAmount: swapRequestBody.swapAmount,
+        outputAmount: swapRequestBody.outputAmount,
+        minAmountOut: swapRequestBody.minAmountOut,
+        allFields: Object.keys(swapRequestBody),
+      });
+      
+      const response = await fetch(`${RELAYER_URL}/api/shielded/relay/swap`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(swapRequestBody),
+      })
+      
+      let data;
+      try {
+        data = await response.json()
+      } catch (e) {
+        const text = await response.text()
+        console.error('[Swap] Failed to parse response as JSON:', text)
+        throw new Error(`Relayer returned non-JSON response: ${text.substring(0, 200)}`)
+      }
+      
+      if (!response.ok) {
+        console.error('[Swap] Backend error response:', {
+          status: response.status,
+          statusText: response.statusText,
+          error: data.error,
+          message: data.message,
+          missing: data.missing,
+          required: data.required,
+        })
+        const errorMsg = data.missing 
+          ? `Missing parameters: ${Array.isArray(data.missing) ? data.missing.join(', ') : data.missing}`
+          : (data.message || data.error || 'Relayer transaction failed')
+        throw new Error(errorMsg)
+      }
+      
+      setTxHash(data.txHash)
       setStatus("success")
       
+      // Update wallet state: remove spent input note and add output note
+      const allNotes = getNotes()
+      const spentNoteIndex = allNotes.findIndex(n => 
+        n.commitment === noteToSpend.commitment && 
+        n.leafIndex === noteToSpend.leafIndex
+      )
+      
+      if (spentNoteIndex !== -1) {
+        // completeSwap will remove the spent note and add both output notes (swapped + change)
+        completeSwap(
+          spentNoteIndex,
+          result.outputNote,
+          data.outputLeafIndex1 || data.outputLeafIndex || undefined,
+          result.changeNote,  // Add change note if present
+          data.outputLeafIndex2 || undefined  // Change note leaf index
+        )
+        console.log('[Swap] Updated wallet state:', {
+          removedNoteIndex: spentNoteIndex,
+          addedLeafIndex1: data.outputLeafIndex1 || data.outputLeafIndex,
+          addedLeafIndex2: data.outputLeafIndex2,
+          outputNoteAmount: result.outputNote.amount.toString(),
+          outputToken: finalQuote.outputToken,
+          changeNoteAmount: result.changeNote?.amount.toString() || '0',
+        })
+        
+        // Trigger UI refresh events
+        setTimeout(() => {
+          // Refresh public balance (for gas token)
+          window.dispatchEvent(new Event('refresh-balance'))
+          // Trigger shielded wallet state refresh
+          window.dispatchEvent(new CustomEvent('shielded-wallet-updated'))
+        }, 500)
+      } else {
+        console.warn('[Swap] Could not find spent note in wallet state')
+      }
+      
       // Add to transaction history
-      const inputAmountWei = parseAmountToWei(inputAmount, inputToken)
-      const outputAmountWei = quote.outputAmount
+      // Use note amount for input (what was actually spent) and finalQuote for output
+      const inputAmountWei = noteToSpend.amount
+      const outputAmountWei = finalQuote.outputAmount
       addTransaction({
         type: 'swap',
-        txHash: mockTxHash,
+        txHash: data.txHash,
         timestamp: Math.floor(Date.now() / 1000),
         token: inputToken,
         amount: inputAmount,
         amountWei: inputAmountWei.toString(),
         inputToken,
         outputToken,
-        outputAmount: formatWeiToAmount({ amount: outputAmountWei } as any).toFixed(6),
+        outputAmount: formatWeiToAmount(outputAmountWei, SWAP_TOKENS[outputToken].decimals).toFixed(6),
         status: 'confirmed',
       })
       
@@ -237,7 +549,7 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
                 className="text-xs text-primary hover:underline"
                 onClick={handleSetMax}
               >
-                Max: {formatWeiToAmount({ amount: inputBalance } as any).toFixed(4)}
+                Max: {largestNoteAmount > 0n ? formatWeiToAmount(largestNoteAmount, SWAP_TOKENS[inputToken].decimals).toFixed(4) : '0.0000'}
               </button>
             </div>
             <div className="flex gap-2">
@@ -245,17 +557,51 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
                 type="number"
                 placeholder="0.0"
                 value={inputAmount}
-                onChange={(e) => setInputAmount(e.target.value)}
+                onChange={(e) => {
+                  const value = e.target.value
+                  if (value === '') {
+                    setInputAmount('')
+                    return
+                  }
+                  const numValue = parseFloat(value)
+                  if (!isNaN(numValue)) {
+                    const maxAmount = formatWeiToAmount(inputBalance, SWAP_TOKENS[inputToken].decimals)
+                    // Cap to max balance
+                    if (numValue > maxAmount) {
+                      setInputAmount(maxAmount.toFixed(4))
+                    } else {
+                      setInputAmount(value)
+                    }
+                  }
+                }}
                 className="text-xl"
+                min="0"
+                step="0.0001"
               />
               <Select value={inputToken} onValueChange={(v) => handleInputTokenChange(v as SwapToken)}>
                 <SelectTrigger className="w-32">
-                  <SelectValue />
+                  <SelectValue>
+                    <div className="flex items-center gap-2">
+                      <img 
+                        src={TOKEN_LOGOS[inputToken] || TOKEN_LOGOS.DOGE} 
+                        alt={inputToken} 
+                        className="w-4 h-4 rounded-full"
+                      />
+                      <span>{inputToken}</span>
+                    </div>
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {Object.keys(SWAP_TOKENS).map((token) => (
                     <SelectItem key={token} value={token}>
-                      {token}
+                      <div className="flex items-center gap-2">
+                        <img 
+                          src={TOKEN_LOGOS[token] || TOKEN_LOGOS.DOGE} 
+                          alt={token} 
+                          className="w-4 h-4 rounded-full"
+                        />
+                        <span>{token}</span>
+                      </div>
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -285,20 +631,36 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
               <Input
                 type="text"
                 placeholder="0.0"
-                value={quote ? formatWeiToAmount({ amount: quote.outputAmount } as any).toFixed(6) : ""}
+                value={quote ? formatWeiToAmount(quote.outputAmount, SWAP_TOKENS[outputToken].decimals).toFixed(6) : ""}
                 readOnly
                 className="text-xl bg-muted"
               />
               <Select value={outputToken} onValueChange={(v) => setOutputToken(v as SwapToken)}>
                 <SelectTrigger className="w-32">
-                  <SelectValue />
+                  <SelectValue>
+                    <div className="flex items-center gap-2">
+                      <img 
+                        src={TOKEN_LOGOS[outputToken] || TOKEN_LOGOS.USDC} 
+                        alt={outputToken} 
+                        className="w-4 h-4 rounded-full"
+                      />
+                      <span>{outputToken}</span>
+                    </div>
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {Object.keys(SWAP_TOKENS)
                     .filter(t => t !== inputToken)
                     .map((token) => (
                       <SelectItem key={token} value={token}>
-                        {token}
+                        <div className="flex items-center gap-2">
+                          <img 
+                            src={TOKEN_LOGOS[token] || TOKEN_LOGOS.USDC} 
+                            alt={token} 
+                            className="w-4 h-4 rounded-full"
+                          />
+                          <span>{token}</span>
+                        </div>
                       </SelectItem>
                     ))}
                 </SelectContent>
@@ -315,7 +677,7 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Fee (0.3%)</span>
-                <span>{formatWeiToAmount({ amount: quote.fee } as any).toFixed(6)} {outputToken}</span>
+                <span>{formatWeiToAmount(quote.fee, SWAP_TOKENS[outputToken].decimals).toFixed(6)} {outputToken}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Price Impact</span>
@@ -324,6 +686,19 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
                 </span>
               </div>
             </div>
+          )}
+          
+          {/* Liquidity Warning */}
+          {liquidityCheck && !liquidityCheck.hasLiquidity && quote && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                <strong>Insufficient Liquidity:</strong> The contract has{" "}
+                {formatWeiToAmount(liquidityCheck.availableBalance, SWAP_TOKENS[outputToken].decimals).toFixed(6)}{" "}
+                {outputToken} available, but {formatWeiToAmount(liquidityCheck.requiredAmount, SWAP_TOKENS[outputToken].decimals).toFixed(6)}{" "}
+                {outputToken} is required. Someone must shield {outputToken} first to provide liquidity.
+              </AlertDescription>
+            </Alert>
           )}
           
           {/* Privacy Note */}
@@ -338,10 +713,10 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
           <Button 
             className="w-full bg-[#C2A633]/20 hover:bg-[#C2A633]/30 text-[#C2A633] border border-[#C2A633]/40" 
             onClick={handleSwap}
-            disabled={!quote || parseFloat(inputAmount) <= 0}
+            disabled={!quote || parseFloat(inputAmount) <= 0 || (liquidityCheck && !liquidityCheck.hasLiquidity)}
           >
             <ArrowDownUp className="h-4 w-4 mr-2 opacity-85" strokeWidth={1.75} />
-            Swap Privately
+            {liquidityCheck && !liquidityCheck.hasLiquidity ? "Insufficient Liquidity" : "Swap Privately"}
           </Button>
         </div>
       )}
