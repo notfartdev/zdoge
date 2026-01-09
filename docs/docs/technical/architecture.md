@@ -139,45 +139,45 @@ The backend provides indexing, relaying, and transaction history services.
 
 ### Shield Flow (Public → Private)
 
-```
-User                    Frontend               Contract
-  │                        │                      │
-  │─── Select token ──────>│                      │
-  │─── Enter amount ───────>│                      │
-  │                        │                      │
-  │<── Generate note ───────│                      │
-  │<── Compute commitment ─│                      │
-  │                        │                      │
-  │─── Confirm shield ─────>│                      │
-  │                        │─── shield(proof) ───>│
-  │                        │                      │─── Add to tree
-  │                        │<── Emit event ───────│
-  │<── Success ────────────│                      │
+```mermaid
+sequenceDiagram
+    participant User
+    participant Frontend
+    participant Contract
+    
+    User->>Frontend: Select token
+    User->>Frontend: Enter amount
+    Frontend->>Frontend: Generate note
+    Frontend->>Frontend: Compute commitment
+    User->>Frontend: Confirm shield
+    Frontend->>Contract: shield(proof)
+    Contract->>Contract: Add to tree
+    Contract->>Frontend: Emit event
+    Frontend->>User: Success
 ```
 
 ### Transfer Flow (Private → Private)
 
-```
-User                    Frontend               Contract
-  │                        │                      │
-  │─── Enter recipient ───>│                      │
-  │─── Enter amount ───────>│                      │
-  │                        │                      │
-  │<── Select notes ───────│                      │
-  │<── Generate memo ──────│                      │
-  │<── Generate ZK proof ───│                      │
-  │      (30-60 seconds)   │                      │
-  │                        │                      │
-  │─── Confirm transfer ───>│                      │
-  │                        │─── transfer(proof) ──>│
-  │                        │                      │─── Verify proof
-  │                        │                      │─── Add commitments
-  │                        │                      │─── Mark nullifier
-  │                        │<── Emit event ───────│
-  │<── Success ────────────│                      │
-  │                        │                      │
-  │                        │                      │─── Auto-discovery
-  │                        │                      │    (Recipient)
+```mermaid
+sequenceDiagram
+    participant User
+    participant Frontend
+    participant Contract
+    participant Recipient
+    
+    User->>Frontend: Enter recipient
+    User->>Frontend: Enter amount
+    Frontend->>Frontend: Select notes
+    Frontend->>Frontend: Generate memo
+    Frontend->>Frontend: Generate ZK proof<br/>(30-60 seconds)
+    User->>Frontend: Confirm transfer
+    Frontend->>Contract: transfer(proof)
+    Contract->>Contract: Verify proof
+    Contract->>Contract: Add commitments
+    Contract->>Contract: Mark nullifier
+    Contract->>Frontend: Emit event
+    Frontend->>User: Success
+    Contract->>Recipient: Auto-discovery
 ```
 
 ## Security Model

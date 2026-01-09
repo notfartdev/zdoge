@@ -86,22 +86,24 @@ Proves valid token swap:
 
 ## How Proofs are Generated
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                    Browser (Client)                      │
-│                                                          │
-│  ┌────────────┐    ┌─────────────┐    ┌──────────────┐  │
-│  │   User     │    │   snarkjs   │    │   Circuit    │  │
-│  │   Inputs   │───>│   Library   │<───│   WASM       │  │
-│  │            │    │             │    │   + zkey     │  │
-│  └────────────┘    └──────┬──────┘    └──────────────┘  │
-│                           │                              │
-│                           ▼                              │
-│                    ┌──────────────┐                      │
-│                    │    Proof     │                      │
-│                    │  (a, b, c)   │                      │
-│                    └──────────────┘                      │
-└─────────────────────────────────────────────────────────┘
+```mermaid
+graph LR
+    subgraph Browser["Browser (Client)"]
+        Inputs["User Inputs"]
+        snarkjs["snarkjs Library"]
+        Circuit["Circuit WASM<br/>+ zkey"]
+        Proof["Proof<br/>(a, b, c)"]
+        
+        Inputs -->|"1. Provide inputs"| snarkjs
+        Circuit -->|"2. Load circuit"| snarkjs
+        snarkjs -->|"3. Generate proof"| Proof
+    end
+    
+    style Browser fill:#1a1a1a,stroke:#C2A633,stroke-width:2px
+    style Inputs fill:#0d0d0d,stroke:#C2A633,stroke-width:1px,color:#fff
+    style snarkjs fill:#0d0d0d,stroke:#C2A633,stroke-width:1px,color:#C2A633
+    style Circuit fill:#0d0d0d,stroke:#C2A633,stroke-width:1px,color:#fff
+    style Proof fill:#0d0d0d,stroke:#C2A633,stroke-width:1px,color:#C2A633
 ```
 
 ### Process:
