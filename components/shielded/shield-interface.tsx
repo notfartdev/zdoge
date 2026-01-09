@@ -535,14 +535,14 @@ export function ShieldInterface({ onSuccess, onReset, selectedToken: externalTok
               </div>
               
               <Button 
-                className="w-full relative overflow-hidden bg-white/10 border border-white/20 hover:border-[#B89A2E]/50 transition-all duration-500 group"
+                className="w-full min-h-[44px] sm:min-h-0 relative overflow-hidden bg-white/10 border border-white/20 hover:border-[#B89A2E]/50 transition-all duration-500 group py-3 sm:py-2"
                 onClick={handleShield}
                 disabled={!wallet?.isConnected || status !== "idle" || !amount || parseFloat(amount) <= 0 || !!amountError}
               >
                 {/* Fill animation from left to right - slower and more natural */}
                 <span className="absolute inset-0 bg-[#B89A2E] transform -translate-x-full group-hover:translate-x-0 transition-transform duration-[1300ms] ease-in-out" />
-                <span className="relative z-10 flex items-center justify-center text-white group-hover:text-black transition-colors duration-[1300ms] ease-in-out">
-                  <Shield className="h-4 w-4 mr-2" />
+                <span className="relative z-10 flex items-center justify-center text-sm sm:text-base text-white group-hover:text-black transition-colors duration-[1300ms] ease-in-out">
+                  <Shield className="h-4 w-4 mr-2 flex-shrink-0" />
                   Shield {selectedToken}
                 </span>
               </Button>

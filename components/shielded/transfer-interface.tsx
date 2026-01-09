@@ -505,7 +505,7 @@ export function TransferInterface({ notes, onSuccess, selectedToken = "DOGE", on
           })()}
           
           <Button 
-            className="w-full relative overflow-hidden bg-white/10 border border-white/20 hover:border-[#B89A2E]/50 transition-all duration-500 group"
+            className="w-full min-h-[44px] sm:min-h-0 relative overflow-hidden bg-white/10 border border-white/20 hover:border-[#B89A2E]/50 transition-all duration-500 group py-3 sm:py-2"
             onClick={() => {
               setPendingTransfer(() => executeTransfer)
               setShowConfirmDialog(true)
@@ -519,8 +519,8 @@ export function TransferInterface({ notes, onSuccess, selectedToken = "DOGE", on
           >
             {/* Fill animation from left to right - slower and more natural */}
             <span className="absolute inset-0 bg-[#B89A2E] transform -translate-x-full group-hover:translate-x-0 transition-transform duration-[1300ms] ease-in-out" />
-            <span className="relative z-10 flex items-center justify-center text-white group-hover:text-black transition-colors duration-[1300ms] ease-in-out">
-              <Send className="h-4 w-4 mr-2" />
+            <span className="relative z-10 flex items-center justify-center text-sm sm:text-base text-white group-hover:text-black transition-colors duration-[1300ms] ease-in-out">
+              <Send className="h-4 w-4 mr-2 flex-shrink-0" />
               Send Privately
             </span>
           </Button>
@@ -546,18 +546,18 @@ export function TransferInterface({ notes, onSuccess, selectedToken = "DOGE", on
                 const amountWei = BigInt(Math.floor(amountNum * 1e18))
                 const { fee, received } = calculateFee(amountWei)
                 return (
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
+                  <div className="space-y-1.5 sm:space-y-2 text-xs sm:text-sm">
+                    <div className="flex justify-between items-center gap-2">
                       <span className="text-gray-400">Amount</span>
-                      <span className="text-white">{amount} {selectedToken}</span>
+                      <span className="text-white text-right break-all">{amount} {selectedToken}</span>
                     </div>
-                    <div className="flex justify-between">
+                    <div className="flex justify-between items-center gap-2">
                       <span className="text-gray-400">Relayer Fee</span>
-                      <span className="text-red-400">-{formatWeiToAmount(fee).toFixed(4)} {selectedToken}</span>
+                      <span className="text-red-400 text-right break-all">-{formatWeiToAmount(fee).toFixed(4)} {selectedToken}</span>
                     </div>
-                    <div className="flex justify-between pt-2 border-t border-[#C2A633]/10">
+                    <div className="flex justify-between items-center gap-2 pt-2 border-t border-[#C2A633]/10">
                       <span className="text-gray-400">Recipient Receives</span>
-                      <span className="text-green-400 font-semibold">{formatWeiToAmount(received).toFixed(4)} {selectedToken}</span>
+                      <span className="text-green-400 font-semibold text-right break-all">{formatWeiToAmount(received).toFixed(4)} {selectedToken}</span>
                     </div>
                   </div>
                 )

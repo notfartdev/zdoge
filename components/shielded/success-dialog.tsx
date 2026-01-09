@@ -61,7 +61,7 @@ export function SuccessDialog({
   return (
     <AlertDialog open={open} onOpenChange={handleOpenChange}>
       <AlertDialogContent 
-        className="bg-gradient-to-br from-zinc-900 via-zinc-900 to-zinc-950 border-2 border-[#C2A633]/30 shadow-2xl shadow-[#C2A633]/10 rounded-2xl p-6 max-w-md"
+        className="bg-gradient-to-br from-zinc-900 via-zinc-900 to-zinc-950 border-2 border-[#C2A633]/30 shadow-2xl shadow-[#C2A633]/10 rounded-2xl p-4 sm:p-6 max-w-[95vw] sm:max-w-md"
         onPointerDownOutside={(e) => e.preventDefault()}
         onEscapeKeyDown={(e) => e.preventDefault()}
       >
@@ -72,33 +72,33 @@ export function SuccessDialog({
               <Check className="h-5 w-5 text-[#C2A633]" strokeWidth={2.5} />
             </div>
           </div>
-          <AlertDialogTitle className="text-white text-xl font-semibold text-center flex items-center justify-center gap-2">
+          <AlertDialogTitle className="text-white text-lg sm:text-xl font-semibold text-center flex items-center justify-center gap-2">
             {title}
           </AlertDialogTitle>
-          <AlertDialogDescription className="text-gray-300 text-center text-sm leading-relaxed">
+          <AlertDialogDescription className="text-gray-300 text-center text-xs sm:text-sm leading-relaxed">
             {message}
           </AlertDialogDescription>
         </AlertDialogHeader>
         
         {details && (
-          <div className="my-4 p-4 rounded-xl bg-zinc-800/60 backdrop-blur-sm border border-[#C2A633]/20 shadow-inner">
+          <div className="my-3 sm:my-4 p-3 sm:p-4 rounded-xl bg-zinc-800/60 backdrop-blur-sm border border-[#C2A633]/20 shadow-inner">
             {details}
           </div>
         )}
 
         {txHash && blockExplorerUrl && (
-          <div className="my-4 p-3 rounded-xl bg-zinc-800/40 backdrop-blur-sm border border-[#C2A633]/20 hover:border-[#C2A633]/30 transition-colors">
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-xs text-gray-400 font-mono flex-1 truncate">
-                {txHash.slice(0, 10)}...{txHash.slice(-8)}
+          <div className="my-3 sm:my-4 p-2.5 sm:p-3 rounded-xl bg-zinc-800/40 backdrop-blur-sm border border-[#C2A633]/20 hover:border-[#C2A633]/30 transition-colors">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3">
+              <span className="text-[10px] sm:text-xs text-gray-400 font-mono flex-1 break-all sm:break-normal sm:truncate">
+                {txHash.slice(0, 8)}...{txHash.slice(-6)}
               </span>
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-8 px-3 text-xs bg-zinc-800/60 hover:bg-zinc-700/60 text-gray-300 hover:text-white border border-zinc-700/50 hover:border-zinc-600/50 rounded-lg transition-all"
+                className="h-8 px-3 text-[10px] sm:text-xs bg-zinc-800/60 hover:bg-zinc-700/60 text-gray-300 hover:text-white border border-zinc-700/50 hover:border-zinc-600/50 rounded-lg transition-all self-start sm:self-auto min-w-[120px] sm:min-w-0"
                 onClick={() => window.open(`${blockExplorerUrl}/tx/${txHash}`, '_blank')}
               >
-                <ExternalLink className="h-3 w-3 mr-1.5" />
+                <ExternalLink className="h-3 w-3 mr-1.5 flex-shrink-0" />
                 View on Explorer
               </Button>
             </div>

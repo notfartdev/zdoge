@@ -486,29 +486,29 @@ export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", onTokenC
       </div>
       
       {walletState?.shieldedAddress && !compact && (
-        <div className="p-4 rounded-lg bg-muted/30 border mt-4">
-          <div className="flex items-center justify-between">
-            <div className="flex-1">
-              <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.14em] text-white/60 mb-1">
-                <Shield className="h-3.5 w-3.5 opacity-85" strokeWidth={1.75} />
+        <div className="p-3 sm:p-4 rounded-lg bg-muted/30 border mt-3 sm:mt-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 font-mono text-[10px] sm:text-[11px] uppercase tracking-[0.14em] text-white/60 mb-1 flex-wrap">
+                <Shield className="h-3 w-3 sm:h-3.5 sm:w-3.5 opacity-85 flex-shrink-0" strokeWidth={1.75} />
                 Your Shielded Address
-                <Badge variant="outline" className="text-[10px] ml-1">Permanent</Badge>
+                <Badge variant="outline" className="text-[9px] sm:text-[10px] ml-1">Permanent</Badge>
               </div>
-              <code className="text-sm font-mono bg-muted px-3 py-1.5 rounded block">
+              <code className="text-xs sm:text-sm font-mono bg-muted px-2 sm:px-3 py-1.5 rounded block break-all sm:break-normal">
                 {showAddress 
                   ? `zdoge:${walletState.shieldedAddress}`
                   : `zdoge:${shortenAddress(walletState.shieldedAddress)}`
                 }
               </code>
-              <p className="text-xs font-body text-white/60 mt-1">
+              <p className="text-[10px] sm:text-xs font-body text-white/60 mt-1">
                 Share this address to receive private payments • This address never changes
               </p>
             </div>
-            <div className="flex items-center gap-2 ml-3">
-              <Button variant="ghost" size="icon" onClick={() => setShowAddress(!showAddress)}>
+            <div className="flex items-center gap-2 sm:ml-3 self-start sm:self-auto">
+              <Button variant="ghost" size="icon" className="h-9 w-9 sm:h-8 sm:w-8" onClick={() => setShowAddress(!showAddress)}>
                 {showAddress ? <EyeOff className="h-4 w-4 opacity-85" strokeWidth={1.75} /> : <Eye className="h-4 w-4 opacity-85" strokeWidth={1.75} />}
               </Button>
-              <Button variant="ghost" size="icon" onClick={copyAddress}>
+              <Button variant="ghost" size="icon" className="h-9 w-9 sm:h-8 sm:w-8" onClick={copyAddress}>
                 {copied ? <Check className="h-4 w-4 text-green-500" strokeWidth={1.75} /> : <Copy className="h-4 w-4 opacity-85" strokeWidth={1.75} />}
               </Button>
             </div>

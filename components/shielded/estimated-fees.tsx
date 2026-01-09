@@ -50,27 +50,27 @@ export function EstimatedFees({
   }
 
   return (
-    <Card className={cn("p-4 bg-zinc-900/50 border-[#C2A633]/20", className)}>
-      <div className="space-y-3">
+    <Card className={cn("p-3 sm:p-4 bg-zinc-900/50 border-[#C2A633]/20", className)}>
+      <div className="space-y-2 sm:space-y-3">
         <div className="flex items-center gap-2">
-          <Info className="h-4 w-4 text-[#C2A633]" />
-          <span className="text-sm font-medium text-white">Estimated Fees</span>
+          <Info className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-[#C2A633] flex-shrink-0" />
+          <span className="text-xs sm:text-sm font-medium text-white">Estimated Fees</span>
         </div>
         
-        <div className="space-y-2 text-sm">
-          <div className="flex justify-between">
+        <div className="space-y-1.5 sm:space-y-2 text-xs sm:text-sm">
+          <div className="flex justify-between items-center gap-2">
             <span className="text-gray-400">Amount</span>
-            <span className="text-white font-mono">{amountFormatted} {token}</span>
+            <span className="text-white font-mono text-right break-all">{amountFormatted} {token}</span>
           </div>
-          <div className="flex justify-between">
+          <div className="flex justify-between items-center gap-2">
             <span className="text-gray-400">Relayer Fee</span>
-            <span className="text-red-400 font-mono">-{feeFormatted} {token}</span>
+            <span className="text-red-400 font-mono text-right break-all">-{feeFormatted} {token}</span>
           </div>
-          <div className="pt-2 border-t border-[#C2A633]/10 flex justify-between">
+          <div className="pt-2 border-t border-[#C2A633]/10 flex justify-between items-center gap-2">
             <span className="text-gray-400">You Receive</span>
-            <span className="text-green-400 font-mono font-semibold">{receivedFormatted} {token}</span>
+            <span className="text-green-400 font-mono font-semibold text-right break-all">{receivedFormatted} {token}</span>
           </div>
-          <div className="text-xs text-gray-500 pt-1">
+          <div className="text-[10px] sm:text-xs text-gray-500 pt-1">
             Fee: {feePercent.toFixed(2)}%
           </div>
         </div>

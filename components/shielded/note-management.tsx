@@ -105,42 +105,43 @@ export function NoteManagement({ className, onNotesChange }: NoteManagementProps
   return (
     <>
       <Card className={`bg-zinc-900 border-[#C2A633]/20 ${className}`}>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-white">Shielded Notes</CardTitle>
-            <div className="flex items-center gap-2">
+      <CardHeader>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+          <CardTitle className="text-white text-base sm:text-lg">Shielded Notes</CardTitle>
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleSync}
+              disabled={isSyncing}
+              className="h-8 flex-1 sm:flex-none bg-zinc-800 border-zinc-700 text-xs sm:text-sm"
+            >
+              {isSyncing ? (
+                <Loader2 className="h-3 w-3 mr-1 sm:mr-2 animate-spin" />
+              ) : (
+                <RefreshCw className="h-3 w-3 mr-1 sm:mr-2" />
+              )}
+              Sync
+            </Button>
+            {notes.length > 0 && (
               <Button
                 variant="outline"
                 size="sm"
-                onClick={handleSync}
-                disabled={isSyncing}
-                className="h-8 bg-zinc-800 border-zinc-700"
+                onClick={() => setClearDialogOpen(true)}
+                className="h-8 flex-1 sm:flex-none bg-zinc-800 border-zinc-700 text-red-400 hover:bg-red-500/10 text-xs sm:text-sm"
               >
-                {isSyncing ? (
-                  <Loader2 className="h-3 w-3 mr-2 animate-spin" />
-                ) : (
-                  <RefreshCw className="h-3 w-3 mr-2" />
-                )}
-                Sync
+                <Trash2 className="h-3 w-3 mr-1 sm:mr-2" />
+                <span className="hidden sm:inline">Clear All</span>
+                <span className="sm:hidden">Clear</span>
               </Button>
-              {notes.length > 0 && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setClearDialogOpen(true)}
-                  className="h-8 bg-zinc-800 border-zinc-700 text-red-400 hover:bg-red-500/10"
-                >
-                  <Trash2 className="h-3 w-3 mr-2" />
-                  Clear All
-                </Button>
-              )}
-            </div>
+            )}
           </div>
-          <div className="flex items-center gap-2 mt-2">
-            <Select value={filterToken} onValueChange={setFilterToken}>
-              <SelectTrigger className="w-32 h-8 bg-zinc-800 border-zinc-700">
-                <SelectValue />
-              </SelectTrigger>
+        </div>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 mt-2">
+          <Select value={filterToken} onValueChange={setFilterToken}>
+            <SelectTrigger className="w-full sm:w-32 h-8 bg-zinc-800 border-zinc-700 text-xs sm:text-sm">
+              <SelectValue />
+            </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Tokens</SelectItem>
                 {tokens.map(token => (
@@ -150,9 +151,11 @@ export function NoteManagement({ className, onNotesChange }: NoteManagementProps
                 ))}
               </SelectContent>
             </Select>
-            <div className="text-sm text-gray-400">
+            <div className="text-xs sm:text-sm text-gray-400">
               {notes.length} note{notes.length !== 1 ? 's' : ''}
-              {filterToken !== "all" && ` • ${formatWeiToAmount(getTotalBalance(filterToken), 18).toFixed(4)} ${filterToken}`}
+              {filterToken !== "all" && (
+                <span className="hidden sm:inline"> • {formatWeiToAmount(getTotalBalance(filterToken), 18).toFixed(4)} {filterToken}</span>
+              )}
             </div>
           </div>
         </CardHeader>
@@ -168,7 +171,7 @@ export function NoteManagement({ className, onNotesChange }: NoteManagementProps
               <p className="text-sm mt-2">Shield tokens to create notes</p>
             </div>
           ) : (
-            <div className="space-y-2 max-h-[500px] overflow-y-auto">
+            <div className="space-y-2 max-h-[400px] sm:max-h-[500px] overflow-y-auto">
               {filteredNotes.map((note, index) => {
                 const noteId = note.commitment.toString()
                 const decimals = note.decimals ?? 18
@@ -179,16 +182,16 @@ export function NoteManagement({ className, onNotesChange }: NoteManagementProps
                 return (
                   <div
                     key={noteId}
-                    className="p-3 rounded-lg bg-zinc-800/50 border border-zinc-700/50 hover:border-[#C2A633]/30 transition-colors"
+                    className="p-2 sm:p-3 rounded-lg bg-zinc-800/50 border border-zinc-700/50 hover:border-[#C2A633]/30 transition-colors"
                   >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-start gap-3 flex-1 min-w-0">
-                        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-[#C2A633]/20 flex items-center justify-center text-[#C2A633]">
-                          <Shield className="h-4 w-4" />
+                    <div className="flex items-start justify-between gap-2 sm:gap-3">
+                      <div className="flex items-start gap-2 sm:gap-3 flex-1 min-w-0">
+                        <div className="flex-shrink-0 w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-[#C2A633]/20 flex items-center justify-center text-[#C2A633]">
+                          <Shield className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            <p className="text-sm font-medium text-white">
+                          <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 mb-1">
+                            <p className="text-xs sm:text-sm font-medium text-white truncate">
                               {amountFormatted} {token}
                             </p>
                             {note.leafIndex !== undefined ? (

@@ -121,41 +121,41 @@ export function TransactionProgress({
   }
 
   return (
-    <Card className={cn("p-4 bg-zinc-900/50 border-[#C2A633]/20", className)}>
-      <div className="space-y-3">
-        <div className="flex items-center gap-3">
+    <Card className={cn("p-3 sm:p-4 bg-zinc-900/50 border-[#C2A633]/20", className)}>
+      <div className="space-y-2 sm:space-y-3">
+        <div className="flex items-center gap-2 sm:gap-3">
           {getStatusIcon()}
-          <div className="flex-1">
-            <p className="text-sm font-medium text-white">{getStatusText()}</p>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs sm:text-sm font-medium text-white">{getStatusText()}</p>
             {message && (
-              <p className="text-xs text-gray-400 mt-1">{message}</p>
+              <p className="text-[10px] sm:text-xs text-gray-400 mt-0.5 sm:mt-1 break-words">{message}</p>
             )}
           </div>
         </div>
 
         {(status === "proving" || status === "relaying" || status === "pending") && (
-          <div className="space-y-2">
+          <div className="space-y-1.5 sm:space-y-2">
             <Progress 
               value={displayProgress} 
-              className="h-2 bg-zinc-800"
+              className="h-1.5 sm:h-2 bg-zinc-800"
             />
-            <p className="text-xs text-gray-400 text-right">{Math.round(displayProgress)}%</p>
+            <p className="text-[10px] sm:text-xs text-gray-400 text-right">{Math.round(displayProgress)}%</p>
           </div>
         )}
 
         {txHash && status !== "idle" && (
-          <div className="flex items-center gap-2 pt-2 border-t border-[#C2A633]/10">
-            <span className="text-xs text-gray-400 font-mono">
-              {txHash.slice(0, 10)}...{txHash.slice(-8)}
+          <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-2 pt-2 border-t border-[#C2A633]/10">
+            <span className="text-[10px] sm:text-xs text-gray-400 font-mono break-all sm:break-normal">
+              {txHash.slice(0, 8)}...{txHash.slice(-6)}
             </span>
             {blockExplorerUrl && (
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-6 px-2 text-xs"
+                className="h-7 sm:h-6 px-2 text-[10px] sm:text-xs self-start sm:self-auto min-h-[32px] sm:min-h-0"
                 onClick={() => window.open(`${blockExplorerUrl}/tx/${txHash}`, '_blank')}
               >
-                <ExternalLink className="h-3 w-3 mr-1" />
+                <ExternalLink className="h-3 w-3 mr-1 flex-shrink-0" />
                 View
               </Button>
             )}

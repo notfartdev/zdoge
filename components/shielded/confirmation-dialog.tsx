@@ -55,7 +55,7 @@ export function ConfirmationDialog({
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent className={cn(
-        "bg-gradient-to-br from-zinc-900 via-zinc-900 to-zinc-950 border-2 shadow-2xl rounded-2xl p-6 max-w-md",
+        "bg-gradient-to-br from-zinc-900 via-zinc-900 to-zinc-950 border-2 shadow-2xl rounded-2xl p-4 sm:p-6 max-w-[95vw] sm:max-w-md",
         variant === "destructive" 
           ? "border-red-500/30 shadow-red-500/10" 
           : "border-[#C2A633]/30 shadow-[#C2A633]/10"
@@ -67,19 +67,19 @@ export function ConfirmationDialog({
             </div>
           )}
           <AlertDialogTitle className={cn(
-            "text-white text-xl font-semibold text-center",
+            "text-white text-lg sm:text-xl font-semibold text-center",
             !variant && "flex items-center justify-center gap-2"
           )}>
             {title}
           </AlertDialogTitle>
-          <AlertDialogDescription className="text-gray-300 text-center text-sm leading-relaxed">
+          <AlertDialogDescription className="text-gray-300 text-center text-xs sm:text-sm leading-relaxed">
             {description}
           </AlertDialogDescription>
         </AlertDialogHeader>
         
         {details && (
           <div className={cn(
-            "my-4 p-4 rounded-xl bg-zinc-800/60 backdrop-blur-sm border shadow-inner",
+            "my-3 sm:my-4 p-3 sm:p-4 rounded-xl bg-zinc-800/60 backdrop-blur-sm border shadow-inner",
             variant === "destructive"
               ? "border-red-500/20"
               : "border-[#C2A633]/20"

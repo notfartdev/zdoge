@@ -99,11 +99,11 @@ export function TransactionHistory({ walletAddress, className }: TransactionHist
   return (
     <Card className={`bg-zinc-900 border-[#C2A633]/20 ${className}`}>
       <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-white">Transaction History</CardTitle>
+        <div className="flex items-center justify-between gap-2">
+          <CardTitle className="text-white text-base sm:text-lg">Transaction History</CardTitle>
           <Select value={filter} onValueChange={(v) => setFilter(v as typeof filter)}>
-            <SelectTrigger className="w-32 h-8 bg-zinc-800 border-zinc-700">
-              <Filter className="h-3 w-3 mr-2" />
+            <SelectTrigger className="w-24 sm:w-32 h-8 bg-zinc-800 border-zinc-700 text-xs sm:text-sm">
+              <Filter className="h-3 w-3 mr-1 sm:mr-2 flex-shrink-0" />
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -127,30 +127,32 @@ export function TransactionHistory({ walletAddress, className }: TransactionHist
             <p className="text-sm mt-2">{filter !== "all" && "Try selecting a different filter"}</p>
           </div>
         ) : (
-          <div className="space-y-2 max-h-[500px] overflow-y-auto">
+          <div className="space-y-2 max-h-[400px] sm:max-h-[500px] overflow-y-auto">
             {filteredTransactions.map((tx) => (
               <div
                 key={`${tx.txHash}-${tx.timestamp}`}
-                className="p-3 rounded-lg bg-zinc-800/50 border border-zinc-700/50 hover:border-[#C2A633]/30 transition-colors"
+                className="p-2 sm:p-3 rounded-lg bg-zinc-800/50 border border-zinc-700/50 hover:border-[#C2A633]/30 transition-colors"
               >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-start gap-3 flex-1 min-w-0">
-                    <div className="flex-shrink-0 w-8 h-8 rounded-full bg-[#C2A633]/20 flex items-center justify-center text-[#C2A633]">
+                <div className="flex items-start justify-between gap-2 sm:gap-3">
+                  <div className="flex items-start gap-2 sm:gap-3 flex-1 min-w-0">
+                    <div className="flex-shrink-0 w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-[#C2A633]/20 flex items-center justify-center text-[#C2A633]">
                       {getTransactionIcon(tx.type)}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <p className="text-sm font-medium text-white truncate">
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 mb-1">
+                        <p className="text-xs sm:text-sm font-medium text-white truncate">
                           {getTransactionLabel(tx)}
                         </p>
-                        {getStatusBadge(tx.status)}
+                        <div className="flex-shrink-0">
+                          {getStatusBadge(tx.status)}
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2 text-xs text-gray-400">
-                        <span>{formatDistanceToNow(new Date(tx.timestamp * 1000), { addSuffix: true })}</span>
+                      <div className="flex flex-wrap items-center gap-1 sm:gap-2 text-xs text-gray-400">
+                        <span className="whitespace-nowrap">{formatDistanceToNow(new Date(tx.timestamp * 1000), { addSuffix: true })}</span>
                         {tx.txHash && (
                           <>
-                            <span>•</span>
-                            <span className="font-mono">{tx.txHash.slice(0, 8)}...{tx.txHash.slice(-6)}</span>
+                            <span className="hidden sm:inline">•</span>
+                            <span className="font-mono text-[10px] sm:text-xs truncate max-w-[80px] sm:max-w-none">{tx.txHash.slice(0, 6)}...{tx.txHash.slice(-4)}</span>
                           </>
                         )}
                       </div>
