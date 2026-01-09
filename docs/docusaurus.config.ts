@@ -53,6 +53,7 @@ const config: Config = {
       logo: {
         alt: 'zDoge Logo',
         src: 'img/dogenadologo.png',
+        srcDark: 'img/dogenadologo.png',
       },
       items: [
         {
