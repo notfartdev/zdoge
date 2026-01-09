@@ -1128,25 +1128,27 @@ shieldedRouter.post('/relay/transfer', relayerRateLimit, async (req: Request, re
   }
   
   // Validate memo sizes (privacy enhancement: cap memo size)
-  const MAX_MEMO_BYTES = 128;
+  // Using 512 bytes for encrypted memos to account for encryption overhead and future fields
+  // Still provides DoS protection while being practical
+  const MAX_ENCRYPTED_MEMO_BYTES = 512;
   if (encryptedMemo1) {
     const memo1Bytes = Buffer.from(encryptedMemo1.startsWith('0x') ? encryptedMemo1.slice(2) : encryptedMemo1, 'hex');
-    if (memo1Bytes.length > MAX_MEMO_BYTES) {
+    if (memo1Bytes.length > MAX_ENCRYPTED_MEMO_BYTES) {
       return res.status(400).json({ 
         error: 'Memo too large',
-        message: `encryptedMemo1 exceeds maximum size of ${MAX_MEMO_BYTES} bytes (got ${memo1Bytes.length} bytes)`,
-        maxSize: MAX_MEMO_BYTES,
+        message: `encryptedMemo1 exceeds maximum size of ${MAX_ENCRYPTED_MEMO_BYTES} bytes (got ${memo1Bytes.length} bytes)`,
+        maxSize: MAX_ENCRYPTED_MEMO_BYTES,
         actualSize: memo1Bytes.length,
       });
     }
   }
   if (encryptedMemo2) {
     const memo2Bytes = Buffer.from(encryptedMemo2.startsWith('0x') ? encryptedMemo2.slice(2) : encryptedMemo2, 'hex');
-    if (memo2Bytes.length > MAX_MEMO_BYTES) {
+    if (memo2Bytes.length > MAX_ENCRYPTED_MEMO_BYTES) {
       return res.status(400).json({ 
         error: 'Memo too large',
-        message: `encryptedMemo2 exceeds maximum size of ${MAX_MEMO_BYTES} bytes (got ${memo2Bytes.length} bytes)`,
-        maxSize: MAX_MEMO_BYTES,
+        message: `encryptedMemo2 exceeds maximum size of ${MAX_ENCRYPTED_MEMO_BYTES} bytes (got ${memo2Bytes.length} bytes)`,
+        maxSize: MAX_ENCRYPTED_MEMO_BYTES,
         actualSize: memo2Bytes.length,
       });
     }

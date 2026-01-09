@@ -478,8 +478,10 @@ export async function prepareTransfer(
       // Encrypt change note for ourselves
       const encryptedMemo2 = await encryptNoteForRecipient(outputNote2, walletState.identity!.shieldedAddress);
       
-      // Validate memo sizes before formatting (128 bytes max)
-      const MAX_MEMO_BYTES = 128;
+      // Validate memo sizes before formatting (512 bytes max for encrypted memos)
+      // This accounts for encryption overhead and provides room for future fields
+      // Still provides DoS protection while being practical
+      const MAX_ENCRYPTED_MEMO_BYTES = 512;
       const memo1Formatted = formatMemoForContract(encryptedMemo1);
       const memo2Formatted = formatMemoForContract(encryptedMemo2);
       
@@ -487,11 +489,11 @@ export async function prepareTransfer(
       const memo1Bytes = (memo1Formatted.length - 2) / 2;
       const memo2Bytes = (memo2Formatted.length - 2) / 2;
       
-      if (memo1Bytes > MAX_MEMO_BYTES) {
-        throw new Error(`encryptedMemo1 exceeds maximum size of ${MAX_MEMO_BYTES} bytes (got ${memo1Bytes} bytes). Please try with a smaller transaction.`);
+      if (memo1Bytes > MAX_ENCRYPTED_MEMO_BYTES) {
+        throw new Error(`encryptedMemo1 exceeds maximum size of ${MAX_ENCRYPTED_MEMO_BYTES} bytes (got ${memo1Bytes} bytes). Please try with a smaller transaction.`);
       }
-      if (memo2Bytes > MAX_MEMO_BYTES) {
-        throw new Error(`encryptedMemo2 exceeds maximum size of ${MAX_MEMO_BYTES} bytes (got ${memo2Bytes} bytes). Please try with a smaller transaction.`);
+      if (memo2Bytes > MAX_ENCRYPTED_MEMO_BYTES) {
+        throw new Error(`encryptedMemo2 exceeds maximum size of ${MAX_ENCRYPTED_MEMO_BYTES} bytes (got ${memo2Bytes} bytes). Please try with a smaller transaction.`);
       }
       
       return {
