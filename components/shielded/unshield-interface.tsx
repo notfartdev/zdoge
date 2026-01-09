@@ -12,9 +12,15 @@ import { ShieldedNote, formatWeiToAmount } from "@/lib/shielded/shielded-note"
 import { prepareUnshield, completeUnshield, getNotes } from "@/lib/shielded/shielded-service"
 import { addTransaction, initTransactionHistory } from "@/lib/shielded/transaction-history"
 import { useWallet } from "@/lib/wallet-context"
-import { shieldedPool } from "@/lib/dogeos-config"
+import { shieldedPool, dogeosTestnet } from "@/lib/dogeos-config"
 import { getUSDValue, formatUSD } from "@/lib/price-service"
 import { parseUnits, formatUnits } from "viem"
+import { TransactionProgress, type TransactionStatus } from "@/components/shielded/transaction-progress"
+import { TransactionTrackerClass } from "@/lib/shielded/transaction-tracker"
+import { EstimatedFees } from "@/components/shielded/estimated-fees"
+import { ConfirmationDialog } from "@/components/shielded/confirmation-dialog"
+import { SuccessDialog } from "@/components/shielded/success-dialog"
+import { formatErrorWithSuggestion } from "@/lib/shielded/error-suggestions"
 
 const NATIVE_TOKEN = '0x0000000000000000000000000000000000000000'
 import Link from "next/link"
@@ -82,10 +88,26 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
   
   const [amount, setAmount] = useState("")
   const [recipientAddress, setRecipientAddress] = useState("")
-  const [status, setStatus] = useState<"idle" | "proving" | "relaying" | "success" | "error" | "consolidating">("idle")
+  const [status, setStatus] = useState<TransactionStatus>("idle")
   const [txHash, setTxHash] = useState<string | null>(null)
+  const [tracker, setTracker] = useState<TransactionTrackerClass | null>(null)
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false)
+  const [showSuccessDialog, setShowSuccessDialog] = useState(false)
+  const [pendingUnshield, setPendingUnshield] = useState<() => Promise<void> | null>(null)
   const [withdrawnAmount, setWithdrawnAmount] = useState<string | null>(null)
   const [fee, setFee] = useState<string | null>(null)
+
+  // Show success dialog when transaction is confirmed (but only if not already shown and not closed)
+  useEffect(() => {
+    if (status === "confirmed" && txHash && !showSuccessDialog) {
+      console.log('[Unshield] useEffect: Status is confirmed, showing success dialog')
+      // Use a small delay to ensure all state updates are processed
+      const timer = setTimeout(() => {
+        setShowSuccessDialog(true)
+      }, 300)
+      return () => clearTimeout(timer)
+    }
+  }, [status, txHash, showSuccessDialog]) // Include showSuccessDialog to prevent duplicate
   const [relayerInfo, setRelayerInfo] = useState<RelayerInfo | null>(null)
   const [isLoadingRelayerInfo, setIsLoadingRelayerInfo] = useState(true)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
@@ -516,10 +538,10 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
           txHash: data.txHash,
           timestamp: Math.floor(Date.now() / 1000),
           token: selectedToken,
-          amount: formatUnits(BigInt(data.amountReceived), tokenDecimals),
+          amount: Number(formatUnits(BigInt(data.amountReceived), tokenDecimals)).toFixed(4),
           amountWei: data.amountReceived,
           recipientPublicAddress: wallet.address,
-          relayerFee: formatUnits(relayerFeeWei, tokenDecimals),
+          relayerFee: Number(formatUnits(relayerFeeWei, tokenDecimals)).toFixed(4),
           status: 'confirmed',
         })
         
@@ -581,12 +603,13 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
     
     setConsolidateTotalReceived(totalReceived)
     setWithdrawnAmount(totalReceived.toFixed(4))
-    setStatus("success")
-    // Don't show toast - the green success UI box will show instead
-    onSuccess?.()
+      setStatus("confirmed")
+      setShowSuccessDialog(true)
+      onSuccess?.()
   }
   
-  const handleUnshield = async () => {
+  // Execute unshield (internal - called after confirmation)
+  const executeUnshield = async () => {
     setErrorMessage(null)
     const requestedWei = parseInputAmount()
     if (requestedWei <= 0n) {
@@ -701,59 +724,78 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
       const data = await response.json()
       if (!response.ok) throw new Error(data.message || data.error || 'Relayer failed')
       setTxHash(data.txHash)
+      
       // Convert from token base units to human-readable using token decimals
       const receivedAmount = formatUnits(BigInt(data.amountReceived), tokenDecimals)
       const feeAmount = formatUnits(BigInt(data.fee), tokenDecimals)
       setWithdrawnAmount(Number(receivedAmount).toFixed(4))
       setFee(Number(feeAmount).toFixed(4))
-      completeUnshield(actualNoteIndex)
       
-      // Add to transaction history
-      addTransaction({
-        type: 'unshield',
-        txHash: data.txHash,
-        timestamp: Math.floor(Date.now() / 1000),
-        token: selectedToken,
-        amount: receivedAmount,
-        amountWei: data.amountReceived,
-        recipientPublicAddress: wallet.address,
-        relayerFee: feeAmount,
-        status: 'confirmed',
+      // Complete unshield immediately (removes note from wallet)
+      await completeUnshield(actualNoteIndex)
+      
+      // Trigger balance refresh immediately after note removal
+      window.dispatchEvent(new Event('refresh-balance'))
+      window.dispatchEvent(new CustomEvent('shielded-wallet-updated'))
+      
+      // Update status to pending (tracker will update to confirmed)
+      setStatus("pending")
+      
+      // Start tracking transaction
+      const newTracker = new TransactionTrackerClass(1)
+      let isConfirmed = false
+      newTracker.onUpdate((trackerState) => {
+        console.log('[Unshield] Tracker update:', trackerState.status, 'txHash:', trackerState.txHash)
+        if (trackerState.status === 'confirmed' && !isConfirmed) {
+          isConfirmed = true
+          console.log('[Unshield] Transaction confirmed! Setting status and showing dialog')
+          // Set status first
+          setStatus('confirmed')
+          // Add to transaction history
+          addTransaction({
+            type: 'unshield',
+            txHash: data.txHash,
+            timestamp: Math.floor(Date.now() / 1000),
+            token: selectedToken,
+            amount: receivedAmount,
+            amountWei: data.amountReceived,
+            recipientPublicAddress: wallet.address,
+            relayerFee: feeAmount,
+            status: 'confirmed',
+          })
+          // Note: Success dialog will be shown by useEffect when status === "confirmed"
+          // Trigger balance refresh immediately and again after delay
+          window.dispatchEvent(new Event('refresh-balance'))
+          window.dispatchEvent(new CustomEvent('shielded-wallet-updated'))
+          setTimeout(() => {
+            window.dispatchEvent(new Event('refresh-balance'))
+            window.dispatchEvent(new CustomEvent('shielded-wallet-updated'))
+          }, 1000)
+        } else if (trackerState.status === 'failed') {
+          setStatus('failed')
+        } else if (trackerState.status === 'pending') {
+          setStatus('pending')
+        }
       })
-      
-      setStatus("success")
-      // Don't show toast - the green success UI box will show instead
-      onSuccess?.()
-      
-      // Trigger balance refresh after a delay to allow transaction confirmation
-      setTimeout(() => {
-        // Dispatch custom event to trigger balance refresh
-        window.dispatchEvent(new Event('refresh-balance'))
-      }, 3000)
+      setTracker(newTracker)
+      // Start tracking (non-blocking - callback will handle updates)
+      newTracker.track(data.txHash).catch((error) => {
+        console.error('[Unshield] Tracker error:', error)
+        setStatus('error')
+      })
     } catch (error: any) {
       setStatus("error")
       
-      // Better error messages
-      let errorMessage = "Transaction failed"
-      if (error?.message) {
-        if (error.message.includes("user rejected") || error.message.includes("User denied")) {
-          errorMessage = "Transaction was cancelled. Please try again when ready."
-        } else if (error.message.includes("insufficient funds") || error.message.includes("insufficient balance")) {
-          errorMessage = "Insufficient balance. Please check your shielded balance."
-        } else if (error.message.includes("network") || error.message.includes("RPC") || error.message.includes("relayer")) {
-          errorMessage = "Network or relayer error. Please check your connection and try again."
-        } else if (error.message.includes("proof") || error.message.includes("nullifier")) {
-          errorMessage = "Proof generation failed. Please try again."
-        } else if (error.message.includes("consolidation")) {
-          errorMessage = "Consolidation failed. Please try again."
-        } else {
-          errorMessage = error.message
-        }
-      }
+      // Smart error suggestions
+      const errorInfo = formatErrorWithSuggestion(error, {
+        operation: 'unshield',
+        token: selectedToken,
+        hasShieldedBalance: totalBalance > 0n,
+      })
       
-      setErrorMessage(errorMessage)
+      setErrorMessage(errorInfo.suggestion ? `${errorInfo.description} ${errorInfo.suggestion}` : errorInfo.description)
       toast({ 
-        title: "Unshield Failed", 
+        title: errorInfo.title, 
         description: errorMessage, 
         variant: "destructive" 
       })
@@ -770,7 +812,22 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
     setErrorMessage(null)
     setConsolidateProgress(null)
     setConsolidateTxHashes([])
+    setShowSuccessDialog(false) // Clear success dialog state
+    if (tracker) {
+      tracker.stop()
+      tracker.reset()
+      setTracker(null)
+    }
   }
+  
+  // Cleanup tracker on unmount
+  useEffect(() => {
+    return () => {
+      if (tracker) {
+        tracker.stop()
+      }
+    }
+  }, [tracker])
   
   const handleSetMax = () => {
     const maxReceivable = calculateMaxUnshieldable()
@@ -795,8 +852,8 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
     }
   }
   
-  // Don't return early if we're showing success state (even if no notes left)
-  if (spendableNotes.length === 0 && status !== "success") {
+  // Don't return early if we're showing success/confirmed state, success dialog, or have a pending transaction (even if no notes left)
+  if (spendableNotes.length === 0 && status !== "success" && status !== "confirmed" && !showSuccessDialog && !txHash) {
     return null
   }
   
@@ -804,7 +861,38 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
   const needsConsolidation = spendableNotes.length > 1
   
   return (
-    <div className="space-y-4">
+    <>
+      {/* Success Dialog - Render outside main content div so it always shows */}
+      {showSuccessDialog && (
+        <SuccessDialog
+          open={showSuccessDialog}
+          onOpenChange={(open) => {
+            if (!open) {
+              // User is closing the dialog - properly reset state
+              setShowSuccessDialog(false)
+              reset()
+              onSuccess?.()
+            }
+          }}
+          title="Unshield Successful!"
+          message={`Successfully unshielded ${withdrawnAmount ? Number(withdrawnAmount).toFixed(4) : (amount ? Number(amount).toFixed(4) : '0')} ${selectedToken} to ${recipientAddress.slice(0, 6)}...${recipientAddress.slice(-4)}.`}
+          onClose={() => {
+            setShowSuccessDialog(false)
+            reset()
+            onSuccess?.()
+          }}
+          txHash={txHash}
+          blockExplorerUrl={dogeosTestnet.blockExplorers.default.url}
+          actionText="Unshield More"
+          onAction={() => {
+            setShowSuccessDialog(false)
+            reset()
+            onSuccess?.()
+          }}
+        />
+      )}
+      
+      <div className="space-y-4">
       <div>
         <h3 className="text-lg font-display font-medium">Send to Public Address</h3>
         <p className="text-sm font-body text-muted-foreground">Unshield your shielded {selectedToken} to any public wallet address</p>
@@ -817,13 +905,20 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
             <span className="font-medium">Available to Unshield</span>
           </div>
           <div className="text-right">
-            <div className="text-xl font-mono font-bold tracking-[-0.01em]">{formatUnits(totalBalance, tokenDecimals)} <span className="font-body text-sm text-white/70">{selectedToken}</span></div>
+            {notes.length === 0 && wallet?.isConnected ? (
+              <div className="flex items-center gap-2 text-white/50">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span className="text-sm">Loading balance...</span>
+              </div>
+            ) : (
+              <div className="text-xl font-mono font-bold tracking-[-0.01em]">{Number(formatUnits(totalBalance, tokenDecimals)).toFixed(4)} <span className="font-body text-sm text-white/70">{selectedToken}</span></div>
+            )}
           </div>
         </div>
         {largestNote && (
           <div className="mt-2 pt-2 border-t border-muted text-xs text-muted-foreground">
             <Info className="h-3 w-3 inline mr-1" />
-            Max single unshield: {formatUnits(largestNote.amount, tokenDecimals)} {selectedToken}
+            Max single unshield: {Number(formatUnits(largestNote.amount, tokenDecimals)).toFixed(4)} {selectedToken}
           </div>
         )}
       </div>
@@ -850,7 +945,7 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
                   <>
                     <div className="flex items-center gap-2">
                       <span className="text-muted-foreground">You'll receive:</span>
-                      <span className="font-medium text-green-500">~{formatUnits(totalReceivableAfterFees, tokenDecimals)} {selectedToken}</span>
+                      <span className="font-medium text-green-500">~{Number(formatUnits(totalReceivableAfterFees, tokenDecimals)).toFixed(4)} {selectedToken}</span>
                     </div>
                     {usdValue && (
                       <div className="text-muted-foreground mt-1">
@@ -898,7 +993,7 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
             <div className="flex items-center justify-between">
               <Label htmlFor="amount">Amount to Unshield</Label>
               <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={handleSetMax}>
-                Max: {formatUnits(calculateMaxUnshieldable(), tokenDecimals)}
+                Max: {Number(formatUnits(calculateMaxUnshieldable(), tokenDecimals)).toFixed(4)}
               </Button>
             </div>
             <Input id="amount" type="number" placeholder="Enter amount" value={amount} onChange={(e) => setAmount(e.target.value)} />
@@ -911,30 +1006,82 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
             <Input id="recipient" placeholder="0x... (any wallet address)" value={recipientAddress} onChange={(e) => setRecipientAddress(e.target.value)} />
             <p className="text-xs text-muted-foreground">You can send unshield to any public wallet address</p>
           </div>
-          {amount && relayerInfo && (
-            <div className="p-3 rounded-lg bg-muted/50 space-y-1">
-              {selectedInfo && 'error' in selectedInfo ? (
-                <div className="text-sm text-red-500 flex items-center gap-2"><AlertCircle className="h-4 w-4" />{selectedInfo.error}</div>
-              ) : selectedInfo ? (
-                <>
-                  <div className="flex justify-between text-sm"><span className="text-muted-foreground">Using note:</span><span>#{selectedInfo.note.leafIndex} ({formatUnits(selectedInfo.noteAmount, tokenDecimals)} {selectedToken})</span></div>
-                  <div className="flex justify-between text-sm"><span className="text-muted-foreground">Relayer fee:</span><span className="text-orange-500">-{formatUnits(selectedInfo.fee, tokenDecimals)} {selectedToken}</span></div>
-                  <div className="flex justify-between text-sm font-medium border-t pt-1 mt-1"><span>You receive:</span><span className="text-green-500">{amount} {selectedToken}</span></div>
-                  {selectedInfo.change > 0n && <div className="flex justify-between text-xs text-muted-foreground"><span>Remaining:</span><span>{formatUnits(selectedInfo.change, tokenDecimals)} {selectedToken}</span></div>}
-                  <div className="flex justify-between text-xs text-muted-foreground"><span>Gas you pay:</span><span className="text-primary">0 ✓</span></div>
-                </>
-              ) : null}
+          {amount && relayerInfo && selectedInfo && !('error' in selectedInfo) && (
+            <EstimatedFees
+              amount={selectedInfo.noteAmount}
+              fee={selectedInfo.fee}
+              received={BigInt(Math.floor(parseFloat(amount) * (10 ** tokenDecimals)))}
+              token={selectedToken}
+              tokenDecimals={tokenDecimals}
+            />
+          )}
+          
+          {amount && relayerInfo && selectedInfo && 'error' in selectedInfo && (
+            <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/30">
+              <div className="text-sm text-red-400 flex items-center gap-2">
+                <AlertCircle className="h-4 w-4" />
+                {selectedInfo.error}
+              </div>
             </div>
           )}
           <Button 
-            className="w-full border-[#C2A633] text-[#C2A633] hover:bg-[#C2A633]/10" 
-            variant="outline"
-            onClick={handleUnshield} 
+            className="w-full relative overflow-hidden bg-white/10 border border-white/20 hover:border-[#B89A2E]/50 transition-all duration-500 group"
+            onClick={() => {
+              if (selectedInfo && !('error' in selectedInfo)) {
+                setPendingUnshield(() => executeUnshield)
+                setShowConfirmDialog(true)
+              }
+            }} 
             disabled={!relayerInfo?.available || !selectedInfo || 'error' in selectedInfo}
           >
-            <ShieldOff className="h-4 w-4 mr-2 opacity-85" strokeWidth={1.75} />
-            Unshield to Public Wallet
+            {/* Fill animation from left to right - slower and more natural */}
+            <span className="absolute inset-0 bg-[#B89A2E] transform -translate-x-full group-hover:translate-x-0 transition-transform duration-[1300ms] ease-in-out" />
+            <span className="relative z-10 flex items-center justify-center text-white group-hover:text-black transition-colors duration-[1300ms] ease-in-out">
+              <ShieldOff className="h-4 w-4 mr-2" strokeWidth={1.75} />
+              Unshield to Public Wallet
+            </span>
           </Button>
+          
+          {/* Confirmation Dialog */}
+          <ConfirmationDialog
+            open={showConfirmDialog}
+            onOpenChange={setShowConfirmDialog}
+            title="Confirm Unshield"
+            description={`You are about to unshield ${amount ? Number(amount).toFixed(4) : '0'} ${selectedToken} to ${recipientAddress.slice(0, 6)}...${recipientAddress.slice(-4)}. A relayer fee will be deducted.`}
+            confirmText="Confirm Unshield"
+            cancelText="Cancel"
+            onConfirm={async () => {
+              if (pendingUnshield) {
+                await pendingUnshield()
+              }
+              setPendingUnshield(null)
+            }}
+            isLoading={status === "proving" || status === "relaying"}
+            details={
+              selectedInfo && !('error' in selectedInfo) ? (
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Note Amount</span>
+                    <span className="text-white">{Number(formatUnits(selectedInfo.noteAmount, tokenDecimals)).toFixed(4)} {selectedToken}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Relayer Fee</span>
+                    <span className="text-red-400">-{Number(formatUnits(selectedInfo.fee, tokenDecimals)).toFixed(4)} {selectedToken}</span>
+                  </div>
+                  <div className="flex justify-between pt-2 border-t border-[#C2A633]/10">
+                    <span className="text-gray-400">You Receive</span>
+                    <span className="text-green-400 font-semibold">{amount ? Number(amount).toFixed(4) : '0'} {selectedToken}</span>
+                  </div>
+                  {selectedInfo.change > 0n && (
+                    <div className="flex justify-between text-xs text-gray-500">
+                      <span>Change (returned to shielded)</span>
+                      <span>{Number(formatUnits(selectedInfo.change, tokenDecimals)).toFixed(4)} {selectedToken}</span>
+                    </div>
+                  )}
+                </div>
+              ) : undefined
+            }
+          />
         </div>
       )}
       
@@ -986,26 +1133,20 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
         </div>
       )}
       
-      {status === "proving" && (
-        <div className="flex flex-col items-center py-8 space-y-4">
-          <Loader2 className="h-8 w-8 animate-spin" />
-          <div className="w-full max-w-xs space-y-2">
-            <Progress value={33} className="h-2" />
-            <p className="text-sm text-muted-foreground text-center">Generating zero-knowledge proof...</p>
-            <p className="text-xs text-muted-foreground text-center">This may take 10-30 seconds</p>
-          </div>
-        </div>
-      )}
-      
-      {status === "relaying" && (
-        <div className="flex flex-col items-center py-8 space-y-4">
-          <Loader2 className="h-8 w-8 animate-spin" />
-          <div className="w-full max-w-xs space-y-2">
-            <Progress value={66} className="h-2" />
-            <p className="text-sm text-muted-foreground text-center">Submitting transaction...</p>
-            <p className="text-xs text-muted-foreground text-center">Your wallet never signs!</p>
-          </div>
-        </div>
+      {/* Progress Indicator - Only show during processing, hide when confirmed/success */}
+      {status !== "confirmed" && status !== "success" && (
+        <TransactionProgress
+          status={status === "idle" ? "idle" : (status === "error" ? "failed" : status)}
+          message={
+            status === "proving" ? "This may take 10-30 seconds..."
+            : status === "relaying" ? "Relayer is submitting your transaction..."
+            : status === "pending" ? "Waiting for blockchain confirmation..."
+            : status === "consolidating" ? `Consolidating notes (${consolidateProgress?.current || 0}/${consolidateProgress?.total || 0})...`
+            : undefined
+          }
+          txHash={txHash}
+          blockExplorerUrl={dogeosTestnet.blockExplorers.default.url}
+        />
       )}
       
       {status === "success" && consolidateTxHashes.length > 0 && (
@@ -1056,66 +1197,6 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
         </div>
       )}
       
-      {status === "success" && txHash && consolidateTxHashes.length === 0 && (
-        <div className="space-y-4">
-          <div className="p-6 rounded-lg bg-white/5 border border-white/10">
-            <div className="flex items-start gap-4">
-              <div className="flex-shrink-0 w-12 h-12 rounded-full bg-[#C2A633]/20 flex items-center justify-center">
-                <Check className="h-6 w-6 text-[#C2A633]" strokeWidth={2.5} />
-              </div>
-              <div className="flex-1 space-y-3">
-                <div>
-                  <h4 className="text-lg font-display font-semibold text-white mb-2">
-                    Unshield Successful!
-                  </h4>
-                  <p className="text-sm font-body text-white/70 leading-relaxed">
-                    Received {withdrawnAmount} {selectedToken}
-                    {fee && <span className="text-white/60"> (Fee: {fee} {selectedToken})</span>}
-                  </p>
-                </div>
-                {txHash && (
-                  <a 
-                    href={`https://blockscout.testnet.dogeos.com/tx/${txHash}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 text-sm text-[#C2A633] hover:text-[#C2A633]/80 transition-colors group font-medium"
-                  >
-                    <span className="font-body">View transaction on Blockscout</span>
-                    <ExternalLink className="h-4 w-4 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
-                  </a>
-                )}
-                {consolidateTxHashes.length > 0 && (
-                  <div className="pt-3 border-t border-white/10 space-y-2">
-                    <p className="text-xs font-medium text-white/60">
-                      Consolidation Transactions ({consolidateTxHashes.length}):
-                    </p>
-                    <div className="max-h-32 overflow-y-auto space-y-1.5">
-                      {consolidateTxHashes.map((hash, i) => (
-                        <a 
-                          key={hash} 
-                          href={`https://blockscout.testnet.dogeos.com/tx/${hash}`} 
-                          target="_blank" 
-                          rel="noopener noreferrer" 
-                          className="inline-flex items-center gap-2 text-xs text-[#C2A633] hover:text-[#C2A633]/80 transition-colors group font-medium"
-                        >
-                          <span className="font-mono">{i + 1}. {hash.slice(0, 10)}...{hash.slice(-8)}</span>
-                          <ExternalLink className="h-3 w-3 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all" />
-                        </a>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-          <Button 
-            className="w-full bg-white/5 hover:bg-white/10 text-[#C2A633] border border-[#C2A633]/50 hover:border-[#C2A633] font-body font-medium transition-all" 
-            onClick={reset}
-          >
-            {consolidateTxHashes.length > 0 ? 'Done' : 'Unshield More'}
-          </Button>
-        </div>
-      )}
       
       {status === "error" && (
         <div className="space-y-4">
@@ -1135,6 +1216,7 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
           <Button className="w-full" onClick={reset}>Try Again</Button>
         </div>
       )}
-    </div>
+      </div>
+    </>
   )
 }

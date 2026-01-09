@@ -17,8 +17,10 @@ import {
   ExternalLink,
   Wallet
 } from "lucide-react"
+import { SuccessDialog } from "@/components/shielded/success-dialog"
 import { useToast } from "@/hooks/use-toast"
 import { useWallet } from "@/lib/wallet-context"
+import { formatErrorWithSuggestion } from "@/lib/shielded/error-suggestions"
 import { prepareShield, completeShield } from "@/lib/shielded/shielded-service"
 import { noteToShareableString, ShieldedNote } from "@/lib/shielded/shielded-note"
 import { shieldedPool, ERC20ABI, tokens, ShieldedPoolABI } from "@/lib/dogeos-config"
@@ -95,7 +97,9 @@ export function ShieldInterface({ onSuccess, onReset, selectedToken: externalTok
   const [leafIndex, setLeafIndex] = useState<number | null>(null)
   const [pendingNote, setPendingNote] = useState<ShieldedNote | null>(null)
   const [allTokenBalances, setAllTokenBalances] = useState<Record<string, string>>({})
+  const [isLoadingBalance, setIsLoadingBalance] = useState(false)
   const [amountError, setAmountError] = useState<string | null>(null)
+  const [showSuccessDialog, setShowSuccessDialog] = useState(false)
   
   // Prevent duplicate submissions
   const isSubmittingRef = useRef(false)
@@ -142,9 +146,11 @@ export function ShieldInterface({ onSuccess, onReset, selectedToken: externalTok
     async function fetchAllBalances() {
       if (!wallet?.address) {
         setAllTokenBalances({})
+        setIsLoadingBalance(false)
         return
       }
       
+      setIsLoadingBalance(true)
       const balances: Record<string, string> = {}
       
       for (const token of SHIELDED_TOKENS) {
@@ -180,6 +186,7 @@ export function ShieldInterface({ onSuccess, onReset, selectedToken: externalTok
       }
       
       setAllTokenBalances(balances)
+      setIsLoadingBalance(false)
     }
     fetchAllBalances()
     
@@ -418,33 +425,23 @@ export function ShieldInterface({ onSuccess, onReset, selectedToken: externalTok
       setNoteBackup(backup)
       
       setStatus("success")
-      
-      // Don't show toast - the green success UI box will show instead
+      setShowSuccessDialog(true)
       onSuccess?.()
       
     } catch (error: any) {
       console.error("Shield error:", error)
       setStatus("error")
       
-      // Better error messages
-      let errorMessage = "Transaction failed"
-      if (error?.message) {
-        if (error.message.includes("user rejected") || error.message.includes("User denied")) {
-          errorMessage = "Transaction was cancelled. Please try again when ready."
-        } else if (error.message.includes("insufficient funds") || error.message.includes("insufficient balance")) {
-          errorMessage = "Insufficient balance. Please check your wallet balance."
-        } else if (error.message.includes("network") || error.message.includes("RPC")) {
-          errorMessage = "Network error. Please check your connection and try again."
-        } else if (error.message.includes("gas") || error.message.includes("fee")) {
-          errorMessage = "Gas estimation failed. Please try again or increase gas limit."
-        } else {
-          errorMessage = error.message
-        }
-      }
+      // Smart error suggestions
+      const errorInfo = formatErrorWithSuggestion(error, {
+        operation: 'shield',
+        token: selectedToken,
+        hasPublicBalance: tokenBalanceNum > 0,
+      })
       
       toast({
-        title: "Shield Failed",
-        description: errorMessage,
+        title: errorInfo.title,
+        description: errorInfo.suggestion ? `${errorInfo.description} ${errorInfo.suggestion}` : errorInfo.description,
         variant: "destructive",
       })
     } finally {
@@ -506,12 +503,21 @@ export function ShieldInterface({ onSuccess, onReset, selectedToken: externalTok
                     </p>
                   </div>
                 )}
-                <p className="text-xs font-body text-white/60">
-                  Available: {tokenBalance} {selectedToken}
-                  {selectedTokenInfo.isNative && tokenBalanceNum > 0.001 && (
-                    <span className="ml-1">(0.001 reserved for gas)</span>
+                <div className="text-xs font-body text-white/60">
+                  {isLoadingBalance ? (
+                    <div className="flex items-center gap-2 text-white/50">
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                      <span>Loading balance...</span>
+                    </div>
+                  ) : (
+                    <>
+                      Available: {tokenBalance} {selectedToken}
+                      {selectedTokenInfo.isNative && tokenBalanceNum > 0.001 && (
+                        <span className="ml-1">(0.001 reserved for gas)</span>
+                      )}
+                    </>
                   )}
-                </p>
+                </div>
               </div>
               
               {/* Info Box */}
@@ -529,12 +535,16 @@ export function ShieldInterface({ onSuccess, onReset, selectedToken: externalTok
               </div>
               
               <Button 
-                className="w-full" 
+                className="w-full relative overflow-hidden bg-white/10 border border-white/20 hover:border-[#B89A2E]/50 transition-all duration-500 group"
                 onClick={handleShield}
                 disabled={!wallet?.isConnected || status !== "idle" || !amount || parseFloat(amount) <= 0 || !!amountError}
               >
-                <Shield className="h-4 w-4 mr-2" />
-                Shield {selectedToken}
+                {/* Fill animation from left to right - slower and more natural */}
+                <span className="absolute inset-0 bg-[#B89A2E] transform -translate-x-full group-hover:translate-x-0 transition-transform duration-[1300ms] ease-in-out" />
+                <span className="relative z-10 flex items-center justify-center text-white group-hover:text-black transition-colors duration-[1300ms] ease-in-out">
+                  <Shield className="h-4 w-4 mr-2" />
+                  Shield {selectedToken}
+                </span>
               </Button>
             </>
           )}
@@ -625,45 +635,25 @@ export function ShieldInterface({ onSuccess, onReset, selectedToken: externalTok
         </div>
       )}
       
-      {status === "success" && txHash && (
-        <div className="space-y-4">
-          <div className="p-6 rounded-lg bg-white/5 border border-white/10">
-            <div className="flex items-start gap-4">
-              <div className="flex-shrink-0 w-12 h-12 rounded-full bg-[#C2A633]/20 flex items-center justify-center">
-                <Check className="h-6 w-6 text-[#C2A633]" strokeWidth={2.5} />
-              </div>
-              <div className="flex-1 space-y-3">
-                <div>
-                  <h4 className="text-lg font-display font-semibold text-white mb-2">
-                    Shield Successful!
-                  </h4>
-                  <p className="text-sm font-body text-white/70 leading-relaxed">
-                    {amount} {selectedToken} has been successfully shielded. Your funds are now private and protected.
-                  </p>
-                </div>
-                {txHash && (
-                  <a 
-                    href={`https://blockscout.testnet.dogeos.com/tx/${txHash}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 text-sm text-[#C2A633] hover:text-[#C2A633]/80 transition-colors group font-medium"
-                  >
-                    <span className="font-body">View transaction on Blockscout</span>
-                    <ExternalLink className="h-4 w-4 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
-                  </a>
-                )}
-              </div>
-            </div>
-          </div>
-          
-          <Button 
-            className="w-full bg-white/5 hover:bg-white/10 text-[#C2A633] border border-[#C2A633]/50 hover:border-[#C2A633] font-body font-medium transition-all" 
-            onClick={reset}
-          >
-            Shield More Tokens
-          </Button>
-        </div>
-      )}
+      {/* Success Dialog */}
+      <SuccessDialog
+        open={showSuccessDialog}
+        onOpenChange={(open) => {
+          // Only allow closing via buttons, not by clicking outside or scrolling
+          if (!open && status === "success") {
+            reset()
+          } else {
+            setShowSuccessDialog(true)
+          }
+        }}
+        title="Shield Successful!"
+        message={`Successfully shielded ${amount ? Number(amount).toFixed(4) : '0'} ${selectedToken}. Your funds are now private and protected.`}
+        txHash={txHash}
+        blockExplorerUrl={dogeosTestnet.blockExplorers.default.url}
+        actionText="Shield More Tokens"
+        onAction={reset}
+        onClose={reset}
+      />
       
       {status === "error" && (
         <div className="space-y-4">

@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { 
   Shield, Copy, Check, Eye, EyeOff, Wallet, Lock
 } from "lucide-react"
+import { useAppLoading } from "@/lib/shielded/app-loading-context"
 import { WalletIcon } from "@/components/wallet-icon"
 import { useToast } from "@/hooks/use-toast"
 import { useWallet } from "@/lib/wallet-context"
@@ -66,9 +67,60 @@ export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", onTokenC
   const [showAddress, setShowAddress] = useState(false)
   const [copied, setCopied] = useState(false)
   const [allPublicBalances, setAllPublicBalances] = useState<Record<string, string>>({})
+  const [isLoadingBalances, setIsLoadingBalances] = useState(false)
+  const [isLoadingShielded, setIsLoadingShielded] = useState(false)
+  const { setLoadingProgress, setIsLoading: setAppLoading, resetLoading, hasCompletedInitialLoad } = useAppLoading()
   
   const tokenConfig = TOKEN_CONFIG[selectedToken] || TOKEN_CONFIG.DOGE
   const publicBalance = allPublicBalances[selectedToken] || "0"
+  
+  // Calculate overall loading progress with smooth animation
+  // 0-25%: Wallet connection
+  // 25-50%: Public balance fetching
+  // 50-75%: Shielded wallet initialization
+  // 75-100%: Shielded balance calculation
+  useEffect(() => {
+    if (!mounted || !wallet?.isConnected || !wallet?.address) {
+      // Reset loading when wallet disconnects
+      resetLoading()
+      return
+    }
+    
+    // Once initial load is complete, stop all progress updates
+    // This prevents loading overlay from showing when switching tabs
+    if (hasCompletedInitialLoad) {
+      return
+    }
+    
+    let targetProgress = 25 // Wallet connected (base)
+    
+    // Public balances progress (25-50%)
+    if (isLoadingBalances && Object.keys(allPublicBalances).length === 0) {
+      targetProgress = 35 // Just started loading
+    } else if (isLoadingBalances && Object.keys(allPublicBalances).length > 0) {
+      targetProgress = 45 // Partially loaded
+    } else if (!isLoadingBalances && Object.keys(allPublicBalances).length > 0) {
+      targetProgress = 50 // Public balances fully loaded
+    }
+    
+    // Shielded wallet progress (50-100%)
+    if (isInitialized && isLoadingShielded) {
+      targetProgress = 70 // Initializing but not done
+    } else if (isInitialized && !isLoadingShielded && !walletState) {
+      targetProgress = 75 // Initialized, waiting for state
+    } else if (isInitialized && walletState && isLoadingShielded) {
+      targetProgress = 90 // State loaded, syncing notes
+    } else if (isInitialized && walletState && !isLoadingShielded) {
+      targetProgress = 100 // Everything complete!
+    } else if (!isInitialized && isLoadingShielded) {
+      targetProgress = 55 // Starting initialization
+    }
+    
+    // Smooth animation to target progress (makes it more convincing)
+    const currentProgress = Math.min(100, Math.max(0, targetProgress))
+    setLoadingProgress(currentProgress)
+    setAppLoading(currentProgress < 100 || isLoadingBalances || isLoadingShielded)
+  }, [mounted, wallet?.isConnected, wallet?.address, isLoadingBalances, allPublicBalances, isInitialized, isLoadingShielded, walletState, setLoadingProgress, setAppLoading, resetLoading, hasCompletedInitialLoad])
   
   useEffect(() => {
     setMounted(true)
@@ -78,10 +130,14 @@ export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", onTokenC
   useEffect(() => {
     if (!mounted || !wallet?.isConnected || !wallet?.address) {
       setAllPublicBalances({})
+      setIsLoadingBalances(false)
       return
     }
     
     async function fetchAllBalances() {
+      setIsLoadingBalances(true)
+      // Add a small delay to make loading more visible
+      await new Promise(resolve => setTimeout(resolve, 200))
       const balances: Record<string, string> = {}
       
       for (const [symbol, config] of Object.entries(TOKEN_CONFIG)) {
@@ -115,6 +171,7 @@ export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", onTokenC
       }
       
       setAllPublicBalances(balances)
+      setIsLoadingBalances(false)
     }
     
     fetchAllBalances()
@@ -131,6 +188,7 @@ export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", onTokenC
         await new Promise(resolve => setTimeout(resolve, 3000))
         
         console.log('[ShieldedHeader] Refreshing balances via onStateChange')
+        setIsLoadingBalances(true)
         const balances: Record<string, string> = {}
         for (const [symbol, config] of Object.entries(TOKEN_CONFIG)) {
           try {
@@ -160,6 +218,7 @@ export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", onTokenC
           }
         }
         setAllPublicBalances(balances)
+        setIsLoadingBalances(false)
         console.log('[ShieldedHeader] Balances refreshed via onStateChange:', balances)
       }
       fetchAllBalances()
@@ -180,6 +239,7 @@ export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", onTokenC
     
     const handleRefreshBalance = async () => {
       console.log('[ShieldedHeader] Refresh balance event received')
+      setIsLoadingBalances(true)
       // Wait 3 seconds for transaction confirmation
       await new Promise(resolve => setTimeout(resolve, 3000))
       
@@ -212,6 +272,7 @@ export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", onTokenC
         }
       }
       setAllPublicBalances(balances)
+      setIsLoadingBalances(false)
       console.log('[ShieldedHeader] Balances refreshed:', balances)
     }
     
@@ -233,6 +294,7 @@ export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", onTokenC
     
     async function init() {
       try {
+        setIsLoadingShielded(true)
         // Pass wallet address and sign message function to initialize
         const identity = await initializeShieldedWallet(
           wallet.address!,
@@ -242,7 +304,12 @@ export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", onTokenC
         
         if (identity) {
           setIsInitialized(true)
+          // Add delays to make loading more convincing and ensure everything is ready
+          await new Promise(resolve => setTimeout(resolve, 400))
           refreshState()
+          // Give more time for notes to be calculated and synced
+          await new Promise(resolve => setTimeout(resolve, 500))
+          setIsLoadingShielded(false)
           
           // Start auto-discovery for incoming transfers
           startAutoDiscovery(
@@ -292,6 +359,7 @@ export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", onTokenC
         }
       } catch (error) {
         console.error("Failed to initialize shielded wallet:", error)
+        setIsLoadingShielded(false)
       }
     }
     
@@ -307,6 +375,10 @@ export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", onTokenC
     if (wallet?.address) {
       const state = getWalletState()
       setWalletState(state)
+      // Once state is refreshed, we're done loading
+      if (state) {
+        setIsLoadingShielded(false)
+      }
     }
     onStateChange?.()
   }
@@ -353,46 +425,46 @@ export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", onTokenC
             Public Balance
           </div>
           {onTokenChange ? (
-            <Select value={selectedToken} onValueChange={onTokenChange}>
-              <SelectTrigger className="h-auto py-0 px-0 border-0 bg-transparent hover:bg-transparent shadow-none focus:ring-0 focus:ring-offset-0 w-fit">
-                <SelectValue>
-                  <div className="flex items-center gap-2">
-                    <img 
-                      src={tokenConfig.logo} 
-                      alt={selectedToken} 
-                      className={`${compact ? 'w-5 h-5' : 'w-6 h-6 sm:w-7 sm:h-7'} rounded-full flex-shrink-0`}
-                    />
-                    <span className={`${compact ? 'text-lg sm:text-xl' : 'text-xl sm:text-2xl'} font-mono font-bold tracking-[-0.01em] break-words`}>{publicBalance}</span>
-                    <span className="font-body text-sm sm:text-base text-white/70 flex-shrink-0">{selectedToken}</span>
-                  </div>
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {Object.entries(TOKEN_CONFIG).map(([symbol, config]) => (
-                  <SelectItem key={symbol} value={symbol}>
+              <Select value={selectedToken} onValueChange={onTokenChange}>
+                <SelectTrigger className="h-auto py-0 px-0 border-0 bg-transparent hover:bg-transparent shadow-none focus:ring-0 focus:ring-offset-0 w-fit">
+                  <SelectValue>
                     <div className="flex items-center gap-2">
                       <img 
-                        src={config.logo} 
-                        alt={symbol} 
-                        className="w-5 h-5 rounded-full"
+                        src={tokenConfig.logo} 
+                        alt={selectedToken} 
+                        className={`${compact ? 'w-5 h-5' : 'w-6 h-6 sm:w-7 sm:h-7'} rounded-full flex-shrink-0`}
                       />
-                      <span className="font-body">{symbol}</span>
+                      <span className={`${compact ? 'text-lg sm:text-xl' : 'text-xl sm:text-2xl'} font-mono font-bold tracking-[-0.01em] break-words`}>{publicBalance}</span>
+                      <span className="font-body text-sm sm:text-base text-white/70 flex-shrink-0">{selectedToken}</span>
                     </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          ) : (
-            <div className={`${compact ? 'text-lg sm:text-xl' : 'text-xl sm:text-2xl'} font-bold flex items-center gap-2 flex-wrap`}>
-              <img 
-                src={tokenConfig.logo} 
-                alt={selectedToken} 
-                className={`${compact ? 'w-5 h-5' : 'w-6 h-6 sm:w-7 sm:h-7'} rounded-full flex-shrink-0`}
-              />
-              <span className="break-words">{publicBalance}</span> <span className="flex-shrink-0">{selectedToken}</span>
-            </div>
-          )}
-          {!compact && <div className="text-xs font-body text-white/60">Available to shield</div>}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(TOKEN_CONFIG).map(([symbol, config]) => (
+                    <SelectItem key={symbol} value={symbol}>
+                      <div className="flex items-center gap-2">
+                        <img 
+                          src={config.logo} 
+                          alt={symbol} 
+                          className="w-5 h-5 rounded-full"
+                        />
+                        <span className="font-body">{symbol}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <div className={`${compact ? 'text-lg sm:text-xl' : 'text-xl sm:text-2xl'} font-bold flex items-center gap-2 flex-wrap`}>
+                <img 
+                  src={tokenConfig.logo} 
+                  alt={selectedToken} 
+                  className={`${compact ? 'w-5 h-5' : 'w-6 h-6 sm:w-7 sm:h-7'} rounded-full flex-shrink-0`}
+                />
+                <span className="break-words">{publicBalance}</span> <span className="flex-shrink-0">{selectedToken}</span>
+              </div>
+            )}
+            {!compact && <div className="text-xs font-body text-white/60">Available to shield</div>}
         </div>
         
         <div className={`${compact ? 'p-3 sm:p-4' : 'p-4 sm:p-5'} rounded-lg bg-primary/5 border border-primary/20`}>
@@ -400,15 +472,15 @@ export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", onTokenC
             <Lock className="h-3.5 w-3.5 sm:h-3 w-3 opacity-85" strokeWidth={1.75} />
             Shielded Balance
           </div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <img 
-                src={tokenConfig.logo} 
-                alt={selectedToken} 
-                className={`${compact ? 'w-5 h-5' : 'w-6 h-6 sm:w-7 sm:h-7'} rounded-full flex-shrink-0`}
-              />
-              <span className="font-body text-sm sm:text-base text-white/70 flex-shrink-0">{selectedToken}</span>
-              <span className={`ml-auto ${compact ? 'text-lg sm:text-xl' : 'text-xl sm:text-2xl'} font-mono font-bold tracking-[-0.01em] break-words`}>{formatWeiToAmount(shieldedBalance[selectedToken] || 0n).toFixed(4)}</span>
-            </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <img 
+              src={tokenConfig.logo} 
+              alt={selectedToken} 
+              className={`${compact ? 'w-5 h-5' : 'w-6 h-6 sm:w-7 sm:h-7'} rounded-full flex-shrink-0`}
+            />
+            <span className="font-body text-sm sm:text-base text-white/70 flex-shrink-0">{selectedToken}</span>
+            <span className={`ml-auto ${compact ? 'text-lg sm:text-xl' : 'text-xl sm:text-2xl'} font-mono font-bold tracking-[-0.01em] break-words`}>{formatWeiToAmount(shieldedBalance[selectedToken] || 0n).toFixed(4)}</span>
+          </div>
           {!compact && <div className="text-xs font-body text-white/60 mt-1">Private balance</div>}
         </div>
       </div>

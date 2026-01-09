@@ -23,7 +23,13 @@ import {
 } from "@/lib/shielded/shielded-swap-service"
 import { getIdentity, getNotes, completeUnshield, completeSwap } from "@/lib/shielded/shielded-service"
 import { addTransaction } from "@/lib/shielded/transaction-history"
-import { shieldedPool } from "@/lib/dogeos-config"
+import { shieldedPool, dogeosTestnet } from "@/lib/dogeos-config"
+import { TransactionProgress, type TransactionStatus } from "@/components/shielded/transaction-progress"
+import { TransactionTrackerClass } from "@/lib/shielded/transaction-tracker"
+import { EstimatedFees } from "@/components/shielded/estimated-fees"
+import { ConfirmationDialog } from "@/components/shielded/confirmation-dialog"
+import { SuccessDialog } from "@/components/shielded/success-dialog"
+import { formatErrorWithSuggestion } from "@/lib/shielded/error-suggestions"
 
 // Use local backend for development, production URL for deployed
 const RELAYER_URL = process.env.NEXT_PUBLIC_INDEXER_URL || 
@@ -60,13 +66,19 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
   const [inputAmount, setInputAmount] = useState("")
   const [quote, setQuote] = useState<SwapQuote | null>(null)
   const [isLoadingQuote, setIsLoadingQuote] = useState(false)
-  const [status, setStatus] = useState<"idle" | "quoting" | "proving" | "relaying" | "success" | "error">("idle")
+  const [isCheckingLiquidity, setIsCheckingLiquidity] = useState(false)
+  const [status, setStatus] = useState<TransactionStatus>("idle")
   const [txHash, setTxHash] = useState<string | null>(null)
+  const [tracker, setTracker] = useState<TransactionTrackerClass | null>(null)
+  const [trackerStatus, setTrackerStatus] = useState<TransactionStatus>("idle")
   const [liquidityCheck, setLiquidityCheck] = useState<{
     hasLiquidity: boolean;
     availableBalance: bigint;
     requiredAmount: bigint;
   } | null>(null)
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false)
+  const [showSuccessDialog, setShowSuccessDialog] = useState(false)
+  const [pendingSwap, setPendingSwap] = useState<() => Promise<void> | null>(null)
   
   // Get balances
   const balances = getShieldedBalances(notes)
@@ -162,12 +174,20 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
         
         // Check liquidity for output token
         if (newQuote) {
-          const liquidity = await checkSwapLiquidity(
-            outputToken,
-            newQuote.outputAmount,
-            shieldedPool.address
-          )
-          setLiquidityCheck(liquidity)
+          setIsCheckingLiquidity(true)
+          try {
+            const liquidity = await checkSwapLiquidity(
+              outputToken,
+              newQuote.outputAmount,
+              shieldedPool.address
+            )
+            setLiquidityCheck(liquidity)
+          } catch (error) {
+            console.error('[Swap] Liquidity check failed:', error)
+            setLiquidityCheck(null)
+          } finally {
+            setIsCheckingLiquidity(false)
+          }
         } else {
           setLiquidityCheck(null)
         }
@@ -184,13 +204,28 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
     return () => clearTimeout(debounce)
   }, [inputAmount, inputToken, outputToken, inputBalance, notes])
   
-  // Swap tokens
+  // Swap tokens (reverse input/output)
   const handleSwapTokens = () => {
     const temp = inputToken
     handleInputTokenChange(outputToken)
     setOutputToken(temp)
     setInputAmount("")
     setQuote(null)
+  }
+  
+  // Show confirmation dialog before swap
+  const handleSwap = () => {
+    if (!quote) {
+      toast({
+        title: "No Quote",
+        description: "Please enter an amount to swap",
+        variant: "destructive",
+      })
+      return
+    }
+    
+    setPendingSwap(() => executeSwap)
+    setShowConfirmDialog(true)
   }
   
   // Set max amount (based on largest single note, since swaps use one note at a time)
@@ -202,8 +237,8 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
     }
   }
   
-  // Execute swap
-  const handleSwap = async () => {
+  // Execute swap (internal - called after confirmation)
+  const executeSwap = async () => {
     if (!quote) {
       toast({
         title: "No Quote",
@@ -422,7 +457,22 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
       }
       
       setTxHash(data.txHash)
-      setStatus("success")
+      
+      // Start tracking transaction
+      const newTracker = new TransactionTrackerClass(1)
+      newTracker.onUpdate((trackerState) => {
+        setTrackerStatus(trackerState.status)
+        if (trackerState.status === 'confirmed') {
+          setStatus('confirmed')
+        } else if (trackerState.status === 'failed') {
+          setStatus('failed')
+        }
+      })
+      setTracker(newTracker)
+      await newTracker.track(data.txHash)
+      
+      // Update status to pending (tracker will update to confirmed)
+      setStatus("pending")
       
       // Update wallet state: remove spent input note and add output note
       const allNotes = getNotes()
@@ -448,6 +498,9 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
           outputToken: finalQuote.outputToken,
           changeNoteAmount: result.changeNote?.amount.toString() || '0',
         })
+        
+        // Show success dialog
+        setShowSuccessDialog(true)
         
         // Trigger UI refresh events
         setTimeout(() => {
@@ -479,7 +532,7 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
         amountWei: swapAmountWei.toString(),
         inputToken,
         outputToken,
-        outputAmount: formatWeiToAmount(outputAmountWei, SWAP_TOKENS[outputToken].decimals).toFixed(6),
+        outputAmount: formatWeiToAmount(outputAmountWei, SWAP_TOKENS[outputToken].decimals).toFixed(4),
         status: 'confirmed',
       })
       
@@ -490,27 +543,16 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
       console.error("Swap error:", error)
       setStatus("error")
       
-      // Better error messages
-      let errorMessage = "Transaction failed"
-      if (error?.message) {
-        if (error.message.includes("user rejected") || error.message.includes("User denied")) {
-          errorMessage = "Transaction was cancelled. Please try again when ready."
-        } else if (error.message.includes("insufficient funds") || error.message.includes("insufficient balance")) {
-          errorMessage = "Insufficient balance. Please check your shielded balance."
-        } else if (error.message.includes("network") || error.message.includes("RPC") || error.message.includes("relayer")) {
-          errorMessage = "Network or relayer error. Please check your connection and try again."
-        } else if (error.message.includes("quote") || error.message.includes("slippage")) {
-          errorMessage = "Swap quote error. Please try again with different amounts."
-        } else if (error.message.includes("proof")) {
-          errorMessage = "Proof generation failed. Please try again."
-        } else {
-          errorMessage = error.message
-        }
-      }
+      // Smart error suggestions
+      const errorInfo = formatErrorWithSuggestion(error, {
+        operation: 'swap',
+        token: inputToken,
+        hasShieldedBalance: inputBalance > 0n,
+      })
       
       toast({
-        title: "Swap Failed",
-        description: errorMessage,
+        title: errorInfo.title,
+        description: errorInfo.suggestion ? `${errorInfo.description} ${errorInfo.suggestion}` : errorInfo.description,
         variant: "destructive",
       })
     }
@@ -521,9 +563,24 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
     setQuote(null)
     setStatus("idle")
     setTxHash(null)
+    if (tracker) {
+      tracker.stop()
+      tracker.reset()
+      setTracker(null)
+    }
+    setTrackerStatus("idle")
     // Trigger component reset in AppCard
     onReset?.()
   }
+  
+  // Cleanup tracker on unmount
+  useEffect(() => {
+    return () => {
+      if (tracker) {
+        tracker.stop()
+      }
+    }
+  }, [tracker])
   
   if (Object.keys(balances).length === 0 || Object.values(balances).every(b => b === 0n)) {
     return null
@@ -624,16 +681,29 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
           <Card className="p-4">
             <div className="flex justify-between items-center mb-2">
               <Label>You Receive</Label>
-              {isLoadingQuote && <Loader2 className="h-4 w-4 animate-spin" />}
+              {isLoadingQuote && (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>Computing quote...</span>
+                </div>
+              )}
             </div>
             <div className="flex gap-2">
-              <Input
-                type="text"
-                placeholder="0.0"
-                value={quote ? formatWeiToAmount(quote.outputAmount, SWAP_TOKENS[outputToken].decimals).toFixed(6) : ""}
-                readOnly
-                className="text-xl bg-muted"
-              />
+              <div className="relative flex-1">
+                <Input
+                  type="text"
+                  placeholder={isLoadingQuote ? "Computing..." : "0.0"}
+                  value={quote ? formatWeiToAmount(quote.outputAmount, SWAP_TOKENS[outputToken].decimals).toFixed(4) : ""}
+                  readOnly
+                  className="text-xl bg-muted"
+                  disabled={isLoadingQuote}
+                />
+                {isLoadingQuote && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-muted/50 rounded-md">
+                    <Loader2 className="h-5 w-5 animate-spin text-[#C2A633]" />
+                  </div>
+                )}
+              </div>
               <Select value={outputToken} onValueChange={(v) => setOutputToken(v as SwapToken)}>
                 <SelectTrigger className="w-32">
                   <SelectValue>
@@ -667,16 +737,35 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
             </div>
           </Card>
           
+          {/* Loading State - Quote Computing */}
+          {(isLoadingQuote || isCheckingLiquidity) && inputAmount && parseFloat(inputAmount) > 0 && (
+            <div className="p-3 rounded-lg bg-muted/30 border border-[#C2A633]/20 text-sm">
+              <div className="flex items-center gap-2 text-[#C2A633]">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>
+                  {isLoadingQuote ? "Computing swap quote..." : "Checking liquidity..."}
+                </span>
+              </div>
+            </div>
+          )}
+          
+          {/* Estimated Fees */}
+          {quote && !isLoadingQuote && !isCheckingLiquidity && (
+            <EstimatedFees
+              amount={quote.inputAmount}
+              fee={quote.fee}
+              received={quote.outputAmount}
+              token={outputToken}
+              tokenDecimals={SWAP_TOKENS[outputToken].decimals}
+            />
+          )}
+          
           {/* Quote Details */}
-          {quote && (
+          {quote && !isLoadingQuote && !isCheckingLiquidity && (
             <div className="p-3 rounded-lg bg-muted/50 text-sm space-y-1">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Rate</span>
                 <span>1 {inputToken} = {quote.exchangeRate.toFixed(6)} {outputToken}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Fee (0.3%)</span>
-                <span>{formatWeiToAmount(quote.fee, SWAP_TOKENS[outputToken].decimals).toFixed(6)} {outputToken}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Price Impact</span>
@@ -693,8 +782,8 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
                 <strong>Insufficient Liquidity:</strong> The contract has{" "}
-                {formatWeiToAmount(liquidityCheck.availableBalance, SWAP_TOKENS[outputToken].decimals).toFixed(6)}{" "}
-                {outputToken} available, but {formatWeiToAmount(liquidityCheck.requiredAmount, SWAP_TOKENS[outputToken].decimals).toFixed(6)}{" "}
+                {formatWeiToAmount(liquidityCheck.availableBalance, SWAP_TOKENS[outputToken].decimals).toFixed(4)}{" "}
+                {outputToken} available, but {formatWeiToAmount(liquidityCheck.requiredAmount, SWAP_TOKENS[outputToken].decimals).toFixed(4)}{" "}
                 {outputToken} is required. Someone must shield {outputToken} first to provide liquidity.
               </AlertDescription>
             </Alert>
@@ -710,137 +799,96 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
           </Alert>
           
           <Button 
-            className="w-full bg-[#C2A633]/20 hover:bg-[#C2A633]/30 text-[#C2A633] border border-[#C2A633]/40" 
+            className="w-full relative overflow-hidden bg-white/10 border border-white/20 hover:border-[#B89A2E]/50 transition-all duration-500 group"
             onClick={handleSwap}
-            disabled={!quote || parseFloat(inputAmount) <= 0 || (liquidityCheck && !liquidityCheck.hasLiquidity)}
+            disabled={!quote || parseFloat(inputAmount) <= 0 || isLoadingQuote || isCheckingLiquidity || (liquidityCheck && !liquidityCheck.hasLiquidity)}
           >
-            <ArrowDownUp className="h-4 w-4 mr-2 opacity-85" strokeWidth={1.75} />
-            {liquidityCheck && !liquidityCheck.hasLiquidity ? "Insufficient Liquidity" : "Swap Privately"}
+            {/* Fill animation from left to right - slower and more natural */}
+            <span className="absolute inset-0 bg-[#B89A2E] transform -translate-x-full group-hover:translate-x-0 transition-transform duration-[1300ms] ease-in-out" />
+            <span className="relative z-10 flex items-center justify-center text-white group-hover:text-black transition-colors duration-[1300ms] ease-in-out">
+              {isLoadingQuote || isCheckingLiquidity ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Computing...
+                </>
+              ) : (
+                <>
+                  <ArrowDownUp className="h-4 w-4 mr-2" strokeWidth={1.75} />
+                  {liquidityCheck && !liquidityCheck.hasLiquidity ? "Insufficient Liquidity" : "Swap Privately"}
+                </>
+              )}
+            </span>
           </Button>
         </div>
       )}
       
-      {status === "proving" && (
-        <div className="space-y-4">
-          <div className="p-6 rounded-lg bg-white/5 border border-white/10">
-            <div className="flex flex-col items-center space-y-4">
-              {/* Animated Icon */}
-              <div className="relative">
-                <div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center">
-                  <ArrowDownUp className="h-8 w-8 text-white/80 animate-pulse" strokeWidth={1.5} />
-                </div>
-                <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-[#C2A633] flex items-center justify-center">
-                  <Loader2 className="h-3 w-3 text-black animate-spin" />
-                </div>
-              </div>
-              
-              {/* Progress Info */}
-              <div className="w-full max-w-xs space-y-3">
-                <div className="text-center space-y-2">
-                  <h4 className="text-base font-display font-semibold text-white">
-                    Generating ZK Proof
-                  </h4>
-                  <p className="text-sm font-body text-white/70">
-                    This may take 10-30 seconds...
-                  </p>
-                </div>
-                
-                {/* Progress Bar */}
-                <div className="relative w-full h-2 bg-white/5 rounded-full overflow-hidden">
-                  <div 
-                    className="absolute top-0 left-0 h-full bg-white rounded-full origin-left"
-                    style={{ 
-                      width: '33%',
-                      animation: 'progressFill 2.5s ease-out infinite'
-                    }}
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+      {/* Progress Indicator - Only show during processing, hide when confirmed */}
+      {status !== "confirmed" && (
+        <TransactionProgress
+          status={status === "idle" ? "idle" : (status === "error" ? "failed" : status)}
+          message={
+            status === "proving" ? "This may take 10-30 seconds..."
+            : status === "relaying" ? "Relayer is submitting your transaction..."
+            : status === "pending" ? "Waiting for blockchain confirmation..."
+            : undefined
+          }
+          txHash={txHash}
+          blockExplorerUrl={dogeosTestnet.blockExplorers.default.url}
+        />
       )}
       
-      {status === "relaying" && (
-        <div className="space-y-4">
-          <div className="p-6 rounded-lg bg-white/5 border border-white/10">
-            <div className="flex flex-col items-center space-y-4">
-              {/* Animated Icon */}
-              <div className="relative">
-                <div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center">
-                  <ArrowDownUp className="h-8 w-8 text-white/80 animate-pulse" strokeWidth={1.5} />
-                </div>
-                <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-[#C2A633] flex items-center justify-center">
-                  <Loader2 className="h-3 w-3 text-black animate-spin" />
-                </div>
+      {/* Confirmation Dialog */}
+      <ConfirmationDialog
+        open={showConfirmDialog}
+        onOpenChange={setShowConfirmDialog}
+        title="Confirm Swap"
+        description={`You are about to swap ${quote ? formatWeiToAmount(quote.inputAmount, SWAP_TOKENS[inputToken].decimals).toFixed(4) : '0'} ${inputToken} for approximately ${quote ? formatWeiToAmount(quote.outputAmount, SWAP_TOKENS[outputToken].decimals).toFixed(4) : '0'} ${outputToken}.`}
+        confirmText="Confirm Swap"
+        cancelText="Cancel"
+        onConfirm={async () => {
+          if (pendingSwap) {
+            await pendingSwap()
+          }
+          setPendingSwap(null)
+        }}
+        isLoading={status === "proving" || status === "relaying"}
+        details={
+          quote ? (
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-gray-400">Rate</span>
+                <span className="text-white">1 {inputToken} = {quote.exchangeRate.toFixed(6)} {outputToken}</span>
               </div>
-              
-              {/* Progress Info */}
-              <div className="w-full max-w-xs space-y-3">
-                <div className="text-center space-y-2">
-                  <h4 className="text-base font-display font-semibold text-white">
-                    Submitting Transaction
-                  </h4>
-                  <p className="text-sm font-body text-white/70">
-                    Your wallet never signs!
-                  </p>
-                </div>
-                
-                {/* Progress Bar */}
-                <div className="relative w-full h-2 bg-white/5 rounded-full overflow-hidden">
-                  <div 
-                    className="absolute top-0 left-0 h-full bg-white rounded-full origin-left"
-                    style={{ 
-                      width: '66%',
-                      animation: 'progressFill 2.5s ease-out infinite'
-                    }}
-                  />
-                </div>
+              <div className="flex justify-between">
+                <span className="text-gray-400">Price Impact</span>
+                <span className={quote.priceImpact > 1 ? "text-red-400" : "text-white"}>
+                  {quote.priceImpact.toFixed(2)}%
+                </span>
               </div>
             </div>
-          </div>
-        </div>
-      )}
+          ) : undefined
+        }
+      />
       
-      {status === "success" && txHash && (
-        <div className="space-y-4">
-          <div className="p-6 rounded-lg bg-white/5 border border-white/10">
-            <div className="flex items-start gap-4">
-              <div className="flex-shrink-0 w-12 h-12 rounded-full bg-[#C2A633]/20 flex items-center justify-center">
-                <Check className="h-6 w-6 text-[#C2A633]" strokeWidth={2.5} />
-              </div>
-              <div className="flex-1 space-y-3">
-                <div>
-                  <h4 className="text-lg font-display font-semibold text-white mb-2">
-                    Swap Successful!
-                  </h4>
-                  <p className="text-sm font-body text-white/70 leading-relaxed">
-                    Your shielded balance has been updated. The swap completed successfully.
-                  </p>
-                </div>
-                {txHash && (
-                  <a 
-                    href={`https://blockscout.testnet.dogeos.com/tx/${txHash}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 text-sm text-[#C2A633] hover:text-[#C2A633]/80 transition-colors group font-medium"
-                  >
-                    <span className="font-body">View transaction on Blockscout</span>
-                    <ExternalLink className="h-4 w-4 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
-                  </a>
-                )}
-              </div>
-            </div>
-          </div>
-          
-          <Button 
-            className="w-full bg-white/5 hover:bg-white/10 text-[#C2A633] border border-[#C2A633]/50 hover:border-[#C2A633] font-body font-medium transition-all" 
-            onClick={reset}
-          >
-            Make Another Swap
-          </Button>
-        </div>
-      )}
+      {/* Success Dialog */}
+      <SuccessDialog
+        open={showSuccessDialog}
+        onOpenChange={(open) => {
+          // Only allow closing via buttons, not by clicking outside or scrolling
+          if (!open && status === "confirmed") {
+            reset()
+          } else {
+            setShowSuccessDialog(true)
+          }
+        }}
+        onClose={reset}
+        title="Swap Successful!"
+        message="Your shielded balance has been updated. The swap completed successfully."
+        txHash={txHash}
+        blockExplorerUrl={dogeosTestnet.blockExplorers.default.url}
+        actionText="Make Another Swap"
+        onAction={reset}
+      />
       
       {status === "error" && (
         <div className="space-y-4">

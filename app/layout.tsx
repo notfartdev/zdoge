@@ -5,6 +5,7 @@ import localFont from "next/font/local"
 import "./globals.css"
 import { WalletProvider } from "@/lib/wallet-context"
 import { TokenProvider } from "@/lib/token-context"
+import { AppLoadingProvider } from "@/lib/shielded/app-loading-context"
 import { Toaster } from "@/components/ui/toaster"
 
 // Helvetica Neue - Display font for headings, nav, card titles, key moments
@@ -99,10 +100,12 @@ export default function RootLayout({
       <body className="font-body antialiased overflow-x-hidden" suppressHydrationWarning>
         <div className="noise-overlay" />
         <WalletProvider>
-          <TokenProvider>
-            {children}
-            <Toaster />
-          </TokenProvider>
+          <AppLoadingProvider>
+            <TokenProvider>
+              {children}
+              <Toaster />
+            </TokenProvider>
+          </AppLoadingProvider>
         </WalletProvider>
       </body>
     </html>

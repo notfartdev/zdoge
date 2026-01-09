@@ -10,6 +10,7 @@
  */
 
 import { Router, type Request, type Response } from 'express';
+import rateLimit from 'express-rate-limit';
 import { type Address, createPublicClient, createWalletClient, http, parseUnits } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import {
@@ -20,8 +21,51 @@ import {
   isNullifierSpent,
 } from './shielded-indexer.js';
 import { config, dogeosTestnet } from '../config.js';
+import { shieldedRelayerLogger } from '../utils/logger.js';
 
 export const shieldedRouter = Router();
+
+// ============ Rate Limiting ============
+
+/**
+ * Rate limiter for relayer endpoints (prevents DoS attacks)
+ * 
+ * Limits:
+ * - 10 requests per minute per IP for relayer endpoints
+ * - 100 requests per minute per IP for read-only endpoints
+ */
+const relayerRateLimit = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 10, // 10 requests per minute per IP
+  message: {
+    error: 'Too many requests',
+    message: 'Rate limit exceeded. Please try again in a minute.',
+    retryAfter: 60,
+  },
+  standardHeaders: true, // Return rate limit info in `RateLimit-*` headers
+  legacyHeaders: false, // Disable `X-RateLimit-*` headers
+  skip: (req) => {
+    // Skip rate limiting for localhost (development)
+    const ip = req.ip || req.socket.remoteAddress || 'unknown';
+    return ip === '::1' || ip === '127.0.0.1' || ip === '::ffff:127.0.0.1';
+  },
+});
+
+const readOnlyRateLimit = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 100, // 100 requests per minute per IP
+  message: {
+    error: 'Too many requests',
+    message: 'Rate limit exceeded. Please try again in a minute.',
+    retryAfter: 60,
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => {
+    const ip = req.ip || req.socket.remoteAddress || 'unknown';
+    return ip === '::1' || ip === '127.0.0.1' || ip === '::ffff:127.0.0.1';
+  },
+});
 
 // ============ Relayer Configuration ============
 
@@ -176,7 +220,7 @@ const ShieldedPoolABI = [
  * GET /api/shielded/pool/:address
  * Get shielded pool info
  */
-shieldedRouter.get('/pool/:address', async (req: Request, res: Response) => {
+shieldedRouter.get('/pool/:address', readOnlyRateLimit, async (req: Request, res: Response) => {
   const address = req.params.address;
   const stats = getShieldedPoolStats(address);
   
@@ -381,7 +425,7 @@ shieldedRouter.get('/relay/info', async (req: Request, res: Response) => {
  * - recipient: address to receive funds
  * - amount: total amount being withdrawn (fee will be deducted)
  */
-shieldedRouter.post('/relay/unshield', async (req: Request, res: Response) => {
+shieldedRouter.post('/relay/unshield', relayerRateLimit, async (req: Request, res: Response) => {
   if (!relayerWallet || !relayerAddress) {
     return res.status(503).json({ 
       error: 'Relayer not available',
@@ -389,22 +433,24 @@ shieldedRouter.post('/relay/unshield', async (req: Request, res: Response) => {
     });
   }
   
-  // Log the raw request body for debugging
-  console.log(`[ShieldedRelayer] Raw request body:`, {
+  // Structured logging
+  const startTime = Date.now();
+  const requestId = `req_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+  shieldedRelayerLogger.requestReceived('/api/shielded/relay/unshield', 'POST', {
+    requestId,
+    ip: req.ip || req.socket.remoteAddress,
+    poolAddress: req.body.poolAddress,
+  });
+  
+  // Log request details
+  shieldedRelayerLogger.debug('relay.unshield.request', 'Processing unshield request', {
     poolAddress: req.body.poolAddress,
     hasProof: !!req.body.proof,
     proofLength: req.body.proof?.length,
-    root: req.body.root,
-    nullifierHash: req.body.nullifierHash,
     recipient: req.body.recipient,
     amount: req.body.amount,
-    fee: req.body.fee,
-    token: req.body.token,  // This is the critical field
-    tokenType: typeof req.body.token,
-    tokenIsUndefined: req.body.token === undefined,
-    tokenIsNull: req.body.token === null,
-    tokenIsEmpty: req.body.token === '',
-  });
+    token: req.body.token,
+  }, { requestId });
   
   const { 
     poolAddress, 
@@ -564,7 +610,14 @@ shieldedRouter.post('/relay/unshield', async (req: Request, res: Response) => {
       });
     }
     
-    console.log(`[ShieldedRelayer] TX submitted: ${txHash}`);
+    shieldedRelayerLogger.transactionSubmitted(txHash, 'unshield', {
+      requestId,
+      poolAddress,
+      recipient,
+      token: tokenAddress,
+      amount: amountBigInt.toString(),
+      fee: fee.toString(),
+    });
     
     // Wait for confirmation
     const receipt = await publicClient.waitForTransactionReceipt({ 
@@ -573,14 +626,23 @@ shieldedRouter.post('/relay/unshield', async (req: Request, res: Response) => {
     });
     
     if (receipt.status === 'reverted') {
-      console.error('[ShieldedRelayer] TX reverted');
+      shieldedRelayerLogger.transactionFailed(txHash, new Error('Transaction reverted'), {
+        requestId,
+        poolAddress,
+      });
       return res.status(500).json({ 
         error: 'Transaction reverted',
         message: 'The unshield transaction was rejected by the contract. Proof may be invalid.',
       });
     }
     
-    console.log(`[ShieldedRelayer] TX confirmed in block ${receipt.blockNumber}`);
+    shieldedRelayerLogger.transactionConfirmed(txHash, Number(receipt.blockNumber), {
+      requestId,
+      poolAddress,
+    });
+    
+    const duration = Date.now() - startTime;
+    shieldedRelayerLogger.requestCompleted('/api/shielded/relay/unshield', 'POST', 200, duration, { requestId });
     
     res.json({
       success: true,
@@ -594,7 +656,11 @@ shieldedRouter.post('/relay/unshield', async (req: Request, res: Response) => {
     });
     
   } catch (error: any) {
-    console.error('[ShieldedRelayer] Error:', error.message);
+    const duration = Date.now() - startTime;
+    shieldedRelayerLogger.error('relay.unshield.error', 'Unshield transaction failed', error, {
+      poolAddress: req.body.poolAddress,
+      recipient: req.body.recipient,
+    }, { requestId });
     
     // Parse common errors
     const errorMsg = error.message || String(error);
@@ -641,7 +707,7 @@ shieldedRouter.post('/relay/unshield', async (req: Request, res: Response) => {
  * POST /api/shielded/relay/swap
  * Relay a private swap (z→z, different token) - USER PAYS NO GAS
  */
-shieldedRouter.post('/relay/swap', async (req: Request, res: Response) => {
+shieldedRouter.post('/relay/swap', relayerRateLimit, async (req: Request, res: Response) => {
   if (!relayerWallet || !relayerAddress) {
     return res.status(503).json({ 
       error: 'Relayer not available',
@@ -715,6 +781,20 @@ shieldedRouter.post('/relay/swap', async (req: Request, res: Response) => {
   
   if (!Array.isArray(proof) || proof.length !== 8) {
     return res.status(400).json({ error: 'Proof must be array of 8 elements' });
+  }
+  
+  // Validate memo size (privacy enhancement: cap memo size)
+  const MAX_MEMO_BYTES = 128;
+  if (encryptedMemo) {
+    const memoBytes = Buffer.from(encryptedMemo.startsWith('0x') ? encryptedMemo.slice(2) : encryptedMemo, 'hex');
+    if (memoBytes.length > MAX_MEMO_BYTES) {
+      return res.status(400).json({ 
+        error: 'Memo too large',
+        message: `encryptedMemo exceeds maximum size of ${MAX_MEMO_BYTES} bytes (got ${memoBytes.length} bytes)`,
+        maxSize: MAX_MEMO_BYTES,
+        actualSize: memoBytes.length,
+      });
+    }
   }
   
   console.log(`[ShieldedRelayer] Processing swap:`);
@@ -882,7 +962,15 @@ shieldedRouter.post('/relay/swap', async (req: Request, res: Response) => {
       ],
     });
     
-    console.log(`[ShieldedRelayer] Swap TX submitted: ${txHash}`);
+    const requestId = `swap_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+    shieldedRelayerLogger.transactionSubmitted(txHash, 'swap', {
+      requestId,
+      poolAddress: req.body.poolAddress,
+      tokenIn: req.body.tokenIn,
+      tokenOut: req.body.tokenOut,
+      swapAmount: req.body.swapAmount,
+      outputAmount: req.body.outputAmount,
+    });
     const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash, confirmations: 1 });
     
     if (receipt.status === 'reverted') {
@@ -1007,7 +1095,7 @@ shieldedRouter.post('/relay/swap', async (req: Request, res: Response) => {
  * - encryptedMemo2: hex string encrypted note for sender (change)
  * - fee: relayer fee (must match what was used in proof)
  */
-shieldedRouter.post('/relay/transfer', async (req: Request, res: Response) => {
+shieldedRouter.post('/relay/transfer', relayerRateLimit, async (req: Request, res: Response) => {
   if (!relayerWallet || !relayerAddress) {
     return res.status(503).json({ 
       error: 'Relayer not available',
@@ -1037,6 +1125,31 @@ shieldedRouter.post('/relay/transfer', async (req: Request, res: Response) => {
   
   if (!Array.isArray(proof) || proof.length !== 8) {
     return res.status(400).json({ error: 'Proof must be array of 8 elements' });
+  }
+  
+  // Validate memo sizes (privacy enhancement: cap memo size)
+  const MAX_MEMO_BYTES = 128;
+  if (encryptedMemo1) {
+    const memo1Bytes = Buffer.from(encryptedMemo1.startsWith('0x') ? encryptedMemo1.slice(2) : encryptedMemo1, 'hex');
+    if (memo1Bytes.length > MAX_MEMO_BYTES) {
+      return res.status(400).json({ 
+        error: 'Memo too large',
+        message: `encryptedMemo1 exceeds maximum size of ${MAX_MEMO_BYTES} bytes (got ${memo1Bytes.length} bytes)`,
+        maxSize: MAX_MEMO_BYTES,
+        actualSize: memo1Bytes.length,
+      });
+    }
+  }
+  if (encryptedMemo2) {
+    const memo2Bytes = Buffer.from(encryptedMemo2.startsWith('0x') ? encryptedMemo2.slice(2) : encryptedMemo2, 'hex');
+    if (memo2Bytes.length > MAX_MEMO_BYTES) {
+      return res.status(400).json({ 
+        error: 'Memo too large',
+        message: `encryptedMemo2 exceeds maximum size of ${MAX_MEMO_BYTES} bytes (got ${memo2Bytes.length} bytes)`,
+        maxSize: MAX_MEMO_BYTES,
+        actualSize: memo2Bytes.length,
+      });
+    }
   }
   
   // Use fee from request (must match proof!)
@@ -1118,7 +1231,11 @@ shieldedRouter.post('/relay/transfer', async (req: Request, res: Response) => {
       ],
     });
     
-    console.log(`[ShieldedRelayer] Transfer TX submitted: ${txHash}`);
+    const requestId = `transfer_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+    shieldedRelayerLogger.transactionSubmitted(txHash, 'transfer', {
+      requestId,
+      poolAddress: req.body.poolAddress,
+    });
     
     // Wait for confirmation
     const receipt = await publicClient.waitForTransactionReceipt({ 

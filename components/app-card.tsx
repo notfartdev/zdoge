@@ -12,9 +12,14 @@ import { UnshieldInterface } from "@/components/shielded/unshield-interface"
 import { ReceiveInterface } from "@/components/receive-interface"
 import { ActivityInterface } from "@/components/activity-interface"
 import { Loader2, Shield, Send, ArrowLeftRight, ShieldOff, QrCode, Activity } from "lucide-react"
+import { AppLoadingOverlay } from "@/components/shielded/app-loading-overlay"
+import { useAppLoading } from "@/lib/shielded/app-loading-context"
+import { useWallet } from "@/lib/wallet-context"
 
 function AppCardContent() {
   const { notes, refresh } = useShieldedState()
+  const { loadingProgress, isLoading, hasCompletedInitialLoad } = useAppLoading()
+  const { wallet } = useWallet()
   const searchParams = useSearchParams()
   
   // Get initial tab from URL params (for deep linking)
@@ -44,9 +49,17 @@ function AppCardContent() {
   }
 
   return (
-    <Card className="p-4 sm:p-6 md:p-8 bg-white/[0.03] border border-white/15 backdrop-blur-sm rounded-2xl shadow-xl relative" style={{ 
+    <Card className="p-4 sm:p-6 md:p-8 bg-white/[0.03] border border-white/15 backdrop-blur-sm rounded-2xl shadow-xl relative overflow-hidden" style={{ 
       boxShadow: '0 20px 60px -15px rgba(194, 166, 51, 0.08), 0 0 0 1px rgba(194, 166, 51, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.05)',
     }}>
+      {/* Only show loading overlay if wallet is connected AND initial load hasn't completed */}
+      {wallet?.isConnected && !hasCompletedInitialLoad && (
+        <AppLoadingOverlay 
+          progress={loadingProgress} 
+          isLoading={isLoading} 
+          hasCompletedInitialLoad={hasCompletedInitialLoad}
+        />
+      )}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         {/* Top Tabs */}
         <TabsList className="w-full grid grid-cols-3 sm:grid-cols-6 p-1 h-auto bg-transparent border-0 rounded-2xl mb-6 overflow-x-auto gap-1 app-tabs-list">

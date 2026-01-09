@@ -11,10 +11,25 @@
  * - Merkle tree of all commitments
  * - Nullifier set (spent notes)
  * - Encrypted memos for note discovery
+ * 
+ * Privacy enhancements:
+ * - Timestamps are rounded to 5-minute buckets to reduce timing correlation
+ * - Only essential data is stored (commitments, nullifiers, minimal fields)
  */
 
 import { createPublicClient, http, parseAbiItem, type Address, type Log } from 'viem';
 import { MerkleTree } from '../merkle/MerkleTree.js';
+
+/**
+ * Round timestamp to buckets to reduce timing correlation
+ * @param timestamp Unix timestamp in seconds
+ * @param bucketMinutes Bucket size in minutes (default: 5)
+ * @returns Rounded timestamp
+ */
+function roundTimestamp(timestamp: number, bucketMinutes: number = 5): number {
+  const bucketSeconds = bucketMinutes * 60;
+  return Math.floor(timestamp / bucketSeconds) * bucketSeconds;
+}
 
 // Event ABIs for shielded pool
 export const ShieldedPoolEvents = {
@@ -144,11 +159,13 @@ export async function syncShieldedPool(
       
       if (!pool.commitments.has(commitment)) {
         pool.tree.insert(BigInt(commitment));
+        // Round timestamp to 5-minute buckets for privacy
+        const roundedTimestamp = roundTimestamp(Number(log.args.timestamp), 5);
         pool.commitments.set(commitment, {
           leafIndex,
           token,
           amount: amount.toString(),
-          timestamp: Number(log.args.timestamp),
+          timestamp: roundedTimestamp, // Rounded for privacy
           blockNumber: Number(log.blockNumber),
           txHash: log.transactionHash!,
           type: 'shield',
@@ -171,14 +188,16 @@ export async function syncShieldedPool(
       // Mark nullifier as spent
       pool.nullifiers.add(nullifierHash);
       
-      // Add new commitments
+      // Add new commitments (only essential data stored)
       if (!pool.commitments.has(outputCommitment1)) {
         pool.tree.insert(BigInt(outputCommitment1));
+        // Round timestamp to 5-minute buckets for privacy
+        const roundedTimestamp = roundTimestamp(Number(log.args.timestamp), 5);
         pool.commitments.set(outputCommitment1, {
           leafIndex: leafIndex1,
-          token: '', // Unknown from transfer event
-          amount: '',
-          timestamp: Number(log.args.timestamp),
+          token: '', // Unknown from transfer event - not stored
+          amount: '', // Not stored for privacy
+          timestamp: roundedTimestamp, // Rounded for privacy
           blockNumber: Number(log.blockNumber),
           txHash: log.transactionHash!,
           type: 'transfer',
@@ -199,7 +218,9 @@ export async function syncShieldedPool(
         });
       }
       
-      // Store encrypted memos for discovery
+      // Store encrypted memos for discovery (only essential data)
+      // Round timestamp to 5-minute buckets for privacy
+      const roundedTimestamp = roundTimestamp(Number(log.args.timestamp), 5);
       pool.transferMemos.set(nullifierHash, {
         nullifierHash,
         outputCommitment1,
@@ -208,7 +229,7 @@ export async function syncShieldedPool(
         encryptedMemo2: log.args.encryptedMemo2 as string || '',
         leafIndex1,
         leafIndex2,
-        timestamp: Number(log.args.timestamp),
+        timestamp: roundedTimestamp, // Rounded for privacy
         txHash: log.transactionHash!,
       });
     }
@@ -241,11 +262,13 @@ export async function syncShieldedPool(
         // Get leaf index from event (need to track this)
         const leafIndex = pool.tree.getLeafCount();
         pool.tree.insert(BigInt(outputCommitment));
+        // Round timestamp to 5-minute buckets for privacy
+        const roundedTimestamp = roundTimestamp(Number(log.args.timestamp), 5);
         pool.commitments.set(outputCommitment, {
           leafIndex,
           token: tokenOut,
           amount: amountOut.toString(),
-          timestamp: Number(log.args.timestamp),
+          timestamp: roundedTimestamp, // Rounded for privacy
           blockNumber: Number(log.blockNumber),
           txHash: log.transactionHash!,
           type: 'swap',
@@ -291,11 +314,13 @@ export function watchShieldedPool(
         
         if (!pool.commitments.has(commitment)) {
           pool.tree.insert(BigInt(commitment));
+          // Round timestamp to 5-minute buckets for privacy
+          const roundedTimestamp = roundTimestamp(Number(log.args.timestamp), 5);
           pool.commitments.set(commitment, {
             leafIndex,
             token,
             amount: amount.toString(),
-            timestamp: Number(log.args.timestamp),
+            timestamp: roundedTimestamp, // Rounded for privacy
             blockNumber: Number(log.blockNumber),
             txHash: log.transactionHash!,
             type: 'shield',
@@ -321,7 +346,9 @@ export function watchShieldedPool(
         pool.nullifiers.add(nullifierHash);
         console.log(`[ShieldedIndexer] NEW transfer: nullifier ${nullifierHash.slice(0, 18)}...`);
         
-        // Store memo for discovery
+        // Store memo for discovery (only essential data)
+        // Round timestamp to 5-minute buckets for privacy
+        const roundedTimestamp = roundTimestamp(Number(log.args.timestamp), 5);
         pool.transferMemos.set(nullifierHash, {
           nullifierHash,
           outputCommitment1: log.args.outputCommitment1 as string,
@@ -330,7 +357,7 @@ export function watchShieldedPool(
           encryptedMemo2: log.args.encryptedMemo2 as string || '',
           leafIndex1: Number(log.args.leafIndex1),
           leafIndex2: Number(log.args.leafIndex2),
-          timestamp: Number(log.args.timestamp),
+          timestamp: roundedTimestamp, // Rounded for privacy
           txHash: log.transactionHash!,
         });
       }

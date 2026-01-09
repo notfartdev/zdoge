@@ -13,7 +13,13 @@ import { isValidShieldedAddress } from "@/lib/shielded/shielded-address"
 import { prepareTransfer, completeTransfer, getNotes, getShieldedBalancePerToken } from "@/lib/shielded/shielded-service"
 import { addTransaction, initTransactionHistory } from "@/lib/shielded/transaction-history"
 import { useWallet } from "@/lib/wallet-context"
-import { shieldedPool } from "@/lib/dogeos-config"
+import { shieldedPool, dogeosTestnet } from "@/lib/dogeos-config"
+import { TransactionProgress, type TransactionStatus } from "@/components/shielded/transaction-progress"
+import { TransactionTrackerClass } from "@/lib/shielded/transaction-tracker"
+import { EstimatedFees } from "@/components/shielded/estimated-fees"
+import { ConfirmationDialog } from "@/components/shielded/confirmation-dialog"
+import { SuccessDialog } from "@/components/shielded/success-dialog"
+import { formatErrorWithSuggestion } from "@/lib/shielded/error-suggestions"
 import Link from "next/link"
 import { ShieldPlus } from "lucide-react"
 
@@ -39,8 +45,12 @@ export function TransferInterface({ notes, onSuccess, selectedToken = "DOGE", on
   
   const [recipientAddress, setRecipientAddress] = useState("")
   const [amount, setAmount] = useState("")
-  const [status, setStatus] = useState<"idle" | "proving" | "relaying" | "success" | "error">("idle")
+  const [status, setStatus] = useState<TransactionStatus>("idle")
   const [txHash, setTxHash] = useState<string | null>(null)
+  const [tracker, setTracker] = useState<TransactionTrackerClass | null>(null)
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false)
+  const [showSuccessDialog, setShowSuccessDialog] = useState(false)
+  const [pendingTransfer, setPendingTransfer] = useState<() => Promise<void> | null>(null)
   const [relayerInfo, setRelayerInfo] = useState<RelayerInfo | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [transactionDetails, setTransactionDetails] = useState<{
@@ -158,7 +168,7 @@ export function TransferInterface({ notes, onSuccess, selectedToken = "DOGE", on
     }
     
     // Validate amount
-    const amountNum = parseFloat(amount)
+    const amountNum = parseFloat(amount || "0")
     if (isNaN(amountNum) || amountNum <= 0) {
       toast({
         title: "Invalid Amount",
@@ -251,6 +261,20 @@ export function TransferInterface({ notes, onSuccess, selectedToken = "DOGE", on
       
       setTxHash(data.txHash)
       
+      // Start tracking transaction
+      const newTracker = new TransactionTrackerClass(1)
+      newTracker.onUpdate((trackerState) => {
+        if (trackerState.status === 'confirmed') {
+          setStatus('confirmed')
+        } else if (trackerState.status === 'failed') {
+          setStatus('failed')
+        } else if (trackerState.status === 'pending') {
+          setStatus('pending')
+        }
+      })
+      setTracker(newTracker)
+      await newTracker.track(data.txHash)
+      
       // Update transaction details with change amount
       if (transactionDetails) {
         setTransactionDetails({
@@ -260,7 +284,7 @@ export function TransferInterface({ notes, onSuccess, selectedToken = "DOGE", on
       }
       
       // Complete transfer (remove input note, add recipient note if sent to self, add change note)
-      completeTransfer(
+      await completeTransfer(
         actualNoteIndex, 
         result.changeNote, 
         data.leafIndex2 || 0,
@@ -282,35 +306,39 @@ export function TransferInterface({ notes, onSuccess, selectedToken = "DOGE", on
         status: 'confirmed',
       })
       
-      setStatus("success")
+      // Update status to pending (tracker will update to confirmed)
+      setStatus("pending")
       
-      // Don't show toast - the green success UI box will show instead
+      // Show success dialog when confirmed
+      const checkStatus = setInterval(() => {
+        const trackerState = newTracker.getTracker()
+        if (trackerState.status === 'confirmed') {
+          setStatus('confirmed')
+          setShowSuccessDialog(true)
+          clearInterval(checkStatus)
+        } else if (trackerState.status === 'failed') {
+          clearInterval(checkStatus)
+        }
+      }, 1000)
+      
+      // Don't show toast - success dialog will show instead
       onSuccess?.()
       
     } catch (error: any) {
       console.error("Transfer error:", error)
       setStatus("error")
       
-      // Better error messages
-      let errorMessage = "Transaction failed"
-      if (error?.message) {
-        if (error.message.includes("user rejected") || error.message.includes("User denied")) {
-          errorMessage = "Transaction was cancelled. Please try again when ready."
-        } else if (error.message.includes("insufficient funds") || error.message.includes("insufficient balance")) {
-          errorMessage = "Insufficient balance. Please check your shielded balance."
-        } else if (error.message.includes("network") || error.message.includes("RPC") || error.message.includes("relayer")) {
-          errorMessage = "Network or relayer error. Please check your connection and try again."
-        } else if (error.message.includes("proof") || error.message.includes("nullifier")) {
-          errorMessage = "Proof generation failed. Please try again."
-        } else {
-          errorMessage = error.message
-        }
-      }
+      // Smart error suggestions
+      const errorInfo = formatErrorWithSuggestion(error, {
+        operation: 'transfer',
+        token: selectedToken,
+        hasShieldedBalance: totalBalance > 0n,
+      })
       
-      setErrorMessage(errorMessage)
+      setErrorMessage(errorInfo.suggestion ? `${errorInfo.description} ${errorInfo.suggestion}` : errorInfo.description)
       toast({
-        title: "Transfer Failed",
-        description: errorMessage,
+        title: errorInfo.title,
+        description: errorInfo.suggestion ? `${errorInfo.description} ${errorInfo.suggestion}` : errorInfo.description,
         variant: "destructive",
       })
     }
@@ -331,7 +359,21 @@ export function TransferInterface({ notes, onSuccess, selectedToken = "DOGE", on
     setShowNote(false)
     setTxHash(null)
     setErrorMessage(null)
+    if (tracker) {
+      tracker.stop()
+      tracker.reset()
+      setTracker(null)
+    }
   }
+  
+  // Cleanup tracker on unmount
+  useEffect(() => {
+    return () => {
+      if (tracker) {
+        tracker.stop()
+      }
+    }
+  }, [tracker])
   
   if (spendableNotes.length === 0) {
     return null
@@ -396,56 +438,78 @@ export function TransferInterface({ notes, onSuccess, selectedToken = "DOGE", on
           {/* Fee Preview */}
           {amount && relayerInfo && (
             <div className="p-3 rounded-lg bg-muted/50 space-y-1">
-              {(() => {
-                const amountWei = BigInt(Math.floor(parseFloat(amount || "0") * 1e18))
-                const { fee, received } = calculateFee(amountWei)
-                const maxSendable = calculateMaxSendable()
-                const largestNote = spendableNotes.reduce((max, note) => 
-                  note.amount > max.amount ? note : max, spendableNotes[0]
-                )
-                const hasInsufficientFunds = amountWei + fee > totalBalance
-                const exceedsSingleNote = amountWei > maxSendable && spendableNotes.length > 0
-                return (
-                  <>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Send amount:</span>
-                      <span>{amount} {selectedToken}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Relayer fee:</span>
-                      <span className="text-orange-500">-{formatWeiToAmount(fee).toFixed(4)} {selectedToken}</span>
-                    </div>
-                    {exceedsSingleNote && !hasInsufficientFunds && (
-                      <Alert className="border-yellow-500/50 bg-yellow-500/10 py-2 px-3 mt-2">
-                        <AlertCircle className="h-3 w-3 text-yellow-500" />
-                        <AlertDescription className="text-xs text-yellow-200">
-                          You have {spendableNotes.length} note{spendableNotes.length > 1 ? 's' : ''} but can only send {formatWeiToAmount(maxSendable).toFixed(4)} {selectedToken} per transaction (largest note: {formatWeiToAmount(largestNote.amount).toFixed(4)} {selectedToken}). Make multiple transactions to send more.
-                        </AlertDescription>
-                      </Alert>
-                    )}
-                    {hasInsufficientFunds && (
-                      <div className="text-xs text-red-500 flex items-center gap-1 mt-1">
-                        <AlertCircle className="h-3 w-3" />
-                        Insufficient balance. Available: {formatWeiToAmount(totalBalance).toFixed(4)} {selectedToken}
-                      </div>
-                    )}
-                    <div className="flex justify-between text-sm font-medium border-t pt-1 mt-1">
-                      <span>Recipient receives:</span>
-                      <span className="text-green-500">{formatWeiToAmount(received).toFixed(4)} {selectedToken}</span>
-                    </div>
-                    <div className="flex justify-between text-xs text-muted-foreground">
-                      <span>Gas you pay:</span>
-                      <span className="text-primary">0 ✓</span>
-                    </div>
-                  </>
-                )
-              })()}
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Send amount:</span>
+                <span>{amount} {selectedToken}</span>
+              </div>
             </div>
           )}
           
+          {/* Estimated Fees */}
+          {amount && relayerInfo && parseFloat(amount) > 0 && (() => {
+            const amountNum = parseFloat(amount || "0")
+            const amountWei = BigInt(Math.floor(amountNum * 1e18))
+            const { fee, received } = calculateFee(amountWei)
+            const maxSendable = calculateMaxSendable()
+            const largestNote = spendableNotes.length > 0 ? spendableNotes.reduce((max, note) => 
+              note.amount > max.amount ? note : max, spendableNotes[0]
+            ) : null
+            const hasInsufficientFunds = amountWei + fee > totalBalance
+            const exceedsSingleNote = amountWei > maxSendable && spendableNotes.length > 0
+            
+            if (hasInsufficientFunds) return null
+            
+            return (
+              <EstimatedFees
+                amount={amountWei}
+                fee={fee}
+                received={received}
+                token={selectedToken}
+                tokenDecimals={18}
+              />
+            )
+          })()}
+          
+          {/* Warnings */}
+          {amount && relayerInfo && parseFloat(amount) > 0 && (() => {
+            const amountNum = parseFloat(amount || "0")
+            const amountWei = BigInt(Math.floor(amountNum * 1e18))
+            const { fee } = calculateFee(amountWei)
+            const maxSendable = calculateMaxSendable()
+            const largestNote = spendableNotes.length > 0 ? spendableNotes.reduce((max, note) => 
+              note.amount > max.amount ? note : max, spendableNotes[0]
+            ) : null
+            const hasInsufficientFunds = amountWei + fee > totalBalance
+            const exceedsSingleNote = amountWei > maxSendable && spendableNotes.length > 0
+            
+            return (
+              <>
+                {exceedsSingleNote && !hasInsufficientFunds && largestNote && (
+                  <Alert className="border-yellow-500/50 bg-yellow-500/10 py-2 px-3">
+                    <AlertCircle className="h-3 w-3 text-yellow-500" />
+                    <AlertDescription className="text-xs text-yellow-200">
+                      You have {spendableNotes.length} note{spendableNotes.length > 1 ? 's' : ''} but can only send {formatWeiToAmount(maxSendable).toFixed(4)} {selectedToken} per transaction (largest note: {formatWeiToAmount(largestNote.amount).toFixed(4)} {selectedToken}). Make multiple transactions to send more.
+                    </AlertDescription>
+                  </Alert>
+                )}
+                {hasInsufficientFunds && (
+                  <Alert className="border-red-500/50 bg-red-500/10 py-2 px-3">
+                    <AlertCircle className="h-3 w-3 text-red-500" />
+                    <AlertDescription className="text-xs text-red-200">
+                      Insufficient balance. Available: {formatWeiToAmount(totalBalance).toFixed(4)} {selectedToken}
+                    </AlertDescription>
+                  </Alert>
+                )}
+              </>
+            )
+          })()}
+          
           <Button 
-            className="w-full" 
-            onClick={handleTransfer}
+            className="w-full relative overflow-hidden bg-white/10 border border-white/20 hover:border-[#B89A2E]/50 transition-all duration-500 group"
+            onClick={() => {
+              setPendingTransfer(() => executeTransfer)
+              setShowConfirmDialog(true)
+            }}
             disabled={!relayerInfo?.available || !amount || parseFloat(amount) <= 0 || (() => {
               if (!amount || !relayerInfo) return true
               const amountWei = BigInt(Math.floor(parseFloat(amount || "0") * 1e18))
@@ -453,150 +517,99 @@ export function TransferInterface({ notes, onSuccess, selectedToken = "DOGE", on
               return amountWei + fee > totalBalance
             })()}
           >
-            <Send className="h-4 w-4 mr-2" />
-            Send Privately
+            {/* Fill animation from left to right - slower and more natural */}
+            <span className="absolute inset-0 bg-[#B89A2E] transform -translate-x-full group-hover:translate-x-0 transition-transform duration-[1300ms] ease-in-out" />
+            <span className="relative z-10 flex items-center justify-center text-white group-hover:text-black transition-colors duration-[1300ms] ease-in-out">
+              <Send className="h-4 w-4 mr-2" />
+              Send Privately
+            </span>
           </Button>
-        </div>
-      )}
-      
-      {status === "proving" && (
-        <div className="space-y-4">
-          <div className="p-6 rounded-lg bg-white/5 border border-white/10">
-            <div className="flex flex-col items-center space-y-4">
-              {/* Animated Icon */}
-              <div className="relative">
-                <div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center">
-                  <Send className="h-8 w-8 text-white/80 animate-pulse" strokeWidth={1.5} />
-                </div>
-                <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-[#C2A633] flex items-center justify-center">
-                  <Loader2 className="h-3 w-3 text-black animate-spin" />
-                </div>
-              </div>
-              
-              {/* Progress Info */}
-              <div className="w-full max-w-xs space-y-3">
-                <div className="text-center space-y-2">
-                  <h4 className="text-base font-display font-semibold text-white">
-                    Generating ZK Proof
-                  </h4>
-                  <p className="text-sm font-body text-white/70">
-                    This may take 10-30 seconds...
-                  </p>
-                </div>
-                
-                {/* Progress Bar */}
-                <div className="relative w-full h-2 bg-white/5 rounded-full overflow-hidden">
-                  <div 
-                    className="absolute top-0 left-0 h-full bg-white rounded-full origin-left"
-                    style={{ 
-                      width: '33%',
-                      animation: 'progressFill 2.5s ease-out infinite'
-                    }}
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-      
-      {status === "relaying" && (
-        <div className="space-y-4">
-          <div className="p-6 rounded-lg bg-white/5 border border-white/10">
-            <div className="flex flex-col items-center space-y-4">
-              {/* Animated Icon */}
-              <div className="relative">
-                <div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center">
-                  <Send className="h-8 w-8 text-white/80 animate-pulse" strokeWidth={1.5} />
-                </div>
-                <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-[#C2A633] flex items-center justify-center">
-                  <Loader2 className="h-3 w-3 text-black animate-spin" />
-                </div>
-              </div>
-              
-              {/* Progress Info */}
-              <div className="w-full max-w-xs space-y-3">
-                <div className="text-center space-y-2">
-                  <h4 className="text-base font-display font-semibold text-white">
-                    Submitting Transaction
-                  </h4>
-                  <p className="text-sm font-body text-white/70">
-                    Your wallet never signs!
-                  </p>
-                </div>
-                
-                {/* Progress Bar */}
-                <div className="relative w-full h-2 bg-white/5 rounded-full overflow-hidden">
-                  <div 
-                    className="absolute top-0 left-0 h-full bg-white rounded-full origin-left"
-                    style={{ 
-                      width: '66%',
-                      animation: 'progressFill 2.5s ease-out infinite'
-                    }}
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-      
-      {status === "success" && txHash && (
-        <div className="space-y-4">
-          <div className="p-6 rounded-lg bg-white/5 border border-white/10">
-            <div className="flex items-start gap-4">
-              <div className="flex-shrink-0 w-12 h-12 rounded-full bg-[#C2A633]/20 flex items-center justify-center">
-                <Check className="h-6 w-6 text-[#C2A633]" strokeWidth={2.5} />
-              </div>
-              <div className="flex-1 space-y-3">
-                <div>
-                  <h4 className="text-lg font-display font-semibold text-white mb-2">
-                    Transfer Successful!
-                  </h4>
-                  <p className="text-sm font-body text-white/70 leading-relaxed">
-                    {transactionDetails?.amountSent} {selectedToken} sent privately to recipient.
-                  </p>
-                </div>
-                {transactionDetails && (
-                  <div className="pt-3 border-t border-white/10 space-y-2">
-                    <div className="flex justify-between text-xs">
-                      <span className="text-white/60">Amount sent:</span>
-                      <span className="text-white font-medium">{formatWeiToAmount(BigInt(Math.floor(transactionDetails.amountSent * 1e18))).toFixed(4)} {selectedToken}</span>
-                    </div>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-white/60">Note consumed:</span>
-                      <span className="text-white font-medium">{formatWeiToAmount(transactionDetails.noteConsumed).toFixed(4)} {selectedToken}</span>
-                    </div>
-                    {transactionDetails.changeReceived > 0n && (
-                      <div className="flex justify-between text-xs">
-                        <span className="text-white/60">Change received:</span>
-                        <span className="text-white font-medium">{formatWeiToAmount(transactionDetails.changeReceived).toFixed(4)} {selectedToken}</span>
-                      </div>
-                    )}
-                  </div>
-                )}
-                {txHash && (
-                  <a
-                    href={`https://blockscout.testnet.dogeos.com/tx/${txHash}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 text-sm text-[#C2A633] hover:text-[#C2A633]/80 transition-colors group font-medium"
-                  >
-                    <span className="font-body">View transaction on Blockscout</span>
-                    <ExternalLink className="h-4 w-4 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
-                  </a>
-                )}
-              </div>
-            </div>
-          </div>
           
-          <Button 
-            className="w-full bg-white/5 hover:bg-white/10 text-[#C2A633] border border-[#C2A633]/50 hover:border-[#C2A633] font-body font-medium transition-all" 
-            onClick={reset}
-          >
-            Send Another Transfer
-          </Button>
+          {/* Confirmation Dialog */}
+          <ConfirmationDialog
+            open={showConfirmDialog}
+            onOpenChange={setShowConfirmDialog}
+            title="Confirm Private Transfer"
+            description={`You are about to send ${amount} ${selectedToken} to ${recipientAddress.slice(0, 10)}...${recipientAddress.slice(-8)} privately. A relayer fee will be deducted.`}
+            confirmText="Confirm Transfer"
+            cancelText="Cancel"
+            onConfirm={async () => {
+              if (pendingTransfer) {
+                await pendingTransfer()
+              }
+              setPendingTransfer(null)
+            }}
+            isLoading={status === "proving" || status === "relaying"}
+            details={
+              amount && parseFloat(amount) > 0 && relayerInfo ? (() => {
+                const amountNum = parseFloat(amount || "0")
+                const amountWei = BigInt(Math.floor(amountNum * 1e18))
+                const { fee, received } = calculateFee(amountWei)
+                return (
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Amount</span>
+                      <span className="text-white">{amount} {selectedToken}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Relayer Fee</span>
+                      <span className="text-red-400">-{formatWeiToAmount(fee).toFixed(4)} {selectedToken}</span>
+                    </div>
+                    <div className="flex justify-between pt-2 border-t border-[#C2A633]/10">
+                      <span className="text-gray-400">Recipient Receives</span>
+                      <span className="text-green-400 font-semibold">{formatWeiToAmount(received).toFixed(4)} {selectedToken}</span>
+                    </div>
+                  </div>
+                )
+              })() : undefined
+            }
+          />
+          
+          {/* Success Dialog */}
+          <SuccessDialog
+            open={showSuccessDialog}
+            onOpenChange={(open) => {
+              // Only allow closing via buttons, not by clicking outside or scrolling
+              if (!open && status === "confirmed") {
+                reset()
+              } else {
+                setShowSuccessDialog(true)
+              }
+            }}
+            onClose={reset}
+            title="Transfer Successful!"
+            message={`Successfully sent ${transactionDetails?.amountSent ? Number(transactionDetails.amountSent).toFixed(4) : (amount ? Number(amount).toFixed(4) : '0')} ${selectedToken} to ${recipientAddress.slice(0, 10)}...${recipientAddress.slice(-8)} privately.`}
+            txHash={txHash}
+            blockExplorerUrl={dogeosTestnet.blockExplorers.default.url}
+            actionText="Send Another"
+            onAction={reset}
+            details={
+              transactionDetails?.changeReceived && transactionDetails.changeReceived > 0n ? (
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Change Returned</span>
+                    <span className="text-green-400 font-semibold">{formatWeiToAmount(transactionDetails.changeReceived, 18).toFixed(4)} {selectedToken}</span>
+                  </div>
+                </div>
+              ) : undefined
+            }
+          />
         </div>
+      )}
+      
+      {/* Progress Indicator - Only show during processing, hide when confirmed */}
+      {status !== "confirmed" && (
+        <TransactionProgress
+          status={status === "idle" ? "idle" : (status === "error" ? "failed" : status)}
+          message={
+            status === "proving" ? "Generating zero-knowledge proof..."
+            : status === "relaying" ? "Relayer is submitting your transaction..."
+            : status === "pending" ? "Waiting for blockchain confirmation..."
+            : undefined
+          }
+          txHash={txHash}
+          blockExplorerUrl={dogeosTestnet.blockExplorers.default.url}
+        />
       )}
       
       {status === "error" && (

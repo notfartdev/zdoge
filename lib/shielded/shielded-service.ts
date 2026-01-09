@@ -50,6 +50,7 @@ import {
   scanStealthTransfer,
 } from './stealth-address';
 import { shieldedPool } from '../dogeos-config';
+import { EncryptedStorage } from './encrypted-storage';
 
 // Helper to get token metadata from config
 function getTokenMetadata(tokenSymbol: string): { symbol: string; address: `0x${string}`; decimals: number } {
@@ -167,18 +168,26 @@ export async function initializeShieldedWallet(
   
   if (storedIdentity) {
     walletState.identity = storedIdentity;
-    walletState.notes = loadNotesFromStorage();
+    walletState.notes = await loadNotesFromStorage();
     walletState.isInitialized = true;
     
     // Verify: Re-derive identity from stored signature to ensure consistency
-    const storedSig = typeof window !== 'undefined' ? localStorage.getItem(keys.signature) : null;
+    let storedSig: string | null = null;
+    if (typeof window !== 'undefined') {
+      const storage = getEncryptedStorage();
+      if (storage) {
+        storedSig = await storage.getItem('signature');
+      } else {
+        storedSig = localStorage.getItem(keys.signature);
+      }
+    }
     if (storedSig) {
       const verifiedIdentity = await deriveIdentityFromSignature(storedSig);
       if (verifiedIdentity.shieldedAddress !== storedIdentity.shieldedAddress) {
         console.error('[ShieldedWallet] Identity mismatch detected! Re-deriving...');
         // Update to verified identity
         walletState.identity = verifiedIdentity;
-        saveIdentityToStorage(verifiedIdentity);
+        await saveIdentityToStorage(verifiedIdentity);
       }
     }
     
@@ -209,7 +218,15 @@ export async function initializeShieldedWallet(
   let signature: string;
   
   // Check if we have a stored signature (from previous session on this browser)
-  const storedSig = typeof window !== 'undefined' ? localStorage.getItem(keys.signature) : null;
+  let storedSig: string | null = null;
+  if (typeof window !== 'undefined') {
+    const storage = getEncryptedStorage();
+    if (storage) {
+      storedSig = await storage.getItem('signature');
+    } else {
+      storedSig = localStorage.getItem(keys.signature);
+    }
+  }
   
   if (storedSig) {
     // Verify stored signature produces same identity
@@ -225,14 +242,19 @@ export async function initializeShieldedWallet(
     // Store signature permanently (so user doesn't have to sign again)
     // This is safe because signature is deterministic - same wallet = same signature
     if (typeof window !== 'undefined') {
-      localStorage.setItem(keys.signature, signature);
+      const storage = getEncryptedStorage();
+      if (storage) {
+        await storage.setItem('signature', signature);
+      } else {
+        localStorage.setItem(keys.signature, signature);
+      }
     }
     console.log('[ShieldedWallet] Signature obtained and stored (permanent)');
   }
   
   // Derive identity from signature (DETERMINISTIC - always same for same wallet)
   const identity = await deriveIdentityFromSignature(signature);
-  saveIdentityToStorage(identity);
+  await saveIdentityToStorage(identity);
   
   walletState.identity = identity;
   walletState.notes = [];
@@ -373,10 +395,10 @@ export async function prepareShield(
  * Complete shield after transaction confirmed
  * Saves the note with its leaf index
  */
-export function completeShield(note: ShieldedNote, leafIndex: number): void {
+export async function completeShield(note: ShieldedNote, leafIndex: number): Promise<void> {
   note.leafIndex = leafIndex;
   walletState.notes.push(note);
-  saveNotesToStorage(walletState.notes);
+  await saveNotesToStorage(walletState.notes);
 }
 
 /**
@@ -475,7 +497,7 @@ export async function prepareTransfer(
  * - Adds recipient note (if sent to self)
  * - Adds change note (if any)
  */
-export function completeTransfer(
+export async function completeTransfer(
   spentNoteIndex: number,
   changeNote: ShieldedNote,
   changeLeafIndex: number,
@@ -581,15 +603,15 @@ export async function prepareUnshield(
  * Complete unshield after transaction confirmed
  * Removes the spent note
  */
-export function completeUnshield(noteIndex: number): void {
+export async function completeUnshield(noteIndex: number): Promise<void> {
   walletState.notes.splice(noteIndex, 1);
-  saveNotesToStorage(walletState.notes);
+  await saveNotesToStorage(walletState.notes);
 }
 
 /**
  * Complete swap: remove spent input note and add output note
  */
-export function completeSwap(
+export async function completeSwap(
   spentNoteIndex: number,
   outputNote: ShieldedNote,
   outputLeafIndex?: number,
@@ -682,7 +704,7 @@ export async function scanForIncomingTransfers(
   }
   
   if (discovered > 0) {
-    saveNotesToStorage(walletState.notes);
+    await saveNotesToStorage(walletState.notes);
   }
   
   return discovered;
@@ -869,7 +891,7 @@ export async function syncNotesWithChain(poolAddress: string): Promise<{
     
     // Save updated notes
     if (synced > 0) {
-      saveNotesToStorage(walletState.notes);
+      await saveNotesToStorage(walletState.notes);
     }
     
     return { synced, notFound, errors };
@@ -895,13 +917,13 @@ export function clearNotes(): void {
  * Remove notes for a specific token
  * Useful for removing old notes from previous contracts
  */
-export function removeNotesForToken(tokenSymbol: string): number {
+export async function removeNotesForToken(tokenSymbol: string): Promise<number> {
   const initialCount = walletState.notes.length;
   walletState.notes = walletState.notes.filter(note => note.token !== tokenSymbol);
   const removedCount = initialCount - walletState.notes.length;
   
   if (removedCount > 0) {
-    saveNotesToStorage(walletState.notes);
+    await saveNotesToStorage(walletState.notes);
     // Dispatch event to refresh UI
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new Event('shielded-wallet-updated'));
@@ -915,7 +937,7 @@ export function removeNotesForToken(tokenSymbol: string): number {
  * Add a discovered note (from auto-discovery)
  * Returns true if note was added, false if already exists
  */
-export function addDiscoveredNote(note: ShieldedNote): boolean {
+export async function addDiscoveredNote(note: ShieldedNote): Promise<boolean> {
   // Check if we already have this note
   const exists = walletState.notes.some(n => n.commitment === note.commitment);
   if (exists) {
@@ -931,7 +953,7 @@ export function addDiscoveredNote(note: ShieldedNote): boolean {
   
   // Add to wallet
   walletState.notes.push(note);
-  saveNotesToStorage(walletState.notes);
+  await saveNotesToStorage(walletState.notes);
   
   console.log(`[ShieldedWallet] Added discovered note: ${Number(note.amount) / 1e18} ${note.token || 'DOGE'} at leafIndex ${note.leafIndex}`);
   return true;
@@ -939,19 +961,109 @@ export function addDiscoveredNote(note: ShieldedNote): boolean {
 
 // ============ Storage Helpers ============
 
-function saveIdentityToStorage(identity: ShieldedIdentity): void {
-  if (typeof localStorage === 'undefined') return;
+/**
+ * Get encrypted storage instance for current wallet
+ */
+function getEncryptedStorage(): EncryptedStorage | null {
+  if (typeof window === 'undefined' || !currentWalletAddress) {
+    return null;
+  }
+  
+  // No password by default - uses wallet address as password (single-device XSS protection)
+  // Users can opt-in to password for multi-device security
+  return new EncryptedStorage(currentWalletAddress);
+}
+
+/**
+ * Migrate old unencrypted data to encrypted format
+ */
+async function migrateToEncryptedStorage(): Promise<void> {
+  if (typeof window === 'undefined' || !currentWalletAddress) {
+    return;
+  }
+  
+  const storage = getEncryptedStorage();
+  if (!storage) return;
   
   const keys = getStorageKeys();
+  
+  // Migrate identity
+  const oldIdentity = localStorage.getItem(keys.identity);
+  if (oldIdentity && !oldIdentity.startsWith('1:')) { // Not already encrypted (version 1)
+    try {
+      await storage.setItem('identity', oldIdentity);
+      localStorage.removeItem(keys.identity);
+      console.log('[EncryptedStorage] Migrated identity to encrypted storage');
+    } catch (error) {
+      console.error('[EncryptedStorage] Failed to migrate identity:', error);
+    }
+  }
+  
+  // Migrate notes
+  const oldNotes = localStorage.getItem(keys.notes);
+  if (oldNotes && !oldNotes.startsWith('1:')) {
+    try {
+      await storage.setItem('notes', oldNotes);
+      localStorage.removeItem(keys.notes);
+      console.log('[EncryptedStorage] Migrated notes to encrypted storage');
+    } catch (error) {
+      console.error('[EncryptedStorage] Failed to migrate notes:', error);
+    }
+  }
+  
+  // Migrate stealth keys
+  const oldStealthKeys = localStorage.getItem(keys.stealthKeys);
+  if (oldStealthKeys && !oldStealthKeys.startsWith('1:')) {
+    try {
+      await storage.setItem('stealthKeys', oldStealthKeys);
+      localStorage.removeItem(keys.stealthKeys);
+      console.log('[EncryptedStorage] Migrated stealth keys to encrypted storage');
+    } catch (error) {
+      console.error('[EncryptedStorage] Failed to migrate stealth keys:', error);
+    }
+  }
+}
+
+async function saveIdentityToStorage(identity: ShieldedIdentity): Promise<void> {
+  if (typeof localStorage === 'undefined') return;
+  
+  // Migrate old data on first save
+  await migrateToEncryptedStorage();
+  
+  const storage = getEncryptedStorage();
+  if (!storage) {
+    // Fallback to unencrypted if no wallet address (shouldn't happen)
+    const keys = getStorageKeys();
+    const serialized = serializeIdentity(identity);
+    localStorage.setItem(keys.identity, JSON.stringify(serialized));
+    return;
+  }
+  
   const serialized = serializeIdentity(identity);
-  localStorage.setItem(keys.identity, JSON.stringify(serialized));
+  await storage.setItem('identity', JSON.stringify(serialized));
 }
 
 async function loadIdentityFromStorage(): Promise<ShieldedIdentity | null> {
   if (typeof localStorage === 'undefined') return null;
   
-  const keys = getStorageKeys();
-  const stored = localStorage.getItem(keys.identity);
+  // Migrate old data on first load
+  await migrateToEncryptedStorage();
+  
+  const storage = getEncryptedStorage();
+  if (!storage) {
+    // Fallback to unencrypted
+    const keys = getStorageKeys();
+    const stored = localStorage.getItem(keys.identity);
+    if (!stored) return null;
+    try {
+      const serialized = JSON.parse(stored);
+      return deserializeIdentity(serialized);
+    } catch {
+      return null;
+    }
+  }
+  
+  const stored = await storage.getItem('identity');
   if (!stored) return null;
   
   try {
@@ -975,14 +1087,14 @@ async function loadIdentityFromStorage(): Promise<ShieldedIdentity | null> {
       identity.addressString = `zdoge:${correctShieldedAddress.toString(16).padStart(64, '0')}`;
       
       // Save the corrected identity
-      saveIdentityToStorage(identity);
+      await saveIdentityToStorage(identity);
       console.log('[ShieldedWallet] Migration complete. Old notes will NOT work - please re-shield.');
     }
     
     // Migrate old address format to new zdoge: prefix (if not already done)
     if (!identity.addressString.startsWith('zdoge:')) {
       identity.addressString = `zdoge:${identity.shieldedAddress.toString(16).padStart(64, '0')}`;
-      saveIdentityToStorage(identity);
+      await saveIdentityToStorage(identity);
       console.log('[ShieldedWallet] Migrated address to new zdoge: format');
     }
     
@@ -993,12 +1105,23 @@ async function loadIdentityFromStorage(): Promise<ShieldedIdentity | null> {
   }
 }
 
-function saveNotesToStorage(notes: ShieldedNote[]): void {
+async function saveNotesToStorage(notes: ShieldedNote[]): Promise<void> {
   if (typeof localStorage === 'undefined') return;
   
-  const keys = getStorageKeys();
+  // Migrate old data on first save
+  await migrateToEncryptedStorage();
+  
+  const storage = getEncryptedStorage();
+  if (!storage) {
+    // Fallback to unencrypted
+    const keys = getStorageKeys();
+    const serialized = notes.map(serializeNote);
+    localStorage.setItem(keys.notes, JSON.stringify(serialized));
+    return;
+  }
+  
   const serialized = notes.map(serializeNote);
-  localStorage.setItem(keys.notes, JSON.stringify(serialized));
+  await storage.setItem('notes', JSON.stringify(serialized));
 }
 
 // Migrate legacy notes to include tokenAddress and decimals
@@ -1042,56 +1165,94 @@ function migrateLegacyNote(note: any): ShieldedNote {
   };
 }
 
-function loadNotesFromStorage(): ShieldedNote[] {
+async function loadNotesFromStorage(): Promise<ShieldedNote[]> {
   if (typeof localStorage === 'undefined') return [];
   
-  const keys = getStorageKeys();
-  const stored = localStorage.getItem(keys.notes);
+  // Migrate old data on first load
+  await migrateToEncryptedStorage();
+  
+  const storage = getEncryptedStorage();
+  if (!storage) {
+    // Fallback to unencrypted
+    const keys = getStorageKeys();
+    const stored = localStorage.getItem(keys.notes);
+    if (!stored) return [];
+    
+    try {
+      const serialized = JSON.parse(stored);
+      return deserializeNotes(serialized);
+    } catch {
+      return [];
+    }
+  }
+  
+  const stored = await storage.getItem('notes');
   if (!stored) return [];
   
   try {
     const serialized = JSON.parse(stored);
-    // Deserialize and migrate legacy notes
-    const notes = serialized.map((s: any) => {
-      const note: any = {
-        amount: BigInt(s.amount),
-        ownerPubkey: BigInt('0x' + s.ownerPubkey),
-        secret: BigInt('0x' + s.secret),
-        blinding: BigInt('0x' + s.blinding),
-        commitment: BigInt('0x' + s.commitment),
-        leafIndex: s.leafIndex,
-        token: s.token || 'DOGE',
-        createdAt: s.createdAt,
-      };
-      
-      // Add tokenAddress and decimals if missing (legacy note migration)
-      if (!s.tokenAddress || s.decimals == null) {
-        return migrateLegacyNote(note);
-      }
-      
-      // Modern note - include all fields
-      note.tokenAddress = s.tokenAddress;
-      note.decimals = s.decimals;
-      return note as ShieldedNote;
-    });
+    const notes = deserializeNotes(serialized);
     
     // Save migrated notes back to storage if any were migrated
     const needsMigration = notes.some((n, i) => !serialized[i].tokenAddress || serialized[i].decimals == null);
     if (needsMigration) {
-      saveNotesToStorage(notes);
+      await saveNotesToStorage(notes);
       console.log('[ShieldedService] Migrated legacy notes to include token metadata');
     }
     
     return notes;
-  } catch {
+  } catch (error) {
+    console.error('[ShieldedService] Failed to load notes:', error);
     return [];
   }
 }
 
+function deserializeNotes(serialized: any[]): ShieldedNote[] {
+  return serialized.map((s: any) => {
+    const note: any = {
+      amount: BigInt(s.amount),
+      ownerPubkey: BigInt('0x' + s.ownerPubkey),
+      secret: BigInt('0x' + s.secret),
+      blinding: BigInt('0x' + s.blinding),
+      commitment: BigInt('0x' + s.commitment),
+      leafIndex: s.leafIndex,
+      token: s.token || 'DOGE',
+      createdAt: s.createdAt,
+    };
+    
+    // Add tokenAddress and decimals if missing (legacy note migration)
+    if (!s.tokenAddress || s.decimals == null) {
+      return migrateLegacyNote(note);
+    }
+    
+    // Modern note - include all fields
+    note.tokenAddress = s.tokenAddress;
+    note.decimals = s.decimals;
+    return note as ShieldedNote;
+  });
+}
+
 // ============ Stealth Key Storage ============
 
-function saveStealthKeysToStorage(keys: StealthKeys): void {
+async function saveStealthKeysToStorage(keys: StealthKeys): Promise<void> {
   if (typeof localStorage === 'undefined') return;
+  
+  // Migrate old data on first save
+  await migrateToEncryptedStorage();
+  
+  const storage = getEncryptedStorage();
+  if (!storage) {
+    // Fallback to unencrypted
+    const serialized = {
+      spendingKey: keys.spendingKey.toString(16),
+      viewingKey: keys.viewingKey.toString(16),
+      spendingPubKey: keys.metaAddress.spendingPubKey.toString(16),
+      viewingPubKey: keys.metaAddress.viewingPubKey.toString(16),
+    };
+    const storageKeys = getStorageKeys();
+    localStorage.setItem(storageKeys.stealthKeys, JSON.stringify(serialized));
+    return;
+  }
   
   const serialized = {
     spendingKey: keys.spendingKey.toString(16),
@@ -1099,15 +1260,38 @@ function saveStealthKeysToStorage(keys: StealthKeys): void {
     spendingPubKey: keys.metaAddress.spendingPubKey.toString(16),
     viewingPubKey: keys.metaAddress.viewingPubKey.toString(16),
   };
-  const storageKeys = getStorageKeys();
-  localStorage.setItem(storageKeys.stealthKeys, JSON.stringify(serialized));
+  await storage.setItem('stealthKeys', JSON.stringify(serialized));
 }
 
-function loadStealthKeysFromStorage(): StealthKeys | null {
+async function loadStealthKeysFromStorage(): Promise<StealthKeys | null> {
   if (typeof localStorage === 'undefined') return null;
   
-  const storageKeys = getStorageKeys();
-  const stored = localStorage.getItem(storageKeys.stealthKeys);
+  // Migrate old data on first load
+  await migrateToEncryptedStorage();
+  
+  const storage = getEncryptedStorage();
+  if (!storage) {
+    // Fallback to unencrypted
+    const storageKeys = getStorageKeys();
+    const stored = localStorage.getItem(storageKeys.stealthKeys);
+    if (!stored) return null;
+    
+    try {
+      const s = JSON.parse(stored);
+      return {
+        spendingKey: BigInt('0x' + s.spendingKey),
+        viewingKey: BigInt('0x' + s.viewingKey),
+        metaAddress: {
+          spendingPubKey: BigInt('0x' + s.spendingPubKey),
+          viewingPubKey: BigInt('0x' + s.viewingPubKey),
+        },
+      };
+    } catch {
+      return null;
+    }
+  }
+  
+  const stored = await storage.getItem('stealthKeys');
   if (!stored) return null;
   
   try {
@@ -1120,7 +1304,8 @@ function loadStealthKeysFromStorage(): StealthKeys | null {
         viewingPubKey: BigInt('0x' + s.viewingPubKey),
       },
     };
-  } catch {
+  } catch (error) {
+    console.error('[ShieldedService] Failed to load stealth keys:', error);
     return null;
   }
 }
@@ -1133,7 +1318,7 @@ function loadStealthKeysFromStorage(): StealthKeys | null {
  */
 export async function initializeStealthKeys(walletAddress: string): Promise<StealthKeys> {
   // Try to load existing keys
-  let keys = loadStealthKeysFromStorage();
+  let keys = await loadStealthKeysFromStorage();
   
   if (keys) {
     walletState.stealthKeys = keys;
@@ -1146,7 +1331,7 @@ export async function initializeStealthKeys(walletAddress: string): Promise<Stea
   keys = await generateStealthKeys(seed);
   
   // Save to storage
-  saveStealthKeysToStorage(keys);
+  await saveStealthKeysToStorage(keys);
   walletState.stealthKeys = keys;
   
   console.log('[Stealth] Keys initialized');
