@@ -195,6 +195,23 @@
   padding: 0.75rem 1rem;
 }
 
+/* Navbar logo - prevent stretching, maintain aspect ratio */
+.navbar__logo {
+  height: auto;
+  max-height: 40px;
+  width: auto;
+  max-width: 200px;
+  object-fit: contain;
+}
+
+.navbar__logo img {
+  height: auto;
+  width: auto;
+  max-height: 40px;
+  max-width: 200px;
+  object-fit: contain;
+}
+
 /* Navbar items spacing - add gap between right-side items */
 .navbar__items--right {
   display: flex !important;
@@ -538,13 +555,19 @@ h2 {
 /* Hero banner (for intro page) */
 .hero-banner {
   margin-bottom: 2rem;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
 .hero-banner img {
   border-radius: 16px;
   width: 100%;
-  max-height: 300px;
-  object-fit: cover;
+  max-width: 100%;
+  max-height: 400px;
+  height: auto;
+  object-fit: contain;
+  object-position: center;
 }
 
 /* Privacy-themed elements */
@@ -630,9 +653,16 @@ h2 {
     min-height: 44px;
   }
   
-  /* Ensure navbar logo has proper spacing */
+  /* Ensure navbar logo has proper spacing and doesn't stretch */
   .navbar__logo {
     margin-right: 0.5rem;
+    max-height: 35px;
+  }
+  
+  .navbar__logo img {
+    max-height: 35px;
+    max-width: 150px;
+    object-fit: contain;
   }
   
   /* Footer mobile */
