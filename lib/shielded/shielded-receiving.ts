@@ -107,14 +107,12 @@ export async function encryptNoteForRecipient(
   // Recipient will compute the SAME value: MiMC(ephemeralPubkey, theirShieldedAddress)
   const sharedSecret = await mimcHash2(ephemeralPubkey, recipientShieldedAddress);
   
-  // Prepare note data (include full token metadata)
+  // Prepare note data (compact format with abbreviated keys to reduce size)
   const memoData: NoteMemoData = {
-    amount: note.amount.toString(),
-    secret: note.secret.toString(16).padStart(64, '0'),
-    blinding: note.blinding.toString(16).padStart(64, '0'),
-    token: note.token,
-    tokenAddress: note.tokenAddress,
-    decimals: note.decimals,
+    a: note.amount.toString(), // amount
+    s: note.secret.toString(16).padStart(64, '0'), // secret
+    b: note.blinding.toString(16).padStart(64, '0'), // blinding
+    t: note.token, // token symbol
   };
   
   // Serialize and encrypt
@@ -167,41 +165,40 @@ export async function tryDecryptMemo(
     const ciphertext = Buffer.from(memo.ciphertext, 'hex');
     const plaintext = xorEncrypt(new Uint8Array(ciphertext), keyBytes);
     
-    // Parse JSON
+    // Parse JSON (compact format with abbreviated keys)
     const dataJson = new TextDecoder().decode(plaintext);
     const memoData: NoteMemoData = JSON.parse(dataJson);
     
-    // Get token metadata - use memo data if available, otherwise look up from config
+    // Support both old format (full keys) and new format (abbreviated keys) for backward compatibility
+    const amount = (memoData as any).a || (memoData as any).amount;
+    const secret = (memoData as any).s || (memoData as any).secret;
+    const blinding = (memoData as any).b || (memoData as any).blinding;
+    const token = (memoData as any).t || (memoData as any).token;
+    
+    // Get token metadata - look up from token symbol (we removed tokenAddress and decimals from memo to save space)
     let tokenAddress: `0x${string}`;
     let decimals: number;
     
-    if (memoData.tokenAddress && memoData.decimals != null) {
-      // Modern memo with full metadata
-      tokenAddress = memoData.tokenAddress as `0x${string}`;
-      decimals = memoData.decimals;
+    const NATIVE_TOKEN = '0x0000000000000000000000000000000000000000' as `0x${string}`;
+    if (token === 'DOGE') {
+      tokenAddress = NATIVE_TOKEN;
+      decimals = 18;
     } else {
-      // Legacy memo - look up from token symbol
-      const NATIVE_TOKEN = '0x0000000000000000000000000000000000000000' as `0x${string}`;
-      if (memoData.token === 'DOGE') {
-        tokenAddress = NATIVE_TOKEN;
-        decimals = 18;
-      } else {
-        const token = shieldedPool.supportedTokens[memoData.token as keyof typeof shieldedPool.supportedTokens];
-        if (!token) {
-          throw new Error(`Token ${memoData.token} not found in config`);
-        }
-        tokenAddress = token.address;
-        decimals = token.decimals;
+      const tokenConfig = shieldedPool.supportedTokens[token as keyof typeof shieldedPool.supportedTokens];
+      if (!tokenConfig) {
+        throw new Error(`Token ${token} not found in config`);
       }
+      tokenAddress = tokenConfig.address;
+      decimals = tokenConfig.decimals;
     }
     
     // Reconstruct note with full token metadata
     const note = await createNoteWithRandomness(
-      BigInt(memoData.amount),
+      BigInt(amount),
       identity.shieldedAddress,
-      BigInt('0x' + memoData.secret),
-      BigInt('0x' + memoData.blinding),
-      memoData.token,
+      BigInt('0x' + secret),
+      BigInt('0x' + blinding),
+      token,
       tokenAddress,
       decimals
     );

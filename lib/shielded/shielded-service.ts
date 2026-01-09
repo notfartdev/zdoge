@@ -473,22 +473,38 @@ export async function prepareTransfer(
   console.log('[Transfer] Using root from proof generation:', root.toString(16).slice(0, 20) + '...');
   
   // Encrypt note details for recipient (enables auto-discovery)
-  const encryptedMemo1 = await encryptNoteForRecipient(outputNote1, recipientPubkey);
-  
-  // Encrypt change note for ourselves
-  const encryptedMemo2 = await encryptNoteForRecipient(outputNote2, walletState.identity!.shieldedAddress);
-  
-  return {
-    proof,
-    nullifierHash: toBytes32(nullifierHash),
-    outputCommitment1: toBytes32(outputNote1.commitment),
-    outputCommitment2: toBytes32(outputNote2.commitment),
-    recipientNote: outputNote1,
-    changeNote: outputNote2,
-    root: toBytes32(root),
-    encryptedMemo1: formatMemoForContract(encryptedMemo1),
-    encryptedMemo2: formatMemoForContract(encryptedMemo2),
-  };
+      const encryptedMemo1 = await encryptNoteForRecipient(outputNote1, recipientPubkey);
+      
+      // Encrypt change note for ourselves
+      const encryptedMemo2 = await encryptNoteForRecipient(outputNote2, walletState.identity!.shieldedAddress);
+      
+      // Validate memo sizes before formatting (128 bytes max)
+      const MAX_MEMO_BYTES = 128;
+      const memo1Formatted = formatMemoForContract(encryptedMemo1);
+      const memo2Formatted = formatMemoForContract(encryptedMemo2);
+      
+      // Check memo sizes (hex string length / 2 = bytes, subtract '0x' prefix)
+      const memo1Bytes = (memo1Formatted.length - 2) / 2;
+      const memo2Bytes = (memo2Formatted.length - 2) / 2;
+      
+      if (memo1Bytes > MAX_MEMO_BYTES) {
+        throw new Error(`encryptedMemo1 exceeds maximum size of ${MAX_MEMO_BYTES} bytes (got ${memo1Bytes} bytes). Please try with a smaller transaction.`);
+      }
+      if (memo2Bytes > MAX_MEMO_BYTES) {
+        throw new Error(`encryptedMemo2 exceeds maximum size of ${MAX_MEMO_BYTES} bytes (got ${memo2Bytes} bytes). Please try with a smaller transaction.`);
+      }
+      
+      return {
+        proof,
+        nullifierHash: toBytes32(nullifierHash),
+        outputCommitment1: toBytes32(outputNote1.commitment),
+        outputCommitment2: toBytes32(outputNote2.commitment),
+        recipientNote: outputNote1,
+        changeNote: outputNote2,
+        root: toBytes32(root),
+        encryptedMemo1: memo1Formatted,
+        encryptedMemo2: memo2Formatted,
+      };
 }
 
 /**
