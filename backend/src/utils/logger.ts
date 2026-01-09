@@ -30,6 +30,7 @@ export interface LogEvent {
     userId?: string;
     txHash?: string;
     poolAddress?: string;
+    [key: string]: any; // Allow additional properties for flexibility
   };
 }
 
