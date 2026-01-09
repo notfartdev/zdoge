@@ -24,7 +24,7 @@ export function DashboardNav() {
   return (
     <nav className="border-b border-[#C2A633]/20 bg-black sticky top-0 z-50">
       <div className="px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center h-14 sm:h-16">
+        <div className="flex items-center h-12 sm:h-14">
           
           {/* Left: Logo only */}
           <div className="flex-shrink-0">
@@ -32,7 +32,8 @@ export function DashboardNav() {
               <img 
                 src="/zdoge-logo.png" 
                 alt="zDoge.cash" 
-                className="w-10 h-10 sm:w-11 sm:h-11 rounded-full transition-transform duration-300 hover:scale-105" 
+                className="w-12 h-10 sm:w-16 sm:h-12 md:w-[72px] md:h-14 rounded-full transition-transform duration-300 hover:scale-105 object-cover" 
+                style={{ aspectRatio: '1.15 / 1', transform: 'scaleX(1.1)' }}
               />
             </Link>
           </div>

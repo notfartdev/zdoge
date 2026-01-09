@@ -66,9 +66,9 @@ export function Navbar() {
           isScrolled ? "bg-background/80 backdrop-blur-md border-b border-border" : ""
         }`}
       >
-        <nav className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 my-0 md:px-12 md:py-5">
-          <Link href="/" className="group flex items-center min-h-[44px]">
-            <img src="/zdoge-logo.png" alt="zDoge.cash" className="w-10 h-10 sm:w-12 sm:h-12 rounded-full transition-transform duration-300 group-hover:scale-105" />
+        <nav className="flex items-center justify-between px-4 sm:px-6 py-1 sm:py-1.5 my-0 md:px-12 md:py-2">
+          <Link href="/" className="group flex items-center min-h-[40px]">
+            <img src="/zdoge-logo.png" alt="zDoge.cash" className="w-12 h-10 sm:w-16 sm:h-12 md:w-[72px] md:h-14 rounded-full transition-transform duration-300 group-hover:scale-105 object-cover" style={{ aspectRatio: '1.15 / 1', transform: 'scaleX(1.1)' }} />
           </Link>
 
           {/* Wallet & Social Icons - Desktop */}

@@ -70,13 +70,14 @@ export const metadata: Metadata = {
   description: "A decentralized privacy protocol enabling shielded transactions on DogeOS",
   icons: {
     icon: [
-      { url: '/zdoge-logo.png', type: 'image/png', sizes: '32x32' },
-      { url: '/zdoge-logo.png', type: 'image/png', sizes: '16x16' },
+      { url: '/favicon.png', type: 'image/png', sizes: '16x16' },
+      { url: '/favicon.png', type: 'image/png', sizes: '32x32' },
+      { url: '/favicon.png', type: 'image/png', sizes: '48x48' },
     ],
     apple: [
-      { url: '/zdoge-logo.png', sizes: '180x180', type: 'image/png' },
+      { url: '/favicon.png', sizes: '180x180', type: 'image/png' },
     ],
-    shortcut: '/zdoge-logo.png',
+    shortcut: '/favicon.png',
   },
 }
 

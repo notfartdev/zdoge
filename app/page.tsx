@@ -311,7 +311,8 @@ export default function HomePage() {
             <img 
               src="/zdoge-logo.png" 
               alt="" 
-              className="w-[400px] h-[400px] md:w-[500px] md:h-[500px] opacity-[0.02] blur-sm select-none"
+              className="w-[440px] h-[400px] md:w-[550px] md:h-[500px] opacity-[0.02] blur-sm select-none"
+              style={{ aspectRatio: '1.15 / 1', transform: 'scaleX(1.1)' }}
               aria-hidden="true"
             />
           </div>
