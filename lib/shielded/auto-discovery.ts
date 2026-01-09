@@ -18,7 +18,7 @@ import { createNoteWithRandomness } from './shielded-note';
 import { mimcHash2 } from './shielded-crypto';
 
 // Configuration
-const POLL_INTERVAL_MS = 15000; // Poll every 15 seconds
+const POLL_INTERVAL_MS = 5000; // Poll every 5 seconds for faster auto-discovery
 const RPC_URL = 'https://rpc.testnet.dogeos.com';
 
 // Transfer event signature: Transfer(bytes32,bytes32,bytes32,uint256,uint256,bytes,bytes,uint256)
@@ -46,6 +46,9 @@ interface TransferEvent {
 /**
  * Start auto-discovery scanning
  */
+// Global set to track all discovered commitments (updated dynamically)
+let globalCommitments = new Set<string>();
+
 export function startAutoDiscovery(
   poolAddress: string,
   identity: ShieldedIdentity,
@@ -56,29 +59,33 @@ export function startAutoDiscovery(
   // This ensures the latest callback is always registered
   onNewNoteCallback = onNewNote;
   
+  // Update global commitments set with current notes
+  existingNotes.forEach(n => {
+    globalCommitments.add(n.commitment.toString());
+  });
+
   if (scanInterval) {
-    console.log('[AutoDiscovery] Already running, callback updated');
+    console.log('[AutoDiscovery] Already running, callback updated. Triggering immediate scan...');
+    // Trigger immediate scan even if already running to catch latest transfers
+    scanForNewTransfers(poolAddress, identity, globalCommitments).catch(err => {
+      console.error('[AutoDiscovery] Immediate scan error:', err);
+    });
     return;
   }
 
   console.log('[AutoDiscovery] Starting auto-discovery for incoming transfers...');
 
-  // Build set of existing commitments to avoid duplicates
-  const existingCommitments = new Set(
-    existingNotes.map(n => n.commitment.toString())
-  );
-
   // Start polling
   scanInterval = setInterval(async () => {
     try {
-      await scanForNewTransfers(poolAddress, identity, existingCommitments);
+      await scanForNewTransfers(poolAddress, identity, globalCommitments);
     } catch (error) {
       console.error('[AutoDiscovery] Scan error:', error);
     }
   }, POLL_INTERVAL_MS);
 
   // Do initial scan immediately
-  scanForNewTransfers(poolAddress, identity, existingCommitments);
+  scanForNewTransfers(poolAddress, identity, globalCommitments);
 }
 
 /**
@@ -306,7 +313,9 @@ async function tryDiscoverNote(
     
     if (note) {
       console.log(`[AutoDiscovery] 🎉 Discovered incoming transfer! ${Number(note.amount) / 1e18} ${note.token || 'DOGE'}`);
+      // Add to both local and global commitments set
       existingCommitments.add(note.commitment.toString());
+      globalCommitments.add(note.commitment.toString());
       onNewNoteCallback?.(note, event.txHash);
     }
   }
@@ -323,8 +332,10 @@ async function tryDiscoverNote(
     
     if (note) {
       console.log(`[AutoDiscovery] Discovered change note: ${Number(note.amount) / 1e18} ${note.token || 'DOGE'}`);
+      // Add to both local and global commitments set
       existingCommitments.add(note.commitment.toString());
-      onNewNoteCallback?.(note);
+      globalCommitments.add(note.commitment.toString());
+      onNewNoteCallback?.(note, event.txHash);
     }
   }
 }

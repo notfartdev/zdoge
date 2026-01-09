@@ -875,7 +875,7 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
             }
           }}
           title="Unshield Successful!"
-          message={`Successfully unshielded ${withdrawnAmount ? Number(withdrawnAmount).toFixed(4) : (amount ? Number(amount).toFixed(4) : '0')} ${selectedToken} to ${recipientAddress.slice(0, 6)}...${recipientAddress.slice(-4)}.`}
+          message={`Successfully unshielded ${withdrawnAmount ? Number(withdrawnAmount).toFixed(4) : (amount ? Number(amount).toFixed(4) : '0')} ${selectedToken} to your public wallet.`}
           onClose={() => {
             setShowSuccessDialog(false)
             reset()
@@ -889,6 +889,14 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
             reset()
             onSuccess?.()
           }}
+          details={
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-gray-400">Unshielded Amount</span>
+                <span className="text-green-400 font-semibold">{withdrawnAmount ? Number(withdrawnAmount).toFixed(4) : (amount ? Number(amount).toFixed(4) : '0')} {selectedToken}</span>
+              </div>
+            </div>
+          }
         />
       )}
       

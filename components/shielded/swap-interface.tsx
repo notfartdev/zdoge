@@ -79,6 +79,12 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
   const [showSuccessDialog, setShowSuccessDialog] = useState(false)
   const [pendingSwap, setPendingSwap] = useState<() => Promise<void> | null>(null)
+  const [swapResult, setSwapResult] = useState<{
+    inputAmount: string
+    inputToken: SwapToken
+    outputAmount: string
+    outputToken: SwapToken
+  } | null>(null)
   
   // Get balances
   const balances = getShieldedBalances(notes)
@@ -338,7 +344,7 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
       // outputCommitment2 is at index 3, swapAmount is at index 6, outputAmount is at index 7
       const outputCommitment2FromProof = publicInputs[3] || '0'  // Change commitment (0 if no change)
       const swapAmountFromProof = publicInputs[6] || finalQuote.inputAmount.toString()  // Amount being swapped (from proof)
-      const outputAmount = publicInputs[7] || finalQuote.outputAmount.toString()
+      const outputAmountFromProof = publicInputs[7] || finalQuote.outputAmount.toString()  // Output amount from proof (raw value)
       
       // Use changeCommitment from result if available, otherwise use the one from public inputs
       // result.changeCommitment should be properly formatted as hex string
@@ -370,7 +376,7 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
         throw new Error('Missing token addresses');
       }
       
-      if (!finalQuote.inputAmount || !outputAmount) {
+      if (!finalQuote.inputAmount || !outputAmountFromProof) {
         throw new Error('Missing swap amounts');
       }
       
@@ -385,14 +391,14 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
         tokenIn: inputTokenAddress,
         tokenOut: outputTokenAddress,
         swapAmount: swapAmountFromProof, // Amount being swapped (from proof's public signals - index 6)
-        outputAmount: outputAmount, // outputAmount from proof's public signals (required for proof verification - index 7)
+        outputAmount: outputAmountFromProof, // outputAmount from proof's public signals (required for proof verification - index 7)
         minAmountOut: finalQuote.outputAmount.toString(), // Use finalQuote's outputAmount as minAmountOut for slippage protection
         encryptedMemo: '', // TODO: Add memo encryption if needed
       };
       
       console.log('[Swap] Request body validation:', {
         swapAmountFromProof,
-        outputAmount,
+        outputAmountFromProof,
         finalQuoteInputAmount: finalQuote.inputAmount.toString(),
         finalQuoteOutputAmount: finalQuote.outputAmount.toString(),
       });
@@ -458,21 +464,20 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
       
       setTxHash(data.txHash)
       
-      // Start tracking transaction
-      const newTracker = new TransactionTrackerClass(1)
-      newTracker.onUpdate((trackerState) => {
-        setTrackerStatus(trackerState.status)
-        if (trackerState.status === 'confirmed') {
-          setStatus('confirmed')
-        } else if (trackerState.status === 'failed') {
-          setStatus('failed')
-        }
-      })
-      setTracker(newTracker)
-      await newTracker.track(data.txHash)
+      // Calculate swap details for success dialog (before tracking)
+      const swapAmountWei = finalQuote.inputAmount  // This is the swapAmount (can be less than note.amount)
+      const outputAmountWei = finalQuote.outputAmount
+      const decimals = SWAP_TOKENS[inputToken].decimals
+      const swappedAmount = formatWeiToAmount(swapAmountWei, decimals)
+      const outputAmount = formatWeiToAmount(outputAmountWei, SWAP_TOKENS[outputToken].decimals)
       
-      // Update status to pending (tracker will update to confirmed)
-      setStatus("pending")
+      // Store swap result details for success dialog
+      setSwapResult({
+        inputAmount: swappedAmount.toFixed(4),
+        inputToken,
+        outputAmount: outputAmount.toFixed(4),
+        outputToken,
+      })
       
       // Update wallet state: remove spent input note and add output note
       const allNotes = getNotes()
@@ -498,43 +503,53 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
           outputToken: finalQuote.outputToken,
           changeNoteAmount: result.changeNote?.amount.toString() || '0',
         })
-        
-        // Show success dialog
-        setShowSuccessDialog(true)
-        
-        // Trigger UI refresh events
-        setTimeout(() => {
-          // Refresh public balance (for gas token)
-          window.dispatchEvent(new Event('refresh-balance'))
-          // Trigger shielded wallet state refresh
-          window.dispatchEvent(new CustomEvent('shielded-wallet-updated'))
-        }, 500)
       } else {
         console.warn('[Swap] Could not find spent note in wallet state')
       }
       
-      // Add to transaction history
-      // Use swapAmount from quote (what was actually swapped) and finalQuote for output
-      // If there's a change note, only the swapAmount was swapped, not the full note
-      const swapAmountWei = finalQuote.inputAmount  // This is the swapAmount (can be less than note.amount)
-      const outputAmountWei = finalQuote.outputAmount
+      // Update status to pending (tracker will update to confirmed)
+      setStatus("pending")
       
-      // Format the swapped amount for display (not the full note amount)
-      const decimals = SWAP_TOKENS[inputToken].decimals
-      const swappedAmount = formatWeiToAmount(swapAmountWei, decimals)
-      
-      addTransaction({
-        type: 'swap',
-        txHash: data.txHash,
-        timestamp: Math.floor(Date.now() / 1000),
-        token: inputToken,
-        amount: swappedAmount.toFixed(4),  // Use the actual swapped amount, not the input field value
-        amountWei: swapAmountWei.toString(),
-        inputToken,
-        outputToken,
-        outputAmount: formatWeiToAmount(outputAmountWei, SWAP_TOKENS[outputToken].decimals).toFixed(4),
-        status: 'confirmed',
+      // Start tracking transaction
+      const newTracker = new TransactionTrackerClass(1)
+      let isConfirmed = false
+      newTracker.onUpdate((trackerState) => {
+        console.log('[Swap] Tracker update:', trackerState.status, 'txHash:', trackerState.txHash)
+        if (trackerState.status === 'confirmed' && !isConfirmed) {
+          isConfirmed = true
+          console.log('[Swap] Transaction confirmed! Setting status and showing dialog')
+          setTrackerStatus(trackerState.status)
+          setStatus('confirmed')
+          
+          // Add to transaction history
+          addTransaction({
+            type: 'swap',
+            txHash: data.txHash,
+            timestamp: Math.floor(Date.now() / 1000),
+            token: inputToken,
+            amount: swappedAmount.toFixed(4),  // Use the actual swapped amount, not the input field value
+            amountWei: swapAmountWei.toString(),
+            inputToken,
+            outputToken,
+            outputAmount: outputAmount.toFixed(4),
+            status: 'confirmed',
+          })
+          
+          // Trigger UI refresh events
+          window.dispatchEvent(new Event('refresh-balance'))
+          window.dispatchEvent(new CustomEvent('shielded-wallet-updated'))
+          
+          // Note: Success dialog will be shown by useEffect when status === "confirmed"
+        } else if (trackerState.status === 'failed') {
+          setTrackerStatus(trackerState.status)
+          setStatus('failed')
+        } else if (trackerState.status === 'pending') {
+          setTrackerStatus(trackerState.status)
+          setStatus('pending')
+        }
       })
+      setTracker(newTracker)
+      await newTracker.track(data.txHash)
       
       // Don't show toast - the green success UI box will show instead
       onSuccess?.()
@@ -563,6 +578,7 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
     setQuote(null)
     setStatus("idle")
     setTxHash(null)
+    setSwapResult(null)
     if (tracker) {
       tracker.stop()
       tracker.reset()
@@ -581,6 +597,18 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
       }
     }
   }, [tracker])
+  
+  // Show success dialog when transaction is confirmed (but only if not already shown and not closed)
+  useEffect(() => {
+    if (status === "confirmed" && txHash && !showSuccessDialog) {
+      console.log('[Swap] useEffect: Status is confirmed, showing success dialog')
+      // Use a small delay to ensure all state updates are processed
+      const timer = setTimeout(() => {
+        setShowSuccessDialog(true)
+      }, 300)
+      return () => clearTimeout(timer)
+    }
+  }, [status, txHash, showSuccessDialog]) // Include showSuccessDialog to prevent duplicate
   
   if (Object.keys(balances).length === 0 || Object.values(balances).every(b => b === 0n)) {
     return null
@@ -870,18 +898,21 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
       
       {/* Success Dialog */}
       <SuccessDialog
-        open={showSuccessDialog}
+        open={showSuccessDialog && status === "confirmed"}
         onOpenChange={(open) => {
           // Only allow closing via buttons, not by clicking outside or scrolling
           if (!open && status === "confirmed") {
             reset()
-          } else {
+          } else if (status === "confirmed") {
             setShowSuccessDialog(true)
           }
         }}
         onClose={reset}
         title="Swap Successful!"
-        message="Your shielded balance has been updated. The swap completed successfully."
+        message={swapResult 
+          ? `Successfully swapped ${swapResult.inputAmount} ${swapResult.inputToken} = ${swapResult.outputAmount} ${swapResult.outputToken}.`
+          : "Your shielded balance has been updated. The swap completed successfully."
+        }
         txHash={txHash}
         blockExplorerUrl={dogeosTestnet.blockExplorers.default.url}
         actionText="Make Another Swap"

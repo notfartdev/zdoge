@@ -18,6 +18,7 @@ import {
   Wallet
 } from "lucide-react"
 import { SuccessDialog } from "@/components/shielded/success-dialog"
+import { ConfirmationDialog } from "@/components/shielded/confirmation-dialog"
 import { useToast } from "@/hooks/use-toast"
 import { useWallet } from "@/lib/wallet-context"
 import { formatErrorWithSuggestion } from "@/lib/shielded/error-suggestions"
@@ -100,6 +101,7 @@ export function ShieldInterface({ onSuccess, onReset, selectedToken: externalTok
   const [isLoadingBalance, setIsLoadingBalance] = useState(false)
   const [amountError, setAmountError] = useState<string | null>(null)
   const [showSuccessDialog, setShowSuccessDialog] = useState(false)
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false)
   
   // Prevent duplicate submissions
   const isSubmittingRef = useRef(false)
@@ -213,12 +215,8 @@ export function ShieldInterface({ onSuccess, onReset, selectedToken: externalTok
     setAmount(shieldAmount.toFixed(4))
   }
   
-  const handleShield = async () => {
-    // Prevent duplicate calls
-    if (isSubmittingRef.current || status !== "idle") {
-      return
-    }
-    
+  // Show confirmation dialog before shield
+  const handleShield = () => {
     if (!wallet?.isConnected) {
       toast({
         title: "Wallet Not Connected",
@@ -262,6 +260,20 @@ export function ShieldInterface({ onSuccess, onReset, selectedToken: externalTok
       })
       return
     }
+    
+    // Set pending shield function and show confirmation dialog
+    // Note: executeShield is defined below, but this is fine since it's only called when confirmed
+    setShowConfirmDialog(true)
+  }
+  
+  // Execute shield (internal - called after confirmation)
+  const executeShield = async () => {
+    // Prevent duplicate calls
+    if (isSubmittingRef.current || status !== "idle") {
+      return
+    }
+    
+    const amountNum = parseFloat(amount)
     
     try {
       isSubmittingRef.current = true
@@ -457,6 +469,8 @@ export function ShieldInterface({ onSuccess, onReset, selectedToken: externalTok
     setLeafIndex(null)
     setPendingNote(null)
     setAmountError(null)
+    setShowConfirmDialog(false)
+    setShowSuccessDialog(false)
     isSubmittingRef.current = false
     // Trigger component reset in AppCard
     onReset?.()
@@ -546,6 +560,37 @@ export function ShieldInterface({ onSuccess, onReset, selectedToken: externalTok
                   Shield {selectedToken}
                 </span>
               </Button>
+              
+              {/* Confirmation Dialog */}
+              <ConfirmationDialog
+                open={showConfirmDialog}
+                onOpenChange={setShowConfirmDialog}
+                title="Confirm Shield"
+                description={`You are about to shield ${amount} ${selectedToken}. Your tokens will be privately stored in the shielded pool.`}
+                confirmText="Confirm Shield"
+                cancelText="Cancel"
+                onConfirm={async () => {
+                  setShowConfirmDialog(false)
+                  await executeShield()
+                }}
+                isLoading={status === "approving" || status === "preparing" || status === "confirming"}
+                details={
+                  amount && parseFloat(amount) > 0 ? (
+                    <div className="space-y-1.5 sm:space-y-2 text-xs sm:text-sm">
+                      <div className="flex justify-between items-center gap-2">
+                        <span className="text-gray-400">Amount to Shield</span>
+                        <span className="text-white text-right break-all">{amount} {selectedToken}</span>
+                      </div>
+                      {selectedTokenInfo.isNative && tokenBalanceNum > 0.001 && (
+                        <div className="flex justify-between items-center gap-2">
+                          <span className="text-gray-400">Gas Reserve</span>
+                          <span className="text-yellow-400 text-right break-all">0.001 {selectedToken}</span>
+                        </div>
+                      )}
+                    </div>
+                  ) : undefined
+                }
+              />
             </>
           )}
         </div>
@@ -653,6 +698,14 @@ export function ShieldInterface({ onSuccess, onReset, selectedToken: externalTok
         actionText="Shield More Tokens"
         onAction={reset}
         onClose={reset}
+        details={
+          <div className="space-y-2 text-sm">
+            <div className="flex justify-between">
+              <span className="text-gray-400">Shielded Amount</span>
+              <span className="text-green-400 font-semibold">{amount ? Number(amount).toFixed(4) : '0'} {selectedToken}</span>
+            </div>
+          </div>
+        }
       />
       
       {status === "error" && (
