@@ -784,14 +784,15 @@ shieldedRouter.post('/relay/swap', relayerRateLimit, async (req: Request, res: R
   }
   
   // Validate memo size (privacy enhancement: cap memo size)
-  const MAX_MEMO_BYTES = 128;
+  // Using 512 bytes for encrypted memos to account for encryption overhead and future fields
+  const MAX_ENCRYPTED_MEMO_BYTES = 512;
   if (encryptedMemo) {
     const memoBytes = Buffer.from(encryptedMemo.startsWith('0x') ? encryptedMemo.slice(2) : encryptedMemo, 'hex');
-    if (memoBytes.length > MAX_MEMO_BYTES) {
+    if (memoBytes.length > MAX_ENCRYPTED_MEMO_BYTES) {
       return res.status(400).json({ 
         error: 'Memo too large',
-        message: `encryptedMemo exceeds maximum size of ${MAX_MEMO_BYTES} bytes (got ${memoBytes.length} bytes)`,
-        maxSize: MAX_MEMO_BYTES,
+        message: `encryptedMemo exceeds maximum size of ${MAX_ENCRYPTED_MEMO_BYTES} bytes (got ${memoBytes.length} bytes)`,
+        maxSize: MAX_ENCRYPTED_MEMO_BYTES,
         actualSize: memoBytes.length,
       });
     }
