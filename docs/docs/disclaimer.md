@@ -41,7 +41,7 @@ To the maximum extent permitted by law:
 
 ## Trust Model
 
-zDoge relies on various components with different trust requirements. Please review our [Trust Model documentation](/docs/resources/trust-model) to understand:
+zDoge relies on various components with different trust requirements. Please review our [Trust Model documentation](/resources/trust-model) to understand:
 - What is cryptographically enforced (mathematical guarantees)
 - What requires trust (relayer, pricing, UI, etc.)
 - Security assumptions and risk levels
@@ -56,7 +56,7 @@ zDoge interacts with:
 - Web3 wallets
 - Backend services (indexer, relayer)
 
-We are not responsible for the operation, security, or reliability of these third-party services. See the [Trust Model](/docs/resources/trust-model) for details on what you must trust.
+We are not responsible for the operation, security, or reliability of these third-party services. See the [Trust Model](/resources/trust-model) for details on what you must trust.
 
 ## Open Source Software
 
