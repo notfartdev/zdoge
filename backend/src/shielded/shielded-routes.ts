@@ -784,8 +784,9 @@ shieldedRouter.post('/relay/swap', relayerRateLimit, async (req: Request, res: R
   }
   
   // Validate memo size (privacy enhancement: cap memo size)
-  // Using 512 bytes for encrypted memos to account for encryption overhead and future fields
-  const MAX_ENCRYPTED_MEMO_BYTES = 512;
+  // Using 1024 bytes for encrypted memos to account for encryption overhead and future fields
+  // Increased from 512 to 1024 to handle edge cases and ensure reliability
+  const MAX_ENCRYPTED_MEMO_BYTES = 1024;
   if (encryptedMemo) {
     const memoBytes = Buffer.from(encryptedMemo.startsWith('0x') ? encryptedMemo.slice(2) : encryptedMemo, 'hex');
     if (memoBytes.length > MAX_ENCRYPTED_MEMO_BYTES) {
@@ -1129,9 +1130,10 @@ shieldedRouter.post('/relay/transfer', relayerRateLimit, async (req: Request, re
   }
   
   // Validate memo sizes (privacy enhancement: cap memo size)
-  // Using 512 bytes for encrypted memos to account for encryption overhead and future fields
+  // Using 1024 bytes for encrypted memos to account for encryption overhead and future fields
   // Still provides DoS protection while being practical
-  const MAX_ENCRYPTED_MEMO_BYTES = 512;
+  // Increased from 512 to 1024 to handle edge cases and ensure reliability
+  const MAX_ENCRYPTED_MEMO_BYTES = 1024;
   if (encryptedMemo1) {
     const memo1Bytes = Buffer.from(encryptedMemo1.startsWith('0x') ? encryptedMemo1.slice(2) : encryptedMemo1, 'hex');
     if (memo1Bytes.length > MAX_ENCRYPTED_MEMO_BYTES) {

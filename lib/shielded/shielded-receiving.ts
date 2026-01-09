@@ -33,14 +33,14 @@ import {
  * Contains all info needed for recipient to reconstruct the note
  */
 export interface EncryptedMemo {
-  // The encrypted data (hex string)
-  ciphertext: string;
+  // The encrypted data (hex string) - abbreviated key to reduce JSON size
+  c: string; // ciphertext
   
-  // Ephemeral public key (for ECDH-like key exchange)
-  ephemeralPubkey: string;
+  // Ephemeral public key (for ECDH-like key exchange) - abbreviated key
+  e: string; // ephemeralPubkey
   
-  // Nonce for decryption
-  nonce: string;
+  // Nonce for decryption - abbreviated key
+  n: string; // nonce
 }
 
 /**
@@ -130,9 +130,9 @@ export async function encryptNoteForRecipient(
   const ciphertext = xorEncrypt(dataBytes, keyBytes);
   
   return {
-    ciphertext: Buffer.from(ciphertext).toString('hex'),
-    ephemeralPubkey: ephemeralPubkey.toString(16).padStart(64, '0'),
-    nonce: nonce.toString(16).padStart(64, '0'),
+    c: Buffer.from(ciphertext).toString('hex'), // ciphertext
+    e: ephemeralPubkey.toString(16).padStart(64, '0'), // ephemeralPubkey
+    n: nonce.toString(16).padStart(64, '0'), // nonce
   };
 }
 
@@ -148,9 +148,11 @@ export async function tryDecryptMemo(
   identity: ShieldedIdentity
 ): Promise<ShieldedNote | null> {
   try {
-    // Parse ephemeral pubkey and nonce
-    const ephemeralPubkey = BigInt('0x' + memo.ephemeralPubkey);
-    const nonce = BigInt('0x' + memo.nonce);
+    // Parse ephemeral pubkey and nonce (support both old and new format for backward compatibility)
+    const ephemeralPubkeyStr = (memo as any).e || (memo as any).ephemeralPubkey;
+    const nonceStr = (memo as any).n || (memo as any).nonce;
+    const ephemeralPubkey = BigInt('0x' + ephemeralPubkeyStr);
+    const nonce = BigInt('0x' + nonceStr);
     
     // Compute shared secret: MiMC(ephemeralPubkey, ourShieldedAddress)
     // This matches what the sender computed: MiMC(ephemeralPubkey, recipientShieldedAddress)
@@ -161,8 +163,9 @@ export async function tryDecryptMemo(
     const decKey = await mimcHash2(sharedSecret, nonce);
     const keyBytes = bigintToBytes(decKey, 32);
     
-    // Decrypt
-    const ciphertext = Buffer.from(memo.ciphertext, 'hex');
+    // Decrypt (support both old and new format for backward compatibility)
+    const ciphertextStr = (memo as any).c || (memo as any).ciphertext;
+    const ciphertext = Buffer.from(ciphertextStr, 'hex');
     const plaintext = xorEncrypt(new Uint8Array(ciphertext), keyBytes);
     
     // Parse JSON (compact format with abbreviated keys)

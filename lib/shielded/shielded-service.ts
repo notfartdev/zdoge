@@ -478,10 +478,11 @@ export async function prepareTransfer(
       // Encrypt change note for ourselves
       const encryptedMemo2 = await encryptNoteForRecipient(outputNote2, walletState.identity!.shieldedAddress);
       
-      // Validate memo sizes before formatting (512 bytes max for encrypted memos)
+      // Validate memo sizes before formatting (1024 bytes max for encrypted memos)
       // This accounts for encryption overhead and provides room for future fields
       // Still provides DoS protection while being practical
-      const MAX_ENCRYPTED_MEMO_BYTES = 512;
+      // Increased from 512 to 1024 to handle edge cases better
+      const MAX_ENCRYPTED_MEMO_BYTES = 1024;
       const memo1Formatted = formatMemoForContract(encryptedMemo1);
       const memo2Formatted = formatMemoForContract(encryptedMemo2);
       

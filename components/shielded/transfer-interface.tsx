@@ -261,20 +261,6 @@ export function TransferInterface({ notes, onSuccess, selectedToken = "DOGE", on
       
       setTxHash(data.txHash)
       
-      // Start tracking transaction
-      const newTracker = new TransactionTrackerClass(1)
-      newTracker.onUpdate((trackerState) => {
-        if (trackerState.status === 'confirmed') {
-          setStatus('confirmed')
-        } else if (trackerState.status === 'failed') {
-          setStatus('failed')
-        } else if (trackerState.status === 'pending') {
-          setStatus('pending')
-        }
-      })
-      setTracker(newTracker)
-      await newTracker.track(data.txHash)
-      
       // Update transaction details with change amount
       if (transactionDetails) {
         setTransactionDetails({
@@ -292,34 +278,63 @@ export function TransferInterface({ notes, onSuccess, selectedToken = "DOGE", on
         data.leafIndex1 || 0   // And its leaf index
       )
       
-      // Add to transaction history
-      addTransaction({
-        type: 'transfer',
-        txHash: data.txHash,
-        timestamp: Math.floor(Date.now() / 1000),
-        token: selectedNote.token || 'DOGE',
-        amount: amountNum.toFixed(4),
-        amountWei: (BigInt(Math.floor(amountNum * 1e18))).toString(),
-        recipientAddress: recipientAddress,
-        fee: (result.fee || 0n).toString(),
-        changeAmount: result.changeNote.amount > 0n ? (Number(result.changeNote.amount) / 1e18).toFixed(4) : undefined,
-        status: 'confirmed',
-      })
-      
       // Update status to pending (tracker will update to confirmed)
       setStatus("pending")
       
-      // Show success dialog when confirmed
-      const checkStatus = setInterval(() => {
-        const trackerState = newTracker.getTracker()
-        if (trackerState.status === 'confirmed') {
+      // Start tracking transaction
+      const newTracker = new TransactionTrackerClass(1)
+      let isConfirmed = false
+      // Capture variables for use in callback
+      const capturedAmountNum = amountNum
+      const capturedSelectedNote = selectedNote
+      const capturedSelectedToken = selectedToken
+      const capturedRecipientAddress = recipientAddress
+      const capturedTxHash = data.txHash
+      const capturedChangeNote = result.changeNote
+      const capturedFee = result.fee || 0n
+      
+      newTracker.onUpdate((trackerState) => {
+        console.log('[Transfer] Tracker update:', trackerState.status, 'txHash:', trackerState.txHash)
+        if (trackerState.status === 'confirmed' && !isConfirmed) {
+          isConfirmed = true
+          console.log('[Transfer] Transaction confirmed! Setting status and showing dialog')
           setStatus('confirmed')
-          setShowSuccessDialog(true)
-          clearInterval(checkStatus)
+          
+          // Update transaction details with final change amount
+          setTransactionDetails({
+            amountSent: capturedAmountNum,
+            noteConsumed: capturedSelectedNote.amount,
+            changeReceived: capturedChangeNote.amount,
+            selectedNote: capturedSelectedNote
+          })
+          
+          // Add to transaction history
+          addTransaction({
+            type: 'transfer',
+            txHash: capturedTxHash,
+            timestamp: Math.floor(Date.now() / 1000),
+            token: capturedSelectedNote.token || 'DOGE',
+            amount: capturedAmountNum.toFixed(4),
+            amountWei: (BigInt(Math.floor(capturedAmountNum * 1e18))).toString(),
+            recipientAddress: capturedRecipientAddress,
+            fee: capturedFee.toString(),
+            changeAmount: capturedChangeNote.amount > 0n ? (Number(capturedChangeNote.amount) / 1e18).toFixed(4) : undefined,
+            status: 'confirmed',
+          })
+          
+          // Trigger balance refresh
+          window.dispatchEvent(new Event('refresh-balance'))
+          window.dispatchEvent(new CustomEvent('shielded-wallet-updated'))
+          
+          // Note: Success dialog will be shown by useEffect when status === "confirmed"
         } else if (trackerState.status === 'failed') {
-          clearInterval(checkStatus)
+          setStatus('failed')
+        } else if (trackerState.status === 'pending') {
+          setStatus('pending')
         }
-      }, 1000)
+      })
+      setTracker(newTracker)
+      await newTracker.track(data.txHash)
       
       // Don't show toast - success dialog will show instead
       onSuccess?.()
@@ -370,6 +385,19 @@ export function TransferInterface({ notes, onSuccess, selectedToken = "DOGE", on
     }
   }, [tracker])
   
+  // Show success dialog when transaction is confirmed (but only if not already shown and not closed)
+  useEffect(() => {
+    if (status === "confirmed" && txHash && !showSuccessDialog) {
+      console.log('[Transfer] useEffect: Status is confirmed, showing success dialog')
+      // Use a small delay to ensure all state updates are processed
+      const timer = setTimeout(() => {
+        setShowSuccessDialog(true)
+        setShowConfirmDialog(false) // Ensure confirmation dialog is closed
+      }, 300)
+      return () => clearTimeout(timer)
+    }
+  }, [status, txHash, showSuccessDialog]) // Include showSuccessDialog to prevent duplicate
+  
   if (spendableNotes.length === 0) {
     return null
   }
@@ -382,6 +410,38 @@ export function TransferInterface({ notes, onSuccess, selectedToken = "DOGE", on
           Send shielded tokens to another shielded address privately
         </p>
       </div>
+      
+      {/* Success Dialog - Show when confirmed */}
+      <SuccessDialog
+        open={showSuccessDialog && status === "confirmed"}
+        onOpenChange={(open) => {
+          // Only allow closing via buttons, not by clicking outside or scrolling
+          if (!open && status === "confirmed") {
+            reset()
+          } else if (status === "confirmed") {
+            setShowSuccessDialog(true)
+          }
+        }}
+        onClose={reset}
+        title="Transfer Successful!"
+        message={`Successfully sent ${transactionDetails?.amountSent ? Number(transactionDetails.amountSent).toFixed(4) : (amount ? Number(amount).toFixed(4) : '0')} ${selectedToken} to ${recipientAddress ? recipientAddress.slice(0, 10) + '...' + recipientAddress.slice(-8) : 'recipient'} privately.`}
+        txHash={txHash}
+        blockExplorerUrl={dogeosTestnet.blockExplorers.default.url}
+        actionText="Send Another"
+        onAction={reset}
+        details={
+          transactionDetails?.changeReceived && 
+          transactionDetails.changeReceived > 0n && 
+          Number(formatWeiToAmount(transactionDetails.changeReceived, 18).toFixed(4)) > 0 ? (
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-gray-400">Change Returned</span>
+                <span className="text-green-400 font-semibold">{formatWeiToAmount(transactionDetails.changeReceived, 18).toFixed(4)} {selectedToken}</span>
+              </div>
+            </div>
+          ) : undefined
+        }
+      />
       
       {status === "idle" && (
         <div className="space-y-4">
@@ -529,6 +589,7 @@ export function TransferInterface({ notes, onSuccess, selectedToken = "DOGE", on
             confirmText="Confirm Transfer"
             cancelText="Cancel"
             onConfirm={async () => {
+              setShowConfirmDialog(false)
               if (pendingTransfer) {
                 await pendingTransfer()
               }
@@ -557,36 +618,6 @@ export function TransferInterface({ notes, onSuccess, selectedToken = "DOGE", on
                   </div>
                 )
               })() : undefined
-            }
-          />
-          
-          {/* Success Dialog */}
-          <SuccessDialog
-            open={showSuccessDialog}
-            onOpenChange={(open) => {
-              // Only allow closing via buttons, not by clicking outside or scrolling
-              if (!open && status === "confirmed") {
-                reset()
-              } else {
-                setShowSuccessDialog(true)
-              }
-            }}
-            onClose={reset}
-            title="Transfer Successful!"
-            message={`Successfully sent ${transactionDetails?.amountSent ? Number(transactionDetails.amountSent).toFixed(4) : (amount ? Number(amount).toFixed(4) : '0')} ${selectedToken} to ${recipientAddress.slice(0, 10)}...${recipientAddress.slice(-8)} privately.`}
-            txHash={txHash}
-            blockExplorerUrl={dogeosTestnet.blockExplorers.default.url}
-            actionText="Send Another"
-            onAction={reset}
-            details={
-              transactionDetails?.changeReceived && transactionDetails.changeReceived > 0n ? (
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Change Returned</span>
-                    <span className="text-green-400 font-semibold">{formatWeiToAmount(transactionDetails.changeReceived, 18).toFixed(4)} {selectedToken}</span>
-                  </div>
-                </div>
-              ) : undefined
             }
           />
         </div>
