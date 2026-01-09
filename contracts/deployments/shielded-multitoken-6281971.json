@@ -1,9 +1,9 @@
 {
-  "shieldedPool": "0x6d237c2ed7036bf2F2006BcA6D3cA98E6E45b5f6",
-  "shieldVerifier": "0xE3F18043e009c62eeC122a959f1CF6fcdc2dcda1",
-  "transferVerifier": "0xaa70a787C6049d01a988a395E181048Cc897DAd7",
-  "unshieldVerifier": "0x6916B65368685F8961dAd5338a966c5F13C9EAF6",
-  "swapVerifier": "0x0C88063F0F28b8f5560Da2A688866BA856D00734",
+  "shieldedPool": "0x2e93EC915E439920a770e5c9d8c207A6160929a8",
+  "shieldVerifier": "0x2cD2A2126825fC8000C1AD2dFD25D15F8Cc365f1",
+  "transferVerifier": "0x0568BF5FaAEf348B71BdD18a05e1EC55a23459B2",
+  "unshieldVerifier": "0x7DFEa7a81B6f7098DB4a973b052A08899865b60b",
+  "swapVerifier": "0xE264695FF93e2baa700C3518227EBc917092bd3A",
   "hasher": "0x1931f2D78930f5c3b0ce65d27F56F35Fa4fdA67D",
   "supportedTokens": {
     "DOGE": "0x0000000000000000000000000000000000000000",
@@ -15,6 +15,6 @@
   },
   "deployer": "0xD1fC75EC0f85eB62ef3cfCDd946b349714a4432F",
   "network": "chain-6281971",
-  "timestamp": "2026-01-02T13:45:45.793Z",
+  "timestamp": "2026-01-08T18:50:24.830Z",
   "isMock": false
 }

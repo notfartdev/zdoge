@@ -5,7 +5,7 @@ import type * as Preset from '@docusaurus/preset-classic';
 const config: Config = {
   title: 'zDoge',
   tagline: 'Zcash-style shielded transactions for DogeOS - Private payments with zero-knowledge proofs',
-  favicon: 'img/dogenadologo.png',
+  favicon: 'img/favicon.png',
 
   future: {
     v4: true,

@@ -60,10 +60,11 @@ async function main() {
   await unshieldVerifier.waitForDeployment();
   console.log("  ✓ UnshieldVerifier (real):", await unshieldVerifier.getAddress());
   
-  const SwapVerifier = await ethers.getContractFactory("SwapVerifier");
-  const swapVerifier = await SwapVerifier.deploy();
-  await swapVerifier.waitForDeployment();
-  console.log("  ✓ SwapVerifier (real):", await swapVerifier.getAddress());
+    // Use pre-deployed SwapVerifier (matches updated circuit with change notes support)
+    // This is the newly deployed SwapVerifier that supports outputCommitment2 (change notes)
+    // Generated from the latest circuit rebuild (8 public inputs, change notes support)
+    const swapVerifierAddress = process.env.SWAP_VERIFIER_ADDRESS || "0xE264695FF93e2baa700C3518227EBc917092bd3A";
+    console.log("  ✓ SwapVerifier (using pre-deployed with change notes support):", swapVerifierAddress);
   
   console.log("");
 
@@ -77,7 +78,7 @@ async function main() {
     await shieldVerifier.getAddress(),
     await transferVerifier.getAddress(),
     await unshieldVerifier.getAddress(),
-    await swapVerifier.getAddress(),
+    swapVerifierAddress,
     CONFIG.DEX_ROUTER || ethers.ZeroAddress
   );
   
@@ -123,7 +124,7 @@ async function main() {
     shieldVerifier: await shieldVerifier.getAddress(),
     transferVerifier: await transferVerifier.getAddress(),
     unshieldVerifier: await unshieldVerifier.getAddress(),
-    swapVerifier: await swapVerifier.getAddress(),
+    swapVerifier: swapVerifierAddress,
     hasher: CONFIG.HASHER_ADDRESS,
     supportedTokens: TOKENS,
     deployer: deployer.address,
@@ -171,7 +172,7 @@ export const shieldedPool = {
   shieldVerifier: '${await shieldVerifier.getAddress()}' as \`0x\${string}\`,
   transferVerifier: '${await transferVerifier.getAddress()}' as \`0x\${string}\`,
   unshieldVerifier: '${await unshieldVerifier.getAddress()}' as \`0x\${string}\`,
-  swapVerifier: '${await swapVerifier.getAddress()}' as \`0x\${string}\`,
+  swapVerifier: '${swapVerifierAddress}' as \`0x\${string}\`,
   // ... keep the rest
 };
 `);
