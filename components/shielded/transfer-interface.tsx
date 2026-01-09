@@ -344,21 +344,16 @@ export function TransferInterface({ notes, onSuccess, selectedToken = "DOGE", on
     }
   }
   
-  const copyNote = async () => {
-    if (!recipientNote) return
-    await navigator.clipboard.writeText(recipientNote)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
-  
   const reset = () => {
     setRecipientAddress("")
     setAmount("")
     setStatus("idle")
-    setRecipientNote(null)
-    setShowNote(false)
     setTxHash(null)
     setErrorMessage(null)
+    setShowConfirmDialog(false)
+    setShowSuccessDialog(false)
+    setPendingTransfer(null)
+    setTransactionDetails(null)
     if (tracker) {
       tracker.stop()
       tracker.reset()
@@ -507,7 +502,7 @@ export function TransferInterface({ notes, onSuccess, selectedToken = "DOGE", on
           <Button 
             className="w-full min-h-[44px] sm:min-h-0 relative overflow-hidden bg-white/10 border border-white/20 hover:border-[#B89A2E]/50 transition-all duration-500 group py-3 sm:py-2"
             onClick={() => {
-              setPendingTransfer(() => executeTransfer)
+              setPendingTransfer(() => handleTransfer)
               setShowConfirmDialog(true)
             }}
             disabled={!relayerInfo?.available || !amount || parseFloat(amount) <= 0 || (() => {
