@@ -39,6 +39,13 @@ To the maximum extent permitted by law:
 - The zDoge protocol, its developers, and contributors shall not be liable for any damages arising from the use of this protocol
 - This includes but is not limited to: loss of funds, lost profits, data loss, or other damages
 
+## Trust Model
+
+zDoge relies on various components with different trust requirements. Please review our [Trust Model documentation](/docs/resources/trust-model) to understand:
+- What is cryptographically enforced (mathematical guarantees)
+- What requires trust (relayer, pricing, UI, etc.)
+- Security assumptions and risk levels
+
 ## Third-Party Services
 
 zDoge interacts with:
@@ -49,7 +56,7 @@ zDoge interacts with:
 - Web3 wallets
 - Backend services (indexer, relayer)
 
-We are not responsible for the operation, security, or reliability of these third-party services.
+We are not responsible for the operation, security, or reliability of these third-party services. See the [Trust Model](/docs/resources/trust-model) for details on what you must trust.
 
 ## Open Source Software
 

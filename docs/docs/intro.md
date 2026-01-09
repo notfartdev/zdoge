@@ -40,6 +40,11 @@ All transactions hide sender, recipient, and amount on-chain. The system uses en
 | **Non-Custodial** | You always control your funds via your spending key |
 | **Fast Transactions** | Built on DogeOS for quick, low-cost transactions |
 | **Multi-Token Support** | Privacy for DOGE, USDC, USDT, USD1, WETH, and LBTC |
+| **Smart Error Messages** | Context-aware error suggestions help resolve common issues |
+| **Transaction History** | Track all your shielded transactions locally |
+| **Note Management** | View, filter, and manage your shielded notes |
+| **Estimated Fees** | See transaction fees before confirming |
+| **Progress Tracking** | Real-time progress for proof generation and transactions |
 
 ## Network Status
 
@@ -91,6 +96,10 @@ Ready to start using zDoge? Follow these guides:
 
 ---
 
-:::warning Disclaimer
-zDoge is provided as-is. Users are responsible for understanding local regulations regarding privacy protocols. Always secure your spending key - if lost, funds cannot be recovered.
+:::warning Important
+Before using zDoge, please review the [Trust Model](/docs/resources/trust-model) to understand what is cryptographically enforced and what requires trust. Also read the [Disclaimer](/docs/disclaimer) for important legal and risk information.
+:::
+
+:::caution Testnet = Experimental
+**zDoge is currently on testnet** - this is experimental software. Learn more about what you must trust in our [Trust Model documentation](/docs/resources/trust-model).
 :::

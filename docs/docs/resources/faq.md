@@ -127,7 +127,13 @@ Yes. All smart contracts and frontend code are open source and available on GitH
 
 ### Has zDoge been audited?
 
-[Update this based on audit status]
+zDoge is currently on testnet and undergoing development. Audits will be conducted before mainnet launch. See our [Trust Model](/docs/resources/trust-model) for details on what is cryptographically enforced vs what requires trust.
+
+### What do I need to trust when using zDoge?
+
+See our detailed [Trust Model documentation](/docs/resources/trust-model). In summary:
+- **Cryptographically enforced**: Privacy guarantees, fund security, proof verification
+- **Requires trust**: Relayer (submits transactions), UI (displays correctly), pricing (for swaps), smart contracts (correct implementation)
 
 ### What is a Merkle tree?
 

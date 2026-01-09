@@ -49,6 +49,8 @@ const sidebars: SidebarsConfig = {
       items: [
         'resources/contract-addresses',
         'resources/supported-tokens',
+        'resources/trust-model',
+        'resources/features-updates',
         'resources/faq',
       ],
     },
