@@ -97,9 +97,9 @@ Ready to start using zDoge? Follow these guides:
 ---
 
 :::warning Important
-Before using zDoge, please review the [Trust Model](/docs/resources/trust-model) to understand what is cryptographically enforced and what requires trust. Also read the [Disclaimer](/docs/disclaimer) for important legal and risk information.
+Before using zDoge, please review the [Trust Model](/resources/trust-model) to understand what is cryptographically enforced and what requires trust. Also read the [Disclaimer](/disclaimer) for important legal and risk information.
 :::
 
 :::caution Testnet = Experimental
-**zDoge is currently on testnet** - this is experimental software. Learn more about what you must trust in our [Trust Model documentation](/docs/resources/trust-model).
+**zDoge is currently on testnet** - this is experimental software. Learn more about what you must trust in our [Trust Model documentation](/resources/trust-model).
 :::

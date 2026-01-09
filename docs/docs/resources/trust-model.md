@@ -188,8 +188,8 @@ The indexer service that tracks transactions:
 ## Questions?
 
 If you have questions about the trust model or security assumptions:
-- Review the [Technical Documentation](/docs/technical/architecture)
-- Check the [FAQ](/docs/resources/faq)
+- Review the [Technical Documentation](/technical/architecture)
+- Check the [FAQ](/resources/faq)
 - Open an issue on GitHub
 - Join community discussions
 
