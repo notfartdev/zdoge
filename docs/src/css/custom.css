@@ -195,21 +195,24 @@
   padding: 0.75rem 1rem;
 }
 
-/* Navbar logo - prevent stretching, maintain aspect ratio */
+/* Navbar logo - maintain aspect ratio, allow natural sizing */
 .navbar__logo {
+  display: flex;
+  align-items: center;
   height: auto;
-  max-height: 40px;
+  max-height: 45px;
   width: auto;
-  max-width: 200px;
-  object-fit: contain;
+  min-width: auto;
 }
 
 .navbar__logo img {
   height: auto;
   width: auto;
-  max-height: 40px;
-  max-width: 200px;
+  max-height: 45px;
+  max-width: 250px;
+  min-width: 120px;
   object-fit: contain;
+  object-position: left center;
 }
 
 /* Navbar items spacing - add gap between right-side items */
@@ -656,12 +659,13 @@ h2 {
   /* Ensure navbar logo has proper spacing and doesn't stretch */
   .navbar__logo {
     margin-right: 0.5rem;
-    max-height: 35px;
+    max-height: 40px;
   }
   
   .navbar__logo img {
-    max-height: 35px;
-    max-width: 150px;
+    max-height: 40px;
+    max-width: 180px;
+    min-width: 100px;
     object-fit: contain;
   }
   
