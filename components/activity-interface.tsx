@@ -62,9 +62,8 @@ export function ActivityInterface() {
   }, [filter])
 
   const loadTransactions = () => {
-    const history = filter === 'all' 
-      ? getTransactionHistory()
-      : getTransactionsByType(filter)
+    // Always load all transactions - filtering happens in filteredTransactions
+    const history = getTransactionHistory()
     setTransactions(history)
   }
 
@@ -185,10 +184,7 @@ export function ActivityInterface() {
               key={type}
               variant={isActive ? "default" : "outline"}
               size="sm"
-              onClick={() => {
-                setFilter(type)
-                loadTransactions()
-              }}
+              onClick={() => setFilter(type)}
               className="font-body"
             >
               {type === 'all' ? 'All' : formatTransactionType(type)}
