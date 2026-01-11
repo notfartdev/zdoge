@@ -7,6 +7,7 @@
 import { type Address, createPublicClient, http } from 'viem';
 import { dogeosTestnet, config } from '../config.js';
 import { isNullifierSpent } from './shielded-indexer.js';
+import { ErrorCode } from '../utils/error-schema.js';
 
 const publicClient = createPublicClient({
   chain: dogeosTestnet,
@@ -85,6 +86,7 @@ const ShieldedPoolABI = [
 export interface SimulationResult {
   wouldPass: boolean;
   decodedError?: string;
+  errorCode?: ErrorCode;
   estimatedFee: string;
   suggestion: string;
   checks: {
@@ -156,6 +158,7 @@ export async function simulateTransaction(
     if (!checks.proofFormat) {
       return {
         wouldPass: false,
+        errorCode: ErrorCode.PROOF_FORMAT_ERROR,
         estimatedFee: fee || '0',
         suggestion: 'Proof must be an array of 8 elements',
         checks,
@@ -172,6 +175,7 @@ export async function simulateTransaction(
       if (spent) {
         return {
           wouldPass: false,
+          errorCode: ErrorCode.NULLIFIER_SPENT,
           decodedError: 'Nullifier already spent',
           estimatedFee: fee || '0',
           suggestion: 'This note has already been spent. Use a different note.',
@@ -199,6 +203,7 @@ export async function simulateTransaction(
       if (!isValidRoot) {
         return {
           wouldPass: false,
+          errorCode: ErrorCode.UNKNOWN_ROOT,
           decodedError: 'Unknown Merkle root',
           estimatedFee: fee || '0',
           suggestion: 'Root is not in the pool\'s history. Sync your notes and try again.',
