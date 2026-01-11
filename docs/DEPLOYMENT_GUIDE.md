@@ -129,7 +129,7 @@ After deployment, verify:
 | Variable | Current Value | Status |
 |----------|---------------|--------|
 | `SHIELDED_POOL_ADDRESS` | `0x40c74Fd9B171D34d971B182bDd5756fe39e477E9` | ✅ **UPDATE THIS** |
-| `RELAYER_PRIVATE_KEY` | `3e819df5706b7cab0a4e10c21ba6cff39ee12d5b019dae8661b38e6f69c06360` | ✅ Keep |
+| `RELAYER_PRIVATE_KEY` | `<your-relayer-private-key-here>` | ✅ Set in Render dashboard |
 | `DOGEOS_RPC_URL` | `https://rpc.testnet.dogeos.com` | ✅ Keep |
 | `DOGEOS_WS_RPC_URL` | `wss://ws.rpc.testnet.dogeos.com` | ✅ Keep |
 | `NODE_ENV` | `production` | ✅ Keep |

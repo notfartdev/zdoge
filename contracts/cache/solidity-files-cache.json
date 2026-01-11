@@ -1,10 +1,10 @@
 {
   "_format": "hh-sol-cache-2",
   "files": {
-    "C:\\Users\\Ivan\\Desktop\\dogenado\\contracts\\src\\Hasher.sol": {
-      "lastModificationDate": 1766147345866,
-      "contentHash": "d47e426dfa7df2974131d1e044d1c0f5",
-      "sourceName": "src/Hasher.sol",
+    "C:\\Users\\Ivan\\Desktop\\dogenado\\contracts\\src\\DogeRouter.sol": {
+      "lastModificationDate": 1766315031322,
+      "contentHash": "db9f3e9e1f5c9608de2b604c4d257e27",
+      "sourceName": "src/DogeRouter.sol",
       "solcConfig": {
         "version": "0.8.30",
         "settings": {
@@ -30,18 +30,22 @@
           }
         }
       },
-      "imports": [],
+      "imports": [
+        "@openzeppelin/contracts/utils/ReentrancyGuard.sol"
+      ],
       "versionPragmas": [
         "^0.8.30"
       ],
       "artifacts": [
-        "Hasher"
+        "DogeRouter",
+        "IMixerPool",
+        "IWrappedDoge"
       ]
     },
-    "C:\\Users\\Ivan\\Desktop\\dogenado\\contracts\\src\\interfaces\\IHasher.sol": {
-      "lastModificationDate": 1766160482858,
-      "contentHash": "abfc7996beee283bfe7818c31c4a557f",
-      "sourceName": "src/interfaces/IHasher.sol",
+    "C:\\Users\\Ivan\\Desktop\\dogenado\\contracts\\node_modules\\@openzeppelin\\contracts\\utils\\ReentrancyGuard.sol": {
+      "lastModificationDate": 1766148602691,
+      "contentHash": "190613e556d509d9e9a0ea43dc5d891d",
+      "sourceName": "@openzeppelin/contracts/utils/ReentrancyGuard.sol",
       "solcConfig": {
         "version": "0.8.30",
         "settings": {
@@ -69,10 +73,93 @@
       },
       "imports": [],
       "versionPragmas": [
-        "^0.8.30"
+        "^0.8.20"
       ],
       "artifacts": [
-        "IHasher"
+        "ReentrancyGuard"
+      ]
+    },
+    "C:\\Users\\Ivan\\Desktop\\dogenado\\contracts\\src\\ShieldedPoolMultiToken.sol": {
+      "lastModificationDate": 1767894068430,
+      "contentHash": "fe86d9d40804e8070e38b69bae962766",
+      "sourceName": "src/ShieldedPoolMultiToken.sol",
+      "solcConfig": {
+        "version": "0.8.30",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "evmVersion": "prague",
+          "viaIR": true,
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "@openzeppelin/contracts/utils/ReentrancyGuard.sol",
+        "@openzeppelin/contracts/token/ERC20/IERC20.sol",
+        "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol",
+        "./MerkleTreeWithHistory.sol",
+        "./interfaces/IShieldedVerifiers.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.20"
+      ],
+      "artifacts": [
+        "ShieldedPoolMultiToken"
+      ]
+    },
+    "C:\\Users\\Ivan\\Desktop\\dogenado\\contracts\\src\\interfaces\\IShieldedVerifiers.sol": {
+      "lastModificationDate": 1767894091542,
+      "contentHash": "ba2ce99b717597efe3ffc6d948a8a612",
+      "sourceName": "src/interfaces/IShieldedVerifiers.sol",
+      "solcConfig": {
+        "version": "0.8.30",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "evmVersion": "prague",
+          "viaIR": true,
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.20"
+      ],
+      "artifacts": [
+        "IShieldVerifier",
+        "ISwapVerifier",
+        "ITransferVerifier",
+        "IUnshieldVerifier"
       ]
     },
     "C:\\Users\\Ivan\\Desktop\\dogenado\\contracts\\src\\MerkleTreeWithHistory.sol": {
@@ -112,87 +199,6 @@
       ],
       "artifacts": [
         "MerkleTreeWithHistory"
-      ]
-    },
-    "C:\\Users\\Ivan\\Desktop\\dogenado\\contracts\\src\\MixerPool.sol": {
-      "lastModificationDate": 1767360463340,
-      "contentHash": "5b6f361bec357602c65a11376d2d24ff",
-      "sourceName": "src/MixerPool.sol",
-      "solcConfig": {
-        "version": "0.8.30",
-        "settings": {
-          "optimizer": {
-            "enabled": true,
-            "runs": 200
-          },
-          "evmVersion": "prague",
-          "viaIR": true,
-          "outputSelection": {
-            "*": {
-              "*": [
-                "abi",
-                "evm.bytecode",
-                "evm.deployedBytecode",
-                "evm.methodIdentifiers",
-                "metadata"
-              ],
-              "": [
-                "ast"
-              ]
-            }
-          }
-        }
-      },
-      "imports": [
-        "@openzeppelin/contracts/token/ERC20/IERC20.sol",
-        "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol",
-        "@openzeppelin/contracts/utils/ReentrancyGuard.sol",
-        "./MerkleTreeWithHistory.sol",
-        "./interfaces/IVerifier.sol"
-      ],
-      "versionPragmas": [
-        "^0.8.30"
-      ],
-      "artifacts": [
-        "MixerPool"
-      ]
-    },
-    "C:\\Users\\Ivan\\Desktop\\dogenado\\contracts\\src\\interfaces\\IVerifier.sol": {
-      "lastModificationDate": 1767360463340,
-      "contentHash": "e485567be4fd71c668d39b6708b71402",
-      "sourceName": "src/interfaces/IVerifier.sol",
-      "solcConfig": {
-        "version": "0.8.30",
-        "settings": {
-          "optimizer": {
-            "enabled": true,
-            "runs": 200
-          },
-          "evmVersion": "prague",
-          "viaIR": true,
-          "outputSelection": {
-            "*": {
-              "*": [
-                "abi",
-                "evm.bytecode",
-                "evm.deployedBytecode",
-                "evm.methodIdentifiers",
-                "metadata"
-              ],
-              "": [
-                "ast"
-              ]
-            }
-          }
-        }
-      },
-      "imports": [],
-      "versionPragmas": [
-        "^0.8.20"
-      ],
-      "artifacts": [
-        "IVerifier",
-        "IVerifierLegacy"
       ]
     },
     "C:\\Users\\Ivan\\Desktop\\dogenado\\contracts\\node_modules\\@openzeppelin\\contracts\\token\\ERC20\\IERC20.sol": {
@@ -272,10 +278,10 @@
         "SafeERC20"
       ]
     },
-    "C:\\Users\\Ivan\\Desktop\\dogenado\\contracts\\node_modules\\@openzeppelin\\contracts\\utils\\ReentrancyGuard.sol": {
-      "lastModificationDate": 1766148602691,
-      "contentHash": "190613e556d509d9e9a0ea43dc5d891d",
-      "sourceName": "@openzeppelin/contracts/utils/ReentrancyGuard.sol",
+    "C:\\Users\\Ivan\\Desktop\\dogenado\\contracts\\src\\interfaces\\IHasher.sol": {
+      "lastModificationDate": 1766160482858,
+      "contentHash": "abfc7996beee283bfe7818c31c4a557f",
+      "sourceName": "src/interfaces/IHasher.sol",
       "solcConfig": {
         "version": "0.8.30",
         "settings": {
@@ -303,10 +309,10 @@
       },
       "imports": [],
       "versionPragmas": [
-        "^0.8.20"
+        "^0.8.30"
       ],
       "artifacts": [
-        "ReentrancyGuard"
+        "IHasher"
       ]
     },
     "C:\\Users\\Ivan\\Desktop\\dogenado\\contracts\\node_modules\\@openzeppelin\\contracts\\interfaces\\IERC1363.sol": {
@@ -656,10 +662,53 @@
         "MockERC20"
       ]
     },
-    "C:\\Users\\Ivan\\Desktop\\dogenado\\contracts\\src\\Verifier.sol": {
-      "lastModificationDate": 1766153208931,
-      "contentHash": "52d08103c357a47638db41b0b590e00d",
-      "sourceName": "src/Verifier.sol",
+    "C:\\Users\\Ivan\\Desktop\\dogenado\\contracts\\src\\MixerPoolV2.sol": {
+      "lastModificationDate": 1767360463340,
+      "contentHash": "5c3e67aa6cd10212275b8cb941558d53",
+      "sourceName": "src/MixerPoolV2.sol",
+      "solcConfig": {
+        "version": "0.8.30",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "evmVersion": "prague",
+          "viaIR": true,
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "@openzeppelin/contracts/token/ERC20/IERC20.sol",
+        "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol",
+        "@openzeppelin/contracts/utils/ReentrancyGuard.sol",
+        "./MerkleTreeWithHistory.sol",
+        "./interfaces/IVerifier.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.30"
+      ],
+      "artifacts": [
+        "MixerPoolV2"
+      ]
+    },
+    "C:\\Users\\Ivan\\Desktop\\dogenado\\contracts\\src\\interfaces\\IVerifier.sol": {
+      "lastModificationDate": 1767360463340,
+      "contentHash": "e485567be4fd71c668d39b6708b71402",
+      "sourceName": "src/interfaces/IVerifier.sol",
       "solcConfig": {
         "version": "0.8.30",
         "settings": {
@@ -687,10 +736,11 @@
       },
       "imports": [],
       "versionPragmas": [
-        ">=0.7.0 <0.9.0"
+        "^0.8.20"
       ],
       "artifacts": [
-        "Groth16Verifier"
+        "IVerifier",
+        "IVerifierLegacy"
       ]
     },
     "C:\\Users\\Ivan\\Desktop\\dogenado\\contracts\\src\\VerifierAdapter.sol": {
@@ -731,6 +781,207 @@
       "artifacts": [
         "IGroth16Verifier",
         "VerifierAdapter"
+      ]
+    },
+    "C:\\Users\\Ivan\\Desktop\\dogenado\\contracts\\src\\ShieldedPool.sol": {
+      "lastModificationDate": 1767360463340,
+      "contentHash": "d5c34e668e246c50b70e6426dd123059",
+      "sourceName": "src/ShieldedPool.sol",
+      "solcConfig": {
+        "version": "0.8.30",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "evmVersion": "prague",
+          "viaIR": true,
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "@openzeppelin/contracts/utils/ReentrancyGuard.sol",
+        "./MerkleTreeWithHistory.sol",
+        "./interfaces/IVerifier.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.20"
+      ],
+      "artifacts": [
+        "ShieldedPool"
+      ]
+    },
+    "C:\\Users\\Ivan\\Desktop\\dogenado\\contracts\\src\\MixerPoolNative.sol": {
+      "lastModificationDate": 1767360463340,
+      "contentHash": "5380b60130f7e16a1837fa5941b549c2",
+      "sourceName": "src/MixerPoolNative.sol",
+      "solcConfig": {
+        "version": "0.8.30",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "evmVersion": "prague",
+          "viaIR": true,
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "@openzeppelin/contracts/utils/ReentrancyGuard.sol",
+        "./MerkleTreeWithHistory.sol",
+        "./interfaces/IVerifier.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.30"
+      ],
+      "artifacts": [
+        "MixerPoolNative"
+      ]
+    },
+    "C:\\Users\\Ivan\\Desktop\\dogenado\\contracts\\src\\MixerPool.sol": {
+      "lastModificationDate": 1767360463340,
+      "contentHash": "5b6f361bec357602c65a11376d2d24ff",
+      "sourceName": "src/MixerPool.sol",
+      "solcConfig": {
+        "version": "0.8.30",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "evmVersion": "prague",
+          "viaIR": true,
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "@openzeppelin/contracts/token/ERC20/IERC20.sol",
+        "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol",
+        "@openzeppelin/contracts/utils/ReentrancyGuard.sol",
+        "./MerkleTreeWithHistory.sol",
+        "./interfaces/IVerifier.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.30"
+      ],
+      "artifacts": [
+        "MixerPool"
+      ]
+    },
+    "C:\\Users\\Ivan\\Desktop\\dogenado\\contracts\\src\\mocks\\MockVerifier.sol": {
+      "lastModificationDate": 1767360463340,
+      "contentHash": "6addb47a8851be1f71d7c4803a8357f0",
+      "sourceName": "src/mocks/MockVerifier.sol",
+      "solcConfig": {
+        "version": "0.8.30",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "evmVersion": "prague",
+          "viaIR": true,
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "../interfaces/IVerifier.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.20"
+      ],
+      "artifacts": [
+        "MockVerifier"
+      ]
+    },
+    "C:\\Users\\Ivan\\Desktop\\dogenado\\contracts\\src\\Hasher.sol": {
+      "lastModificationDate": 1766147345866,
+      "contentHash": "d47e426dfa7df2974131d1e044d1c0f5",
+      "sourceName": "src/Hasher.sol",
+      "solcConfig": {
+        "version": "0.8.30",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "evmVersion": "prague",
+          "viaIR": true,
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.30"
+      ],
+      "artifacts": [
+        "Hasher"
       ]
     },
     "C:\\Users\\Ivan\\Desktop\\dogenado\\contracts\\src\\HasherAdapter.sol": {
@@ -808,254 +1059,6 @@
         "MiMCSponge"
       ]
     },
-    "C:\\Users\\Ivan\\Desktop\\dogenado\\contracts\\src\\MixerPoolV2.sol": {
-      "lastModificationDate": 1767360463340,
-      "contentHash": "5c3e67aa6cd10212275b8cb941558d53",
-      "sourceName": "src/MixerPoolV2.sol",
-      "solcConfig": {
-        "version": "0.8.30",
-        "settings": {
-          "optimizer": {
-            "enabled": true,
-            "runs": 200
-          },
-          "evmVersion": "prague",
-          "viaIR": true,
-          "outputSelection": {
-            "*": {
-              "*": [
-                "abi",
-                "evm.bytecode",
-                "evm.deployedBytecode",
-                "evm.methodIdentifiers",
-                "metadata"
-              ],
-              "": [
-                "ast"
-              ]
-            }
-          }
-        }
-      },
-      "imports": [
-        "@openzeppelin/contracts/token/ERC20/IERC20.sol",
-        "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol",
-        "@openzeppelin/contracts/utils/ReentrancyGuard.sol",
-        "./MerkleTreeWithHistory.sol",
-        "./interfaces/IVerifier.sol"
-      ],
-      "versionPragmas": [
-        "^0.8.30"
-      ],
-      "artifacts": [
-        "MixerPoolV2"
-      ]
-    },
-    "C:\\Users\\Ivan\\Desktop\\dogenado\\contracts\\src\\DogeRouter.sol": {
-      "lastModificationDate": 1766315031322,
-      "contentHash": "db9f3e9e1f5c9608de2b604c4d257e27",
-      "sourceName": "src/DogeRouter.sol",
-      "solcConfig": {
-        "version": "0.8.30",
-        "settings": {
-          "optimizer": {
-            "enabled": true,
-            "runs": 200
-          },
-          "evmVersion": "prague",
-          "viaIR": true,
-          "outputSelection": {
-            "*": {
-              "*": [
-                "abi",
-                "evm.bytecode",
-                "evm.deployedBytecode",
-                "evm.methodIdentifiers",
-                "metadata"
-              ],
-              "": [
-                "ast"
-              ]
-            }
-          }
-        }
-      },
-      "imports": [
-        "@openzeppelin/contracts/utils/ReentrancyGuard.sol"
-      ],
-      "versionPragmas": [
-        "^0.8.30"
-      ],
-      "artifacts": [
-        "DogeRouter",
-        "IMixerPool",
-        "IWrappedDoge"
-      ]
-    },
-    "C:\\Users\\Ivan\\Desktop\\dogenado\\contracts\\src\\MixerPoolNative.sol": {
-      "lastModificationDate": 1767360463340,
-      "contentHash": "5380b60130f7e16a1837fa5941b549c2",
-      "sourceName": "src/MixerPoolNative.sol",
-      "solcConfig": {
-        "version": "0.8.30",
-        "settings": {
-          "optimizer": {
-            "enabled": true,
-            "runs": 200
-          },
-          "evmVersion": "prague",
-          "viaIR": true,
-          "outputSelection": {
-            "*": {
-              "*": [
-                "abi",
-                "evm.bytecode",
-                "evm.deployedBytecode",
-                "evm.methodIdentifiers",
-                "metadata"
-              ],
-              "": [
-                "ast"
-              ]
-            }
-          }
-        }
-      },
-      "imports": [
-        "@openzeppelin/contracts/utils/ReentrancyGuard.sol",
-        "./MerkleTreeWithHistory.sol",
-        "./interfaces/IVerifier.sol"
-      ],
-      "versionPragmas": [
-        "^0.8.30"
-      ],
-      "artifacts": [
-        "MixerPoolNative"
-      ]
-    },
-    "C:\\Users\\Ivan\\Desktop\\dogenado\\contracts\\src\\ShieldedPoolMultiToken.sol": {
-      "lastModificationDate": 1767361488121,
-      "contentHash": "27670573d8a83c8072c73c6d71768b54",
-      "sourceName": "src/ShieldedPoolMultiToken.sol",
-      "solcConfig": {
-        "version": "0.8.30",
-        "settings": {
-          "optimizer": {
-            "enabled": true,
-            "runs": 200
-          },
-          "evmVersion": "prague",
-          "viaIR": true,
-          "outputSelection": {
-            "*": {
-              "*": [
-                "abi",
-                "evm.bytecode",
-                "evm.deployedBytecode",
-                "evm.methodIdentifiers",
-                "metadata"
-              ],
-              "": [
-                "ast"
-              ]
-            }
-          }
-        }
-      },
-      "imports": [
-        "@openzeppelin/contracts/utils/ReentrancyGuard.sol",
-        "@openzeppelin/contracts/token/ERC20/IERC20.sol",
-        "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol",
-        "./MerkleTreeWithHistory.sol",
-        "./interfaces/IShieldedVerifiers.sol"
-      ],
-      "versionPragmas": [
-        "^0.8.20"
-      ],
-      "artifacts": [
-        "ShieldedPoolMultiToken"
-      ]
-    },
-    "C:\\Users\\Ivan\\Desktop\\dogenado\\contracts\\src\\ShieldedPool.sol": {
-      "lastModificationDate": 1767360463340,
-      "contentHash": "d5c34e668e246c50b70e6426dd123059",
-      "sourceName": "src/ShieldedPool.sol",
-      "solcConfig": {
-        "version": "0.8.30",
-        "settings": {
-          "optimizer": {
-            "enabled": true,
-            "runs": 200
-          },
-          "evmVersion": "prague",
-          "viaIR": true,
-          "outputSelection": {
-            "*": {
-              "*": [
-                "abi",
-                "evm.bytecode",
-                "evm.deployedBytecode",
-                "evm.methodIdentifiers",
-                "metadata"
-              ],
-              "": [
-                "ast"
-              ]
-            }
-          }
-        }
-      },
-      "imports": [
-        "@openzeppelin/contracts/utils/ReentrancyGuard.sol",
-        "./MerkleTreeWithHistory.sol",
-        "./interfaces/IVerifier.sol"
-      ],
-      "versionPragmas": [
-        "^0.8.20"
-      ],
-      "artifacts": [
-        "ShieldedPool"
-      ]
-    },
-    "C:\\Users\\Ivan\\Desktop\\dogenado\\contracts\\src\\mocks\\MockVerifier.sol": {
-      "lastModificationDate": 1767360463340,
-      "contentHash": "6addb47a8851be1f71d7c4803a8357f0",
-      "sourceName": "src/mocks/MockVerifier.sol",
-      "solcConfig": {
-        "version": "0.8.30",
-        "settings": {
-          "optimizer": {
-            "enabled": true,
-            "runs": 200
-          },
-          "evmVersion": "prague",
-          "viaIR": true,
-          "outputSelection": {
-            "*": {
-              "*": [
-                "abi",
-                "evm.bytecode",
-                "evm.deployedBytecode",
-                "evm.methodIdentifiers",
-                "metadata"
-              ],
-              "": [
-                "ast"
-              ]
-            }
-          }
-        }
-      },
-      "imports": [
-        "../interfaces/IVerifier.sol"
-      ],
-      "versionPragmas": [
-        "^0.8.20"
-      ],
-      "artifacts": [
-        "MockVerifier"
-      ]
-    },
     "C:\\Users\\Ivan\\Desktop\\dogenado\\contracts\\src\\ShieldVerifier.sol": {
       "lastModificationDate": 1767361340023,
       "contentHash": "c7a72561fbce4969f392c13bd703ec54",
@@ -1094,8 +1097,8 @@
       ]
     },
     "C:\\Users\\Ivan\\Desktop\\dogenado\\contracts\\src\\SwapVerifier.sol": {
-      "lastModificationDate": 1767361340032,
-      "contentHash": "677039d6433f2a97a292e9d23b1edba5",
+      "lastModificationDate": 1767897456958,
+      "contentHash": "24efed4c3025a7662d0297ca2d47dcb8",
       "sourceName": "src/SwapVerifier.sol",
       "solcConfig": {
         "version": "0.8.30",
@@ -1204,10 +1207,10 @@
         "UnshieldVerifier"
       ]
     },
-    "C:\\Users\\Ivan\\Desktop\\dogenado\\contracts\\src\\interfaces\\IShieldedVerifiers.sol": {
-      "lastModificationDate": 1767361428973,
-      "contentHash": "7a7fbfc3cbc500c79bd532f7d16ea8d6",
-      "sourceName": "src/interfaces/IShieldedVerifiers.sol",
+    "C:\\Users\\Ivan\\Desktop\\dogenado\\contracts\\src\\Verifier.sol": {
+      "lastModificationDate": 1766153208931,
+      "contentHash": "52d08103c357a47638db41b0b590e00d",
+      "sourceName": "src/Verifier.sol",
       "solcConfig": {
         "version": "0.8.30",
         "settings": {
@@ -1235,13 +1238,10 @@
       },
       "imports": [],
       "versionPragmas": [
-        "^0.8.20"
+        ">=0.7.0 <0.9.0"
       ],
       "artifacts": [
-        "IShieldVerifier",
-        "ISwapVerifier",
-        "ITransferVerifier",
-        "IUnshieldVerifier"
+        "Groth16Verifier"
       ]
     }
   }

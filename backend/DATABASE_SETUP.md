@@ -27,13 +27,13 @@
 
 5. **Create `.env` file in backend folder:**
    ```
-   RELAYER_PRIVATE_KEY=3e819df5706b7cab0a4e10c21ba6cff39ee12d5b019dae8661b38e6f69c06360
+   RELAYER_PRIVATE_KEY=<your-relayer-private-key-here>
    
    DB_HOST=localhost
    DB_PORT=5432
    DB_NAME=dogenado
    DB_USER=dogenado
-   DB_PASSWORD=dogenado_secret_2024
+   DB_PASSWORD=<your-database-password-here>
    ```
 
 6. **Start the backend:**
@@ -79,7 +79,7 @@ You should see: `[Database] Connected to PostgreSQL at localhost:5432/dogenado`
 3. **Create database and user:**
    ```sql
    CREATE DATABASE dogenado;
-   CREATE USER dogenado WITH PASSWORD 'dogenado_secret_2024';
+   CREATE USER dogenado WITH PASSWORD '<your-database-password-here>';
    GRANT ALL PRIVILEGES ON DATABASE dogenado TO dogenado;
    \c dogenado
    GRANT ALL ON SCHEMA public TO dogenado;
@@ -97,13 +97,13 @@ npm run db:init
 
 Create `.env` file in `backend` folder:
 ```
-RELAYER_PRIVATE_KEY=3e819df5706b7cab0a4e10c21ba6cff39ee12d5b019dae8661b38e6f69c06360
+RELAYER_PRIVATE_KEY=<your-relayer-private-key-here>
 
 DB_HOST=localhost
 DB_PORT=5432
 DB_NAME=dogenado
 DB_USER=dogenado
-DB_PASSWORD=dogenado_secret_2024
+DB_PASSWORD=<your-database-password-here>
 ```
 
 ### Step 6: Start Backend

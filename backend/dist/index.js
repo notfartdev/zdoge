@@ -61,7 +61,8 @@ app.use(cors({
     },
     credentials: true,
 }));
-app.use(express.json());
+// Increase body parser limit for large ZK proof payloads (up to 10MB)
+app.use(express.json({ limit: '10mb' }));
 // In-memory rate limit store (use Redis for production with multiple instances)
 const rateLimitStore = new Map();
 // Rate limit configuration per endpoint type

@@ -3,6 +3,7 @@
 /* eslint-disable */
 export * as dogeRouterSol from "./DogeRouter.sol";
 export * as hasherAdapterSol from "./HasherAdapter.sol";
+export * as swapVerifierSol from "./SwapVerifier.sol";
 export * as verifierSol from "./Verifier.sol";
 export * as verifierAdapterSol from "./VerifierAdapter.sol";
 export * as interfaces from "./interfaces";
@@ -16,6 +17,5 @@ export { MixerPoolV2__factory } from "./MixerPoolV2__factory";
 export { ShieldVerifier__factory } from "./ShieldVerifier__factory";
 export { ShieldedPool__factory } from "./ShieldedPool__factory";
 export { ShieldedPoolMultiToken__factory } from "./ShieldedPoolMultiToken__factory";
-export { SwapVerifier__factory } from "./SwapVerifier__factory";
 export { TransferVerifier__factory } from "./TransferVerifier__factory";
 export { UnshieldVerifier__factory } from "./UnshieldVerifier__factory";
