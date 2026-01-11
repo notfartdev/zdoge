@@ -99,7 +99,8 @@ app.use(cors({
   credentials: true,
 }));
 
-app.use(express.json());
+// Increase body parser limit for large ZK proof payloads (up to 10MB)
+app.use(express.json({ limit: '10mb' }));
 
 // ============ Rate Limiting ============
 

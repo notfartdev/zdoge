@@ -768,13 +768,15 @@ shieldedRouter.post('/relay/unshield', relayerRateLimit, async (req: Request, re
     
     // Parse common errors using structured error schema
     const errorMsg = error.message || String(error);
-    const errorCode = mapContractErrorToCode(errorMsg);
     
-    return res.status(400).json(createErrorResponse(errorCode, {
-      originalError: errorMsg,
-      poolAddress,
-      recipient,
-    }));
+    // Handle network/timeout errors
+    if (errorMsg.includes('took too long') || errorMsg.includes('timeout') || errorMsg.includes('timed out')) {
+      return res.status(503).json({ 
+        error: 'Network timeout',
+        message: 'The RPC node took too long to respond. This is usually a temporary network issue. Please try again in a moment.',
+      });
+    }
+    
     if (errorMsg.includes('InsufficientPoolBalance')) {
       return res.status(400).json({ 
         error: 'Insufficient liquidity', 
@@ -793,12 +795,28 @@ shieldedRouter.post('/relay/unshield', relayerRateLimit, async (req: Request, re
         message: 'This token is not supported by the pool' 
       });
     }
+    if (errorMsg.includes('NullifierAlreadySpent')) {
+      return res.status(400).json({ error: 'Already spent', message: 'This note has already been used' });
+    }
     if (errorMsg.includes('insufficient funds')) {
       return res.status(503).json(createErrorResponse(ErrorCode.RELAYER_UNAVAILABLE, {
         reason: 'Insufficient gas funds',
       }));
     }
     
+    // Parse other common errors using structured error schema
+    const errorCode = mapContractErrorToCode(errorMsg);
+    
+    // For contract errors, use structured response
+    if (errorCode !== ErrorCode.INVALID_PARAMS) {
+      return res.status(400).json(createErrorResponse(errorCode, {
+        originalError: errorMsg,
+        poolAddress,
+        recipient,
+      }));
+    }
+    
+    // Generic transaction failure
     res.status(500).json({ 
       error: 'Transaction failed',
       message: errorMsg.slice(0, 200),

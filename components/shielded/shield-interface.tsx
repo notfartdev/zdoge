@@ -437,8 +437,11 @@ export function ShieldInterface({ onSuccess, onReset, selectedToken: externalTok
       setNoteBackup(backup)
       
       setStatus("success")
-      setShowSuccessDialog(true)
-      onSuccess?.()
+      // Add a small delay before showing success dialog for better UX
+      setTimeout(() => {
+        setShowSuccessDialog(true)
+        onSuccess?.()
+      }, 750)
       
     } catch (error: any) {
       console.error("Shield error:", error)

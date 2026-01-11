@@ -526,7 +526,9 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
             setConsolidateProgress({ current: i + 1, total: worthyNotes.length, totalReceived })
             continue
           }
-          throw new Error(data.message || data.error || 'Relayer failed')
+          // Use error message from response, fallback to error field, then generic message
+          const errorMessage = data.message || data.error || 'Relayer failed'
+          throw new Error(errorMessage)
         }
         txHashes.push(data.txHash)
         // Convert amountReceived from token base units to human-readable using token decimals
