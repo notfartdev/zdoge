@@ -22,6 +22,8 @@ import {
 } from './shielded-indexer.js';
 import { config, dogeosTestnet } from '../config.js';
 import { shieldedRelayerLogger } from '../utils/logger.js';
+import { simulateTransaction } from './shielded-simulate.js';
+import { createErrorResponse, ErrorCode, mapContractErrorToCode } from '../utils/error-schema.js';
 
 export const shieldedRouter = Router();
 
@@ -351,7 +353,9 @@ shieldedRouter.post('/discover', async (req: Request, res: Response) => {
   const { poolAddress, sinceTimestamp, limit = 100 } = req.body;
   
   if (!poolAddress) {
-    return res.status(400).json({ error: 'Missing poolAddress' });
+    return res.status(400).json(createErrorResponse(ErrorCode.MISSING_PARAMS, {
+      required: ['poolAddress'],
+    }));
   }
   
   const memos = getTransferMemos(poolAddress, sinceTimestamp);
@@ -414,6 +418,110 @@ shieldedRouter.get('/relay/info', async (req: Request, res: Response) => {
 });
 
 /**
+ * POST /api/shielded/relay/simulate
+ * Simulate a transaction without submitting it
+ * 
+ * Pre-validates transactions before proof submission to prevent failures.
+ * Returns: wouldPass, decodedError, estimatedFee, suggestion, checks
+ */
+shieldedRouter.post('/relay/simulate', readOnlyRateLimit, async (req: Request, res: Response) => {
+  const requestId = `sim_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+  
+  try {
+    const { 
+      operation, // 'transfer' | 'unshield' | 'swap'
+      poolAddress,
+      proof,
+      root,
+      nullifierHash,
+      recipient,
+      amount,
+      fee,
+      token,
+      // Transfer-specific
+      outputCommitment1,
+      outputCommitment2,
+      // Swap-specific
+      tokenIn,
+      tokenOut,
+      swapAmount,
+      outputAmount,
+      minAmountOut,
+      encryptedMemo,
+    } = req.body;
+
+    console.log('[Simulate] Received request:', {
+      operation,
+      poolAddress,
+      hasProof: !!proof,
+      hasRoot: !!root,
+      hasNullifierHash: !!nullifierHash,
+      hasOutputCommitment1: !!outputCommitment1,
+      hasOutputCommitment2: !!outputCommitment2,
+      hasTokenIn: !!tokenIn,
+      hasTokenOut: !!tokenOut,
+      hasSwapAmount: !!swapAmount,
+      hasOutputAmount: !!outputAmount,
+      hasMinAmountOut: minAmountOut !== undefined,
+    });
+
+    if (!operation || !poolAddress) {
+      return res.status(400).json(createErrorResponse(ErrorCode.MISSING_PARAMS, {
+        required: ['operation', 'poolAddress'],
+      }));
+    }
+
+    // Call simulation service
+    const result = await simulateTransaction({
+      operation,
+      poolAddress,
+      proof,
+      root,
+      nullifierHash,
+      recipient,
+      amount,
+      fee,
+      token,
+      relayerAddress: relayerAddress || undefined,
+      // Transfer-specific
+      outputCommitment1,
+      outputCommitment2,
+      // Swap-specific
+      tokenIn,
+      tokenOut,
+      swapAmount,
+      outputAmount,
+      minAmountOut,
+      encryptedMemo,
+    });
+
+    // Return simulation result
+    console.log('[Simulate] Result:', {
+      operation,
+      wouldPass: result.wouldPass,
+      errorCode: result.decodedError,
+      suggestion: result.suggestion,
+      checks: result.checks,
+    });
+    
+    res.json({
+      success: true,
+      ...result,
+    });
+
+  } catch (error: any) {
+    const errorObj = error instanceof Error ? error : new Error(error.message || String(error));
+    shieldedRelayerLogger.error('relay.simulate.error', 'Simulation failed', errorObj, {
+      requestId,
+    }, { requestId });
+
+    res.status(500).json(createErrorResponse(ErrorCode.NETWORK_ERROR, {
+      message: error.message,
+    }));
+  }
+});
+
+/**
  * POST /api/shielded/relay/unshield
  * Relay an unshield transaction (USER PAYS NO GAS)
  * 
@@ -427,10 +535,7 @@ shieldedRouter.get('/relay/info', async (req: Request, res: Response) => {
  */
 shieldedRouter.post('/relay/unshield', relayerRateLimit, async (req: Request, res: Response) => {
   if (!relayerWallet || !relayerAddress) {
-    return res.status(503).json({ 
-      error: 'Relayer not available',
-      message: 'Relayer wallet not configured. Please try again later.',
-    });
+    return res.status(503).json(createErrorResponse(ErrorCode.RELAYER_UNAVAILABLE));
   }
   
   // Structured logging
@@ -465,14 +570,13 @@ shieldedRouter.post('/relay/unshield', relayerRateLimit, async (req: Request, re
   
   // Validate inputs
   if (!poolAddress || !proof || !root || !nullifierHash || !recipient || !amount) {
-    return res.status(400).json({ 
-      error: 'Missing parameters',
+    return res.status(400).json(createErrorResponse(ErrorCode.MISSING_PARAMS, {
       required: ['poolAddress', 'proof', 'root', 'nullifierHash', 'recipient', 'amount'],
-    });
+    }));
   }
   
   if (!Array.isArray(proof) || proof.length !== 8) {
-    return res.status(400).json({ error: 'Proof must be array of 8 elements' });
+    return res.status(400).json(createErrorResponse(ErrorCode.PROOF_FORMAT_ERROR));
   }
   
   // Determine if native or ERC20 token
@@ -630,10 +734,10 @@ shieldedRouter.post('/relay/unshield', relayerRateLimit, async (req: Request, re
         requestId,
         poolAddress,
       });
-      return res.status(500).json({ 
-        error: 'Transaction reverted',
-        message: 'The unshield transaction was rejected by the contract. Proof may be invalid.',
-      });
+      return res.status(500).json(createErrorResponse(ErrorCode.INVALID_PROOF, {
+        txHash,
+        message: 'Transaction was reverted by the contract',
+      }));
     }
     
     shieldedRelayerLogger.transactionConfirmed(txHash, Number(receipt.blockNumber), {
@@ -662,18 +766,15 @@ shieldedRouter.post('/relay/unshield', relayerRateLimit, async (req: Request, re
       recipient: req.body.recipient,
     }, { requestId });
     
-    // Parse common errors
+    // Parse common errors using structured error schema
     const errorMsg = error.message || String(error);
+    const errorCode = mapContractErrorToCode(errorMsg);
     
-    if (errorMsg.includes('InvalidProof')) {
-      return res.status(400).json({ error: 'Invalid proof', message: 'ZK proof verification failed' });
-    }
-    if (errorMsg.includes('UnknownRoot') || errorMsg.includes('InvalidMerkleRoot')) {
-      return res.status(400).json({ error: 'Invalid root', message: 'Merkle root not recognized' });
-    }
-    if (errorMsg.includes('NullifierAlreadySpent') || errorMsg.includes('already spent')) {
-      return res.status(400).json({ error: 'Already spent', message: 'This note has already been withdrawn' });
-    }
+    return res.status(400).json(createErrorResponse(errorCode, {
+      originalError: errorMsg,
+      poolAddress,
+      recipient,
+    }));
     if (errorMsg.includes('InsufficientPoolBalance')) {
       return res.status(400).json({ 
         error: 'Insufficient liquidity', 
@@ -693,7 +794,9 @@ shieldedRouter.post('/relay/unshield', relayerRateLimit, async (req: Request, re
       });
     }
     if (errorMsg.includes('insufficient funds')) {
-      return res.status(503).json({ error: 'Relayer out of gas', message: 'Please try again later' });
+      return res.status(503).json(createErrorResponse(ErrorCode.RELAYER_UNAVAILABLE, {
+        reason: 'Insufficient gas funds',
+      }));
     }
     
     res.status(500).json({ 
@@ -780,7 +883,7 @@ shieldedRouter.post('/relay/swap', relayerRateLimit, async (req: Request, res: R
   const outputCommitment2Final = outputCommitment2 || '0x0000000000000000000000000000000000000000000000000000000000000000';
   
   if (!Array.isArray(proof) || proof.length !== 8) {
-    return res.status(400).json({ error: 'Proof must be array of 8 elements' });
+    return res.status(400).json(createErrorResponse(ErrorCode.PROOF_FORMAT_ERROR));
   }
   
   // Validate memo size (privacy enhancement: cap memo size)
@@ -1119,14 +1222,13 @@ shieldedRouter.post('/relay/transfer', relayerRateLimit, async (req: Request, re
   
   // Validate inputs
   if (!poolAddress || !proof || !root || !nullifierHash || !outputCommitment1 || !outputCommitment2) {
-    return res.status(400).json({ 
-      error: 'Missing parameters',
+    return res.status(400).json(createErrorResponse(ErrorCode.MISSING_PARAMS, {
       required: ['poolAddress', 'proof', 'root', 'nullifierHash', 'outputCommitment1', 'outputCommitment2'],
-    });
+    }));
   }
   
   if (!Array.isArray(proof) || proof.length !== 8) {
-    return res.status(400).json({ error: 'Proof must be array of 8 elements' });
+    return res.status(400).json(createErrorResponse(ErrorCode.PROOF_FORMAT_ERROR));
   }
   
   // Validate memo sizes (privacy enhancement: cap memo size)
@@ -1286,19 +1388,12 @@ shieldedRouter.post('/relay/transfer', relayerRateLimit, async (req: Request, re
     console.error('[ShieldedRelayer] Transfer Error:', error.message);
     
     const errorMsg = error.message || String(error);
+    const errorCode = mapContractErrorToCode(errorMsg);
     
-    if (errorMsg.includes('InvalidProof')) {
-      return res.status(400).json({ error: 'Invalid proof', message: 'ZK proof verification failed' });
-    }
-    if (errorMsg.includes('UnknownRoot') || errorMsg.includes('InvalidMerkleRoot')) {
-      return res.status(400).json({ error: 'Invalid root', message: 'Merkle root not recognized' });
-    }
-    if (errorMsg.includes('NullifierAlreadySpent') || errorMsg.includes('already spent')) {
-      return res.status(400).json({ error: 'Already spent', message: 'This note has already been used' });
-    }
-    if (errorMsg.includes('insufficient funds')) {
-      return res.status(503).json({ error: 'Relayer out of gas', message: 'Please try again later' });
-    }
+    return res.status(400).json(createErrorResponse(errorCode, {
+      originalError: errorMsg,
+      poolAddress: req.body.poolAddress,
+    }));
     
     res.status(500).json({ 
       error: 'Transaction failed',

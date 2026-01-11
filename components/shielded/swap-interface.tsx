@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Card } from "@/components/ui/card"
 import { Loader2, ArrowDownUp, AlertCircle, Check, RefreshCw, ExternalLink } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
@@ -30,6 +30,7 @@ import { EstimatedFees } from "@/components/shielded/estimated-fees"
 import { ConfirmationDialog } from "@/components/shielded/confirmation-dialog"
 import { SuccessDialog } from "@/components/shielded/success-dialog"
 import { formatErrorWithSuggestion } from "@/lib/shielded/error-suggestions"
+import { syncNotesWithChain } from "@/lib/shielded/shielded-service"
 
 // Use local backend for development, production URL for deployed
 const RELAYER_URL = process.env.NEXT_PUBLIC_INDEXER_URL || 
@@ -79,6 +80,13 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
   const [showSuccessDialog, setShowSuccessDialog] = useState(false)
   const [pendingSwap, setPendingSwap] = useState<() => Promise<void> | null>(null)
+  const [simulationWarning, setSimulationWarning] = useState<{
+    show: boolean
+    message: string
+    errorCode?: string
+    suggestion?: string
+  } | null>(null)
+  const [isSyncingNotes, setIsSyncingNotes] = useState(false)
   const [swapResult, setSwapResult] = useState<{
     inputAmount: string
     inputToken: SwapToken
@@ -230,6 +238,7 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
       return
     }
     
+    setSimulationWarning(null) // Clear any previous warnings
     setPendingSwap(() => executeSwap)
     setShowConfirmDialog(true)
   }
@@ -415,6 +424,67 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
         console.error('[Swap] Missing required fields:', missingFields);
         console.error('[Swap] Request body:', swapRequestBody);
         throw new Error(`Missing required fields: ${missingFields.join(', ')}`);
+      }
+      
+      console.log('[Swap] Simulating transaction before submission...')
+      
+      // 🆕 Simulate transaction before submitting to relayer
+      try {
+        const simResponse = await fetch(`${RELAYER_URL}/api/shielded/relay/simulate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            operation: 'swap',
+            poolAddress: swapRequestBody.poolAddress,
+            proof: swapRequestBody.proof,
+            root: swapRequestBody.root,
+            nullifierHash: swapRequestBody.inputNullifierHash,
+            outputCommitment1: swapRequestBody.outputCommitment1,
+            outputCommitment2: swapRequestBody.outputCommitment2,
+            tokenIn: swapRequestBody.tokenIn,
+            tokenOut: swapRequestBody.tokenOut,
+            swapAmount: swapRequestBody.swapAmount,
+            outputAmount: swapRequestBody.outputAmount,
+            minAmountOut: swapRequestBody.minAmountOut,
+            encryptedMemo: swapRequestBody.encryptedMemo || '',
+          }),
+        })
+        
+        const simResult = await simResponse.json()
+        
+        // If simulation fails, show warning and stop
+        // BUT: If all checks pass (proofFormat, nullifierSpent, rootValid), allow it through
+        // (Contract simulation might fail due to RPC issues, but basic validation passed)
+        if (!simResult.wouldPass) {
+          const allChecksPass = simResult.checks?.proofFormat === true && 
+                                 simResult.checks?.nullifierSpent === true && 
+                                 simResult.checks?.rootValid === true
+          
+          if (allChecksPass) {
+            // All basic checks passed, contract simulation might have failed due to RPC issues
+            // Allow transaction to proceed - relayer will catch actual contract errors
+            console.warn('[Swap] Simulation returned false but all checks passed - proceeding anyway:', simResult)
+            setSimulationWarning(null)
+          } else {
+            // Basic checks failed - block transaction
+            console.warn('[Swap] Simulation failed:', simResult)
+            setSimulationWarning({
+              show: true,
+              message: simResult.error || 'Transaction validation failed',
+              errorCode: simResult.errorCode,
+              suggestion: simResult.suggestion,
+            })
+            setStatus("idle")
+            return // Don't submit to relayer
+          }
+        }
+        
+        // ✅ If simulation passes, clear any previous warning (silent success)
+        setSimulationWarning(null)
+        console.log('[Swap] Simulation passed, proceeding with submission')
+      } catch (simError: any) {
+        // Don't block on simulation errors, just log and continue
+        console.warn('[Swap] Simulation check failed, continuing anyway:', simError)
       }
       
       console.log('[Swap] Sending to relayer:', {
@@ -625,6 +695,57 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
       
       {status === "idle" && (
         <div className="space-y-4">
+          {/* 🆕 Simulation Warning */}
+          {simulationWarning?.show && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription className="space-y-2">
+                <div className="font-semibold">Transaction Validation Failed</div>
+                <div>{simulationWarning.suggestion || simulationWarning.message}</div>
+                {simulationWarning.errorCode === 'UNKNOWN_ROOT' && (
+                  <Button
+                    onClick={async () => {
+                      setIsSyncingNotes(true)
+                      try {
+                        await syncNotesWithChain(shieldedPool.address)
+                        // Trigger balance refresh
+                        window.dispatchEvent(new Event('refresh-balance'))
+                        window.dispatchEvent(new CustomEvent('shielded-wallet-updated'))
+                        toast({
+                          title: "Notes Synced",
+                          description: "Your notes have been synced. Please try again.",
+                        })
+                        // Clear warning
+                        setSimulationWarning(null)
+                      } catch (error: any) {
+                        toast({
+                          title: "Sync Failed",
+                          description: error.message || "Failed to sync notes",
+                          variant: "destructive",
+                        })
+                      } finally {
+                        setIsSyncingNotes(false)
+                      }
+                    }}
+                    className="mt-2"
+                    variant="outline"
+                    size="sm"
+                    disabled={isSyncingNotes}
+                  >
+                    {isSyncingNotes ? (
+                      <>
+                        <Loader2 className="h-3 w-3 mr-2 animate-spin" />
+                        Syncing...
+                      </>
+                    ) : (
+                      "Sync Notes"
+                    )}
+                  </Button>
+                )}
+              </AlertDescription>
+            </Alert>
+          )}
+          
           {/* Input Token */}
           <Card className="p-4">
             <div className="flex justify-between items-center mb-2">

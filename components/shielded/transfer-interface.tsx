@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Progress } from "@/components/ui/progress"
 import { Loader2, Send, AlertCircle, Check, Shield, ExternalLink } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
@@ -20,6 +20,7 @@ import { EstimatedFees } from "@/components/shielded/estimated-fees"
 import { ConfirmationDialog } from "@/components/shielded/confirmation-dialog"
 import { SuccessDialog } from "@/components/shielded/success-dialog"
 import { formatErrorWithSuggestion } from "@/lib/shielded/error-suggestions"
+import { syncNotesWithChain } from "@/lib/shielded/shielded-service"
 import Link from "next/link"
 import { ShieldPlus } from "lucide-react"
 
@@ -53,6 +54,13 @@ export function TransferInterface({ notes, onSuccess, selectedToken = "DOGE", on
   const [pendingTransfer, setPendingTransfer] = useState<() => Promise<void> | null>(null)
   const [relayerInfo, setRelayerInfo] = useState<RelayerInfo | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [simulationWarning, setSimulationWarning] = useState<{
+    show: boolean
+    message: string
+    errorCode?: string
+    suggestion?: string
+  } | null>(null)
+  const [isSyncingNotes, setIsSyncingNotes] = useState(false)
   const [transactionDetails, setTransactionDetails] = useState<{
     amountSent: number
     noteConsumed: bigint
@@ -233,7 +241,64 @@ export function TransferInterface({ notes, onSuccess, selectedToken = "DOGE", on
       )
       
       
-      console.log('[Transfer] Proof generated, sending to relayer...')
+      console.log('[Transfer] Proof generated, simulating transaction before submission...')
+      
+      // 🆕 Simulate transaction before submitting to relayer
+      try {
+        const simResponse = await fetch(`${RELAYER_URL}/api/shielded/relay/simulate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            operation: 'transfer',
+            poolAddress: SHIELDED_POOL_ADDRESS,
+            proof: result.proof.proof,
+            root: result.root,
+            nullifierHash: result.nullifierHash,
+            outputCommitment1: result.outputCommitment1,
+            outputCommitment2: result.outputCommitment2,
+            fee: relayerFeeWei.toString(),
+            encryptedMemo: (result.encryptedMemo1 || '') + (result.encryptedMemo2 || ''),
+          }),
+        })
+        
+        const simResult = await simResponse.json()
+        
+        // If simulation fails, show warning and stop
+        // BUT: If all checks pass (proofFormat, nullifierSpent, rootValid), allow it through
+        // (Contract simulation might fail due to RPC issues, but basic validation passed)
+        if (!simResult.wouldPass) {
+          const allChecksPass = simResult.checks?.proofFormat === true && 
+                                 simResult.checks?.nullifierSpent === true && 
+                                 simResult.checks?.rootValid === true
+          
+          if (allChecksPass) {
+            // All basic checks passed, contract simulation might have failed due to RPC issues
+            // Allow transaction to proceed - relayer will catch actual contract errors
+            console.warn('[Transfer] Simulation returned false but all checks passed - proceeding anyway:', simResult)
+            setSimulationWarning(null)
+          } else {
+            // Basic checks failed - block transaction
+            console.warn('[Transfer] Simulation failed:', simResult)
+            setSimulationWarning({
+              show: true,
+              message: simResult.error || 'Transaction validation failed',
+              errorCode: simResult.errorCode,
+              suggestion: simResult.suggestion,
+            })
+            setStatus("idle")
+            return // Don't submit to relayer
+          }
+        }
+        
+        // ✅ If simulation passes, clear any previous warning (silent success)
+        setSimulationWarning(null)
+        console.log('[Transfer] Simulation passed, proceeding with submission')
+      } catch (simError: any) {
+        // Don't block on simulation errors, just log and continue
+        console.warn('[Transfer] Simulation check failed, continuing anyway:', simError)
+      }
+      
+      console.log('[Transfer] Sending to relayer...')
       setStatus("relaying")
       
       // Send to relayer
@@ -445,6 +510,57 @@ export function TransferInterface({ notes, onSuccess, selectedToken = "DOGE", on
       
       {status === "idle" && (
         <div className="space-y-4">
+          {/* 🆕 Simulation Warning */}
+          {simulationWarning?.show && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription className="space-y-2">
+                <div className="font-semibold">Transaction Validation Failed</div>
+                <div>{simulationWarning.suggestion || simulationWarning.message}</div>
+                {simulationWarning.errorCode === 'UNKNOWN_ROOT' && (
+                  <Button
+                    onClick={async () => {
+                      setIsSyncingNotes(true)
+                      try {
+                        await syncNotesWithChain(SHIELDED_POOL_ADDRESS)
+                        // Trigger balance refresh
+                        window.dispatchEvent(new Event('refresh-balance'))
+                        window.dispatchEvent(new CustomEvent('shielded-wallet-updated'))
+                        toast({
+                          title: "Notes Synced",
+                          description: "Your notes have been synced. Please try again.",
+                        })
+                        // Clear warning
+                        setSimulationWarning(null)
+                      } catch (error: any) {
+                        toast({
+                          title: "Sync Failed",
+                          description: error.message || "Failed to sync notes",
+                          variant: "destructive",
+                        })
+                      } finally {
+                        setIsSyncingNotes(false)
+                      }
+                    }}
+                    className="mt-2"
+                    variant="outline"
+                    size="sm"
+                    disabled={isSyncingNotes}
+                  >
+                    {isSyncingNotes ? (
+                      <>
+                        <Loader2 className="h-3 w-3 mr-2 animate-spin" />
+                        Syncing...
+                      </>
+                    ) : (
+                      "Sync Notes"
+                    )}
+                  </Button>
+                )}
+              </AlertDescription>
+            </Alert>
+          )}
+          
           <div className="space-y-2">
             <Label htmlFor="recipient">Recipient Shielded Address</Label>
             <Input
@@ -562,6 +678,7 @@ export function TransferInterface({ notes, onSuccess, selectedToken = "DOGE", on
           <Button 
             className="w-full min-h-[44px] sm:min-h-0 relative overflow-hidden bg-white/10 border border-white/20 hover:border-[#B89A2E]/50 transition-all duration-500 group py-3 sm:py-2"
             onClick={() => {
+              setSimulationWarning(null) // Clear any previous warnings
               setPendingTransfer(() => handleTransfer)
               setShowConfirmDialog(true)
             }}

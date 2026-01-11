@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Progress } from "@/components/ui/progress"
 import { Loader2, LogOut, AlertCircle, Check, Shield, ShieldOff, Info, Coins, Layers, ExternalLink } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
@@ -21,6 +21,7 @@ import { EstimatedFees } from "@/components/shielded/estimated-fees"
 import { ConfirmationDialog } from "@/components/shielded/confirmation-dialog"
 import { SuccessDialog } from "@/components/shielded/success-dialog"
 import { formatErrorWithSuggestion } from "@/lib/shielded/error-suggestions"
+import { syncNotesWithChain } from "@/lib/shielded/shielded-service"
 
 const NATIVE_TOKEN = '0x0000000000000000000000000000000000000000'
 import Link from "next/link"
@@ -96,6 +97,13 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
   const [pendingUnshield, setPendingUnshield] = useState<() => Promise<void> | null>(null)
   const [withdrawnAmount, setWithdrawnAmount] = useState<string | null>(null)
   const [fee, setFee] = useState<string | null>(null)
+  const [simulationWarning, setSimulationWarning] = useState<{
+    show: boolean
+    message: string
+    errorCode?: string
+    suggestion?: string
+  } | null>(null)
+  const [isSyncingNotes, setIsSyncingNotes] = useState(false)
 
   // Show success dialog when transaction is confirmed (but only if not already shown and not closed)
   useEffect(() => {
@@ -670,6 +678,48 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
         throw new Error(`Invalid token address format for ${selectedToken}`)
       }
       
+      // 🆕 Simulate transaction before submitting to relayer
+      try {
+        console.log('[Unshield] Simulating transaction before submission...')
+        const simResponse = await fetch(`${RELAYER_URL}/api/shielded/relay/simulate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            operation: 'unshield',
+            poolAddress: SHIELDED_POOL_ADDRESS,
+            proof: proofResult.proof.proof,
+            root: proofResult.root,
+            nullifierHash: proofResult.nullifierHash,
+            recipient: recipientAddress,
+            amount: proofResult.amount.toString(),
+            fee: relayerFeeWei.toString(),
+            token: tokenAddress || NATIVE_TOKEN,
+          }),
+        })
+        
+        const simResult = await simResponse.json()
+        
+        // If simulation fails, show warning and stop
+        if (!simResult.wouldPass) {
+          console.warn('[Unshield] Simulation failed:', simResult)
+          setSimulationWarning({
+            show: true,
+            message: simResult.error || 'Transaction validation failed',
+            errorCode: simResult.errorCode,
+            suggestion: simResult.suggestion,
+          })
+          setStatus("idle")
+          return // Don't submit to relayer
+        }
+        
+        // ✅ If simulation passes, clear any previous warning (silent success)
+        setSimulationWarning(null)
+        console.log('[Unshield] Simulation passed, proceeding with submission')
+      } catch (simError: any) {
+        // Don't block on simulation errors, just log and continue
+        console.warn('[Unshield] Simulation check failed, continuing anyway:', simError)
+      }
+      
       setStatus("relaying")
       
       // Prepare request body - ALWAYS include token parameter
@@ -989,6 +1039,57 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
       
       {status === "idle" && (
         <div className="space-y-4">
+          {/* 🆕 Simulation Warning */}
+          {simulationWarning?.show && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription className="space-y-2">
+                <div className="font-semibold">Transaction Validation Failed</div>
+                <div>{simulationWarning.suggestion || simulationWarning.message}</div>
+                {simulationWarning.errorCode === 'UNKNOWN_ROOT' && (
+                  <Button
+                    onClick={async () => {
+                      setIsSyncingNotes(true)
+                      try {
+                        await syncNotesWithChain(SHIELDED_POOL_ADDRESS)
+                        // Trigger balance refresh
+                        window.dispatchEvent(new Event('refresh-balance'))
+                        window.dispatchEvent(new CustomEvent('shielded-wallet-updated'))
+                        toast({
+                          title: "Notes Synced",
+                          description: "Your notes have been synced. Please try again.",
+                        })
+                        // Clear warning
+                        setSimulationWarning(null)
+                      } catch (error: any) {
+                        toast({
+                          title: "Sync Failed",
+                          description: error.message || "Failed to sync notes",
+                          variant: "destructive",
+                        })
+                      } finally {
+                        setIsSyncingNotes(false)
+                      }
+                    }}
+                    className="mt-2"
+                    variant="outline"
+                    size="sm"
+                    disabled={isSyncingNotes}
+                  >
+                    {isSyncingNotes ? (
+                      <>
+                        <Loader2 className="h-3 w-3 mr-2 animate-spin" />
+                        Syncing...
+                      </>
+                    ) : (
+                      "Sync Notes"
+                    )}
+                  </Button>
+                )}
+              </AlertDescription>
+            </Alert>
+          )}
+          
           {needsConsolidation && (
             <div className="relative">
               <div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div>
@@ -1036,6 +1137,7 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
             className="w-full min-h-[44px] sm:min-h-0 relative overflow-hidden bg-white/10 border border-white/20 hover:border-[#B89A2E]/50 transition-all duration-500 group py-3 sm:py-2"
             onClick={() => {
               if (selectedInfo && !('error' in selectedInfo)) {
+                setSimulationWarning(null) // Clear any previous warnings
                 setPendingUnshield(() => executeUnshield)
                 setShowConfirmDialog(true)
               }
