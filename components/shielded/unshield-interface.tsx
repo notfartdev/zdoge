@@ -1223,9 +1223,9 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
                 {/* Progress Bar */}
                 <div className="relative w-full h-2 bg-white/5 rounded-full overflow-hidden">
                   <div 
-                    className="absolute top-0 left-0 h-full bg-white rounded-full origin-left transition-transform duration-300"
+                    className="absolute top-0 left-0 h-full w-full bg-white rounded-full origin-left transition-transform duration-300 ease-out"
                     style={{ 
-                      width: `${(consolidateProgress.current / consolidateProgress.total) * 100}%`
+                      transform: `scaleX(${consolidateProgress.total > 0 ? consolidateProgress.current / consolidateProgress.total : 0})`
                     }}
                   />
                 </div>
