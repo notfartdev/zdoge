@@ -335,44 +335,6 @@ export async function simulateTransaction(
       
       wouldPass = true;
       }
-    } else {
-      // Missing required parameters - log for debugging
-      const missingParams: string[] = [];
-      if (!root) missingParams.push('root');
-      if (!nullifierHash) missingParams.push('nullifierHash');
-      if (operation === 'transfer' || operation === 'swap') {
-        if (!outputCommitment1) missingParams.push('outputCommitment1');
-        if (operation === 'transfer' && !outputCommitment2) missingParams.push('outputCommitment2');
-      }
-      if (operation === 'unshield') {
-        if (!recipient) missingParams.push('recipient');
-        if (!amount) missingParams.push('amount');
-      }
-      if (operation === 'swap') {
-        if (!tokenIn) missingParams.push('tokenIn');
-        if (!tokenOut) missingParams.push('tokenOut');
-        if (!swapAmount) missingParams.push('swapAmount');
-        if (!outputAmount) missingParams.push('outputAmount');
-        if (minAmountOut === undefined) missingParams.push('minAmountOut');
-      }
-      
-      console.warn('[Simulate] Missing required parameters for operation:', {
-        operation,
-        missingParams,
-        received: {
-          root: !!root,
-          nullifierHash: !!nullifierHash,
-          outputCommitment1: !!outputCommitment1,
-          outputCommitment2: !!outputCommitment2,
-          recipient: !!recipient,
-          amount: !!amount,
-          tokenIn: !!tokenIn,
-          tokenOut: !!tokenOut,
-          swapAmount: !!swapAmount,
-          outputAmount: !!outputAmount,
-          minAmountOut: minAmountOut !== undefined,
-        },
-      });
     }
 
   } catch (simError: any) {
