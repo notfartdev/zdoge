@@ -104,7 +104,7 @@ export function Navbar() {
                 <XIcon className="w-5 h-5" />
               </a>
               <a
-                href="https://discord.gg/zdoge"
+                href="https://discord.gg/gzPNefTMq2"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-muted-foreground hover:text-foreground transition-colors duration-300"
@@ -213,7 +213,7 @@ export function Navbar() {
                   <XIcon className="w-6 h-6" />
                 </a>
                 <a
-                  href="https://discord.gg/zdoge"
+                  href="https://discord.gg/gzPNefTMq2"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-muted-foreground hover:text-foreground transition-colors"
