@@ -682,7 +682,7 @@ export function TransferInterface({ notes, onSuccess, selectedToken = "DOGE", on
               setPendingTransfer(() => handleTransfer)
               setShowConfirmDialog(true)
             }}
-            disabled={!relayerInfo?.available || !amount || parseFloat(amount) <= 0 || (() => {
+            disabled={!relayerInfo?.available || totalBalance === 0n || !amount || parseFloat(amount) <= 0 || (() => {
               if (!amount || !relayerInfo) return true
               const amountWei = BigInt(Math.floor(parseFloat(amount || "0") * 1e18))
               const { fee } = calculateFee(amountWei)

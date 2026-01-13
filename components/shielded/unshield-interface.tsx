@@ -108,14 +108,20 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
   // Show success dialog when transaction is confirmed (but only if not already shown and not closed)
   useEffect(() => {
     if (status === "confirmed" && txHash && !showSuccessDialog) {
-      console.log('[Unshield] useEffect: Status is confirmed, showing success dialog')
+      // Validate that we have a valid withdrawn amount before showing dialog
+      const validAmount = withdrawnAmount && Number(withdrawnAmount) > 0
+      if (!validAmount) {
+        console.warn('[Unshield] Not showing success dialog: withdrawnAmount is invalid or zero', { withdrawnAmount, status, txHash })
+        return
+      }
+      console.log('[Unshield] useEffect: Status is confirmed, showing success dialog', { withdrawnAmount })
       // Use a small delay to ensure all state updates are processed
       const timer = setTimeout(() => {
         setShowSuccessDialog(true)
       }, 300)
       return () => clearTimeout(timer)
     }
-  }, [status, txHash, showSuccessDialog]) // Include showSuccessDialog to prevent duplicate
+  }, [status, txHash, showSuccessDialog, withdrawnAmount]) // Include withdrawnAmount to validate
   const [relayerInfo, setRelayerInfo] = useState<RelayerInfo | null>(null)
   const [isLoadingRelayerInfo, setIsLoadingRelayerInfo] = useState(true)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
@@ -775,13 +781,27 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
       })
       const data = await response.json()
       if (!response.ok) throw new Error(data.message || data.error || 'Relayer failed')
+      
+      // Validate response data
+      if (!data.amountReceived || BigInt(data.amountReceived) <= 0n) {
+        console.error('[Unshield] Invalid amountReceived from relayer:', data.amountReceived)
+        throw new Error('Invalid response from relayer: amountReceived is zero or missing')
+      }
+      
       setTxHash(data.txHash)
       
       // Convert from token base units to human-readable using token decimals
       const receivedAmount = formatUnits(BigInt(data.amountReceived), tokenDecimals)
-      const feeAmount = formatUnits(BigInt(data.fee), tokenDecimals)
-      setWithdrawnAmount(Number(receivedAmount).toFixed(4))
+      const feeAmount = formatUnits(BigInt(data.fee || 0), tokenDecimals)
+      const withdrawnAmountStr = Number(receivedAmount).toFixed(4)
+      setWithdrawnAmount(withdrawnAmountStr)
       setFee(Number(feeAmount).toFixed(4))
+      
+      // Validate withdrawn amount is greater than 0
+      if (Number(withdrawnAmountStr) <= 0) {
+        console.error('[Unshield] Withdrawn amount is zero or negative:', withdrawnAmountStr)
+        throw new Error('Cannot unshield: amount received would be zero')
+      }
       
       // Complete unshield immediately (removes note from wallet)
       await completeUnshield(actualNoteIndex)
@@ -927,7 +947,7 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
             }
           }}
           title="Unshield Successful!"
-          message={`Successfully unshielded ${withdrawnAmount ? Number(withdrawnAmount).toFixed(4) : (amount ? Number(amount).toFixed(4) : '0')} ${selectedToken} to your public wallet.`}
+          message={`Successfully unshielded ${withdrawnAmount && Number(withdrawnAmount) > 0 ? Number(withdrawnAmount).toFixed(4) : '0'} ${selectedToken} to your public wallet.`}
           onClose={() => {
             setShowSuccessDialog(false)
             reset()
@@ -945,7 +965,7 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
                 <span className="text-gray-400">Unshielded Amount</span>
-                <span className="text-green-400 font-semibold">{withdrawnAmount ? Number(withdrawnAmount).toFixed(4) : (amount ? Number(amount).toFixed(4) : '0')} {selectedToken}</span>
+                <span className="text-green-400 font-semibold">{withdrawnAmount && Number(withdrawnAmount) > 0 ? Number(withdrawnAmount).toFixed(4) : '0.0000'} {selectedToken}</span>
               </div>
             </div>
           }
@@ -1019,7 +1039,7 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
                 className="mt-3 w-full" 
                 variant="outline" 
                 onClick={handleConsolidateAll} 
-                disabled={isLoadingRelayerInfo || !relayerInfo?.available || !wallet?.address}
+                disabled={isLoadingRelayerInfo || !relayerInfo?.available || !wallet?.address || totalBalance === 0n}
               >
                 {isLoadingRelayerInfo ? (
                   <>
@@ -1144,7 +1164,7 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
                 setShowConfirmDialog(true)
               }
             }} 
-            disabled={!relayerInfo?.available || !selectedInfo || 'error' in selectedInfo}
+            disabled={!relayerInfo?.available || !selectedInfo || 'error' in selectedInfo || totalBalance === 0n}
           >
             {/* Fill animation from left to right - slower and more natural */}
             <span className="absolute inset-0 bg-[#B89A2E] transform -translate-x-full group-hover:translate-x-0 transition-transform duration-[1300ms] ease-in-out" />

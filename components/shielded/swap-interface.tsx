@@ -950,7 +950,7 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
           <Button 
             className="w-full min-h-[44px] sm:min-h-0 relative overflow-hidden bg-white/10 border border-white/20 hover:border-[#B89A2E]/50 transition-all duration-500 group py-3 sm:py-2"
             onClick={handleSwap}
-            disabled={!quote || parseFloat(inputAmount) <= 0 || isLoadingQuote || isCheckingLiquidity || (liquidityCheck && !liquidityCheck.hasLiquidity)}
+            disabled={!quote || inputBalance === 0n || parseFloat(inputAmount) <= 0 || isLoadingQuote || isCheckingLiquidity || (liquidityCheck && !liquidityCheck.hasLiquidity)}
           >
             {/* Fill animation from left to right - slower and more natural */}
             <span className="absolute inset-0 bg-[#B89A2E] transform -translate-x-full group-hover:translate-x-0 transition-transform duration-[1300ms] ease-in-out" />
