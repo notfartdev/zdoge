@@ -113,7 +113,7 @@ export function Navbar() {
                 <DiscordIcon className="w-5 h-5" />
               </a>
               <a
-                href="https://t.me/zdogecash"
+                href="https://t.me/zdogecsh"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-muted-foreground hover:text-foreground transition-colors duration-300"
@@ -221,7 +221,7 @@ export function Navbar() {
                   <DiscordIcon className="w-6 h-6" />
                 </a>
                 <a
-                  href="https://t.me/zdogecash"
+                  href="https://t.me/zdogecsh"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-muted-foreground hover:text-foreground transition-colors"

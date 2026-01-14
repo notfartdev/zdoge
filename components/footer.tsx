@@ -112,7 +112,7 @@ export function Footer() {
                 Discord
               </a>
               <a
-                href="http://t.me/zdogecash"
+                href="https://t.me/zdogecsh"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-3 font-mono text-xs text-muted-foreground hover:text-foreground transition-colors group"
