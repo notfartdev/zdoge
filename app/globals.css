@@ -308,6 +308,51 @@ html {
   animation: marquee-right 50s linear infinite;
 }
 
+/* Shimmer animation for proof generation */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes colorPulse {
+  0%, 100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@keyframes checkmarkPulse {
+  0% {
+    transform: scale(0.8);
+    opacity: 0;
+    filter: drop-shadow(0 0 0px rgba(34, 197, 94, 0));
+  }
+  50% {
+    transform: scale(1.1);
+    filter: drop-shadow(0 0 8px rgba(34, 197, 94, 0.6));
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+    filter: drop-shadow(0 0 4px rgba(34, 197, 94, 0.5));
+  }
+}
+
+@keyframes progressEaseOut {
+  0% {
+    width: 0%;
+  }
+  100% {
+    width: 100%;
+  }
+}
+
 /* Mobile optimizations */
 @media (max-width: 640px) {
   /* Prevent text zoom on iOS inputs */

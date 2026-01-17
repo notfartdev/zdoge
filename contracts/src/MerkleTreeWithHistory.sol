@@ -13,7 +13,9 @@ contract MerkleTreeWithHistory {
     uint256 public constant TREE_DEPTH = 20;
     
     // Number of historical roots to keep
-    uint256 public constant ROOT_HISTORY_SIZE = 30;
+    // Increased from 30 to 500 to prevent root manipulation attacks
+    // An attacker would need to perform 500 shield operations to cycle through all roots
+    uint256 public constant ROOT_HISTORY_SIZE = 500;
 
     // Hasher contract for MiMC
     IHasher public immutable hasher;

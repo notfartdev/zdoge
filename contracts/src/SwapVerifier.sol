@@ -37,10 +37,10 @@ contract SwapVerifier {
     uint256 constant gammax2 = 10857046999023057135944570762232829481370756359578518086990519993285655852781;
     uint256 constant gammay1 = 4082367875863433681332203403145435568316851327593401208105741076214120093531;
     uint256 constant gammay2 = 8495653923123431417604973247489272438418190587263600148770280649306958101930;
-    uint256 constant deltax1 = 14372628797089570918746730387981713420899033652423700065640908207401348739594;
-    uint256 constant deltax2 = 437313017515884875773185092069812862445204690640059011937516462531698843422;
-    uint256 constant deltay1 = 8431715960610182610260904756653838095622409323683449300212308468522439157681;
-    uint256 constant deltay2 = 12246353146440101884858436463224819785646900267316833375248287800728000137893;
+    uint256 constant deltax1 = 16593646836259532744075500305287309389025976294880989186379226291423569023901;
+    uint256 constant deltax2 = 19658755085893355918084316432815148087674362080814148173804117859006490119397;
+    uint256 constant deltay1 = 687595802090555166883129722616049626699295539348638365238441723389722162686;
+    uint256 constant deltay2 = 11936924338877917521052214137077421942219577483282048530873577796452626021272;
 
     
     uint256 constant IC0x = 3654417581288314732106034492735683905216831933195737933441495023092184860827;
@@ -85,6 +85,12 @@ contract SwapVerifier {
                     return(0, 0x20)
                 }
             }
+            
+            // NOTE: Canonical point validation removed
+            // snarkjs does not guarantee proofs are in canonical form (y < (q-1)/2)
+            // Both y and -y mod q are valid, and snarkjs can generate either
+            // Enforcing canonical form would reject valid proofs
+            // Nullifier mechanism already prevents double-spending (main security concern)
             
             // G1 function to multiply a G1 value(x,y) to value in an address
             function g1_mulAccC(pR, x, y, s) {
@@ -206,6 +212,8 @@ contract SwapVerifier {
             
             checkField(calldataload(add(_pubSignals, 224)))
             
+            // NOTE: Canonical point validation removed - snarkjs proofs are not always canonical
+            // Nullifier mechanism provides sufficient protection against double-spending
 
             // Validate all evaluations
             let isValid := checkPairing(_pA, _pB, _pC, _pubSignals, pMem)

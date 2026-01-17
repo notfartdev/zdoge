@@ -1207,7 +1207,8 @@ async function main() {
     console.log(`[Backend] Pool addresses configured: ${poolAddresses.length}`);
     poolAddresses.forEach((addr, i) => console.log(`  Pool ${i + 1}: ${addr}`));
     // Initialize shielded pool if configured
-    const shieldedPoolAddress = process.env.SHIELDED_POOL_ADDRESS;
+    // Get shielded pool address from env var or config (defaults to V3)
+    const shieldedPoolAddress = process.env.SHIELDED_POOL_ADDRESS || config.shieldedPool?.address;
     if (shieldedPoolAddress) {
         console.log(`[ShieldedPool] Initializing: ${shieldedPoolAddress}`);
         initializeShieldedPool(shieldedPoolAddress, config.merkleTreeDepth).then(async (pool) => {

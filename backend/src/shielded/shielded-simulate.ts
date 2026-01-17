@@ -115,6 +115,7 @@ export interface SimulationParams {
   tokenOut?: string;
   swapAmount?: string;
   outputAmount?: string;
+  platformFee?: string;
   minAmountOut?: string;
   encryptedMemo?: string;
 }
@@ -141,6 +142,7 @@ export async function simulateTransaction(
     tokenOut,
     swapAmount,
     outputAmount,
+    platformFee,
     minAmountOut,
     encryptedMemo,
   } = params;

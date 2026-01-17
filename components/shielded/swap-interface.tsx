@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -13,17 +14,22 @@ import { ShieldedNote, formatWeiToAmount, parseAmountToWei } from "@/lib/shielde
 import { 
   getSwapQuote, 
   prepareShieldedSwap,
+  prepareSequentialSwaps,
   getShieldedBalances,
   getNotesForToken, filterValidNotes,
   formatSwapDetails,
   checkSwapLiquidity,
   SWAP_TOKENS,
+  addSwapToken,
+  removeSwapToken,
+  loadSwapTokensFromStorage,
   type SwapToken,
   type SwapQuote,
 } from "@/lib/shielded/shielded-swap-service"
 import { getIdentity, getNotes, completeUnshield, completeSwap } from "@/lib/shielded/shielded-service"
 import { addTransaction } from "@/lib/shielded/transaction-history"
 import { shieldedPool, dogeosTestnet } from "@/lib/dogeos-config"
+import { useWallet } from "@/lib/wallet-context"
 import { TransactionProgress, type TransactionStatus } from "@/components/shielded/transaction-progress"
 import { TransactionTrackerClass } from "@/lib/shielded/transaction-tracker"
 import { EstimatedFees } from "@/components/shielded/estimated-fees"
@@ -31,12 +37,18 @@ import { ConfirmationDialog } from "@/components/shielded/confirmation-dialog"
 import { SuccessDialog } from "@/components/shielded/success-dialog"
 import { formatErrorWithSuggestion } from "@/lib/shielded/error-suggestions"
 import { syncNotesWithChain } from "@/lib/shielded/shielded-service"
+import { ShieldProgressBar } from "@/components/shielded/shield-progress-bar"
+import { cn } from "@/lib/utils"
 
 // Use local backend for development, production URL for deployed
 const RELAYER_URL = process.env.NEXT_PUBLIC_INDEXER_URL || 
   (typeof window !== 'undefined' && window.location.hostname === 'localhost' 
     ? 'http://localhost:3001' 
     : 'https://dogenadocash.onrender.com')
+
+// Native token address constant - must match contract's NATIVE_TOKEN constant
+// V4 Contract uses address(0) (zero address) for native DOGE
+const NATIVE_TOKEN = '0x0000000000000000000000000000000000000000' as `0x${string}`
 
 // Token logos for swap interface
 const TOKEN_LOGOS: Record<string, string> = {
@@ -55,6 +67,25 @@ interface SwapInterfaceProps {
 
 export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }: SwapInterfaceProps) {
   const { toast } = useToast()
+  const { wallet } = useWallet()
+  const router = useRouter()
+  
+  // Load swap tokens from storage on mount
+  useEffect(() => {
+    loadSwapTokensFromStorage()
+    
+    // Listen for swap tokens updates
+    const handleSwapTokensUpdate = () => {
+      // Force re-render by updating state
+      setInputToken(prev => prev)
+      setOutputToken(prev => prev)
+    }
+    
+    window.addEventListener('swap-tokens-updated', handleSwapTokensUpdate)
+    return () => {
+      window.removeEventListener('swap-tokens-updated', handleSwapTokensUpdate)
+    }
+  }, [])
   
   const [inputToken, setInputToken] = useState<SwapToken>("DOGE")
   
@@ -93,6 +124,16 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
     outputAmount: string
     outputToken: SwapToken
   } | null>(null)
+  const [sequentialSwapProgress, setSequentialSwapProgress] = useState<{
+    current: number
+    total: number
+    amount: number
+    stage: 'preparing' | 'generating' | 'submitting' | 'confirming' | 'complete' | 'finalized'
+    txHash?: string
+  } | null>(null)
+  const [sequentialSwapTxHashes, setSequentialSwapTxHashes] = useState<string[]>([])
+  const [showProgressGlow, setShowProgressGlow] = useState(false)
+  const [iconPulseKey, setIconPulseKey] = useState(0)
   
   // Get balances
   const balances = getShieldedBalances(notes)
@@ -133,7 +174,17 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
       
       try {
         setIsLoadingQuote(true)
-        const decimals = SWAP_TOKENS[inputToken].decimals
+        const inputTokenConfig = SWAP_TOKENS[inputToken]
+        if (!inputTokenConfig) {
+          toast({
+            title: "Invalid Token",
+            description: `Token ${inputToken} is not available for swapping`,
+            variant: "destructive",
+          })
+          setIsLoadingQuote(false)
+          return
+        }
+        const decimals = inputTokenConfig.decimals
         const amountWei = parseAmountToWei(parseFloat(inputAmount), decimals)
         
         // Get identity for filtering spent notes (optional - if not available, will skip spent check)
@@ -149,17 +200,8 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
           return
         }
         
-        // Find largest note
-        const largestNote = availableNotes.reduce((max, note) => 
-          note.amount > max.amount ? note : max
-        )
-        
-        // Cap amount to largest single note (swap can only use one note at a time)
-        // Use largestNoteAmount if available, otherwise calculate on the fly
-        const maxNoteAmount = largestNoteAmount > 0n && largestNoteAmount <= largestNote.amount 
-          ? largestNoteAmount 
-          : largestNote.amount
-        const maxAvailableWei = inputBalance < maxNoteAmount ? inputBalance : maxNoteAmount
+        // Cap amount to total balance (sequential swaps will handle splitting across notes)
+        const maxAvailableWei = inputBalance
         const cappedAmountWei = amountWei > maxAvailableWei ? maxAvailableWei : amountWei
         
         // Only generate quote if we have a valid amount
@@ -184,29 +226,39 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
         
         // Generate quote with capped amount
         const newQuote = await getSwapQuote(inputToken, outputToken, cappedAmountWei)
-        setQuote(newQuote)
         
-        // Check liquidity for output token
-        if (newQuote) {
-          setIsCheckingLiquidity(true)
-          try {
-            const liquidity = await checkSwapLiquidity(
-              outputToken,
-              newQuote.outputAmount,
-              shieldedPool.address
-            )
-            setLiquidityCheck(liquidity)
-          } catch (error) {
-            console.error('[Swap] Liquidity check failed:', error)
-            setLiquidityCheck(null)
-          } finally {
-            setIsCheckingLiquidity(false)
-          }
-        } else {
+        // Check if quote has an error (amount too small)
+        if (newQuote.error) {
+          // Set quote to show error message in UI
+          setQuote(newQuote)
           setLiquidityCheck(null)
+        } else {
+          setQuote(newQuote)
+          
+          // Check liquidity for output token
+          if (newQuote && newQuote.outputAmount > 0n) {
+            setIsCheckingLiquidity(true)
+            try {
+              const liquidity = await checkSwapLiquidity(
+                outputToken,
+                newQuote.outputAmount,
+                shieldedPool.address
+              )
+              setLiquidityCheck(liquidity)
+            } catch (error) {
+              console.error('[Swap] Liquidity check failed:', error)
+              setLiquidityCheck(null)
+            } finally {
+              setIsCheckingLiquidity(false)
+            }
+          } else {
+            setLiquidityCheck(null)
+          }
         }
       } catch (error) {
         console.error("Quote error:", error)
+        // If it's a quote with an error flag, set it to show the error message
+        // Otherwise, clear the quote
         setQuote(null)
         setLiquidityCheck(null)
       } finally {
@@ -227,7 +279,7 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
     setQuote(null)
   }
   
-  // Show confirmation dialog before swap
+    // Show confirmation dialog before swap
   const handleSwap = () => {
     if (!quote) {
       toast({
@@ -238,16 +290,28 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
       return
     }
     
+    // Prevent swap if quote has an error
+    if (quote.error) {
+      toast({
+        title: "Swap Not Possible",
+        description: quote.error,
+        variant: "destructive",
+      })
+      return
+    }
+    
     setSimulationWarning(null) // Clear any previous warnings
     setPendingSwap(() => executeSwap)
     setShowConfirmDialog(true)
   }
   
-  // Set max amount (based on largest single note, since swaps use one note at a time)
+  // Set max amount (based on total balance, sequential swaps will handle splitting)
   const handleSetMax = () => {
-    if (largestNoteAmount > 0n) {
-      const decimals = SWAP_TOKENS[inputToken].decimals
-      const maxAmount = formatWeiToAmount(largestNoteAmount, decimals)
+    if (inputBalance > 0n) {
+      const inputTokenConfig = SWAP_TOKENS[inputToken]
+      if (!inputTokenConfig) return
+      const decimals = inputTokenConfig.decimals
+      const maxAmount = formatWeiToAmount(inputBalance, decimals)
       setInputAmount(maxAmount.toString())
     }
   }
@@ -289,13 +353,343 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
       return
     }
     
-    // Find largest note that can cover the swap amount
+    // Check if we need sequential swaps (amount exceeds largest single note)
     const sortedNotes = [...availableNotes].sort((a, b) => {
       if (a.amount > b.amount) return -1
       if (a.amount < b.amount) return 1
       return 0
     })
     
+    const largestNote = sortedNotes[0]
+    const useSequentialSwaps = largestNote && quote.inputAmount > largestNote.amount
+    
+    if (useSequentialSwaps) {
+      // Use sequential swaps (auto-splitting large amount across multiple notes)
+      console.log('[Swap] Using SEQUENTIAL swaps (auto-splitting large amount)...')
+      console.log('[Swap] Amount:', formatWeiToAmount(quote.inputAmount, SWAP_TOKENS[inputToken].decimals), inputToken)
+      
+      // Start with "Preparing swap" stage
+      setSequentialSwapProgress({
+        current: 0,
+        total: 0, // Will be updated when we know the count
+        amount: Number(quote.inputAmount) / 10 ** SWAP_TOKENS[inputToken].decimals,
+        stage: 'preparing'
+      })
+      
+      // Small delay to show "Preparing swap" phase
+      await new Promise(resolve => setTimeout(resolve, 400))
+      
+      // Store original notes array BEFORE generating proofs (indices will shift after swaps)
+      const originalNotes = getNotes()
+      
+      // Prepare sequential swaps - note that the actual amount swapped may be slightly less
+      // if some small notes are too small to swap after fees
+      let sequentialResults
+      try {
+        sequentialResults = await prepareSequentialSwaps(
+          inputToken,
+          outputToken,
+          quote.inputAmount,
+          shieldedPool.address,
+          identity,
+          availableNotes,
+          (swapIndex, totalSwaps, amount) => {
+            setShowProgressGlow(true)
+            setIconPulseKey(prev => prev + 1)
+            setTimeout(() => setShowProgressGlow(false), 400)
+            setSequentialSwapProgress({ 
+              current: swapIndex, 
+              total: totalSwaps, 
+              amount,
+              stage: 'generating' // Proof generation stage
+            })
+            console.log(`[SequentialSwap] Progress: ${swapIndex}/${totalSwaps} (${amount} ${inputToken})`)
+          }
+        )
+      } catch (error: any) {
+        // Check if it's a remainder tolerance error - if so, we should show a helpful message
+        if (error.message && error.message.includes('remaining after selecting viable swaps')) {
+          // Show a more user-friendly error message
+          toast({
+            title: "Cannot Swap Full Amount",
+            description: error.message + " Try swapping a slightly smaller amount, or the remaining small notes may be too small to swap after fees.",
+            variant: "destructive",
+          })
+          setStatus("idle")
+          return
+        }
+        throw error
+      }
+      
+      // Check if we got any swaps - if not, show error
+      if (!sequentialResults || sequentialResults.length === 0) {
+        toast({
+          title: "No Viable Swaps",
+          description: "All notes are too small to swap after fees. The platform fee (0.4 USDC) requires a minimum swap amount.",
+          variant: "destructive",
+        })
+        setStatus("idle")
+        return
+      }
+      
+      // Calculate actual amount that will be swapped (may be less than requested)
+      const actualSwapAmount = sequentialResults.reduce((sum, r) => sum + r.inputAmount, 0n)
+      const requestedAmount = quote.inputAmount
+      
+      if (actualSwapAmount < requestedAmount) {
+        const difference = requestedAmount - actualSwapAmount
+        const differenceDoge = formatWeiToAmount(difference, SWAP_TOKENS[inputToken].decimals)
+        const actualSwapAmountDoge = formatWeiToAmount(actualSwapAmount, SWAP_TOKENS[inputToken].decimals)
+        
+        // Show warning if difference is significant
+        if (differenceDoge > 0.01) {
+          console.warn(
+            `[SequentialSwap] Warning: Requested ${formatWeiToAmount(requestedAmount, SWAP_TOKENS[inputToken].decimals).toFixed(4)} ${inputToken}, ` +
+            `but only ${actualSwapAmountDoge.toFixed(4)} ${inputToken} can be swapped. ` +
+            `${differenceDoge.toFixed(4)} ${inputToken} remains in notes that are too small after fees.`
+          )
+          
+          // Update quote to reflect actual swapable amount
+          const updatedQuote = await getSwapQuote(inputToken, outputToken, actualSwapAmount)
+          if (updatedQuote.error) {
+            toast({
+              title: "Cannot Complete Swap",
+              description: `Cannot swap the full amount. ${differenceDoge.toFixed(4)} ${inputToken} cannot be swapped because it's in notes that are too small after fees.`,
+              variant: "destructive",
+            })
+            setStatus("idle")
+            return
+          }
+          
+          // Continue with updated quote (actual swapable amount)
+          // The sequential results already use the correct amounts, so we can proceed
+        }
+      }
+      
+      // Update total count now that we know it
+      if (sequentialResults.length > 0) {
+        setSequentialSwapProgress(prev => prev ? {
+          ...prev,
+          total: sequentialResults.length,
+          current: 1 // Start with first swap (stage will be set in loop)
+        } : null)
+      }
+
+      // Small delay after proof generation completes
+      await new Promise(resolve => setTimeout(resolve, 400))
+      
+      console.log(`[SequentialSwap] Generated ${sequentialResults.length} swap proofs`)
+      
+      // Send each swap sequentially
+      setStatus("relaying")
+      const txHashes: string[] = []
+      let totalOutputAmount = 0n
+      
+      // Get token addresses
+      const inputTokenAddress = inputToken === 'DOGE' 
+        ? NATIVE_TOKEN
+        : SWAP_TOKENS[inputToken].address
+      const outputTokenAddress = outputToken === 'DOGE'
+        ? NATIVE_TOKEN
+        : SWAP_TOKENS[outputToken].address
+      
+      for (let i = 0; i < sequentialResults.length; i++) {
+        const result = sequentialResults[i]
+        
+        // Update progress: Submitting (for this specific swap)
+        setShowProgressGlow(true)
+        setIconPulseKey(prev => prev + 1)
+        setTimeout(() => setShowProgressGlow(false), 400)
+        setSequentialSwapProgress({
+          current: i + 1,
+          total: sequentialResults.length,
+          amount: Number(result.inputAmount) / 10 ** SWAP_TOKENS[inputToken].decimals,
+          stage: 'submitting'
+        })
+        
+        // Small delay to show "Submitting" phase
+        await new Promise(resolve => setTimeout(resolve, 300))
+        
+        console.log(`[SequentialSwap] Sending swap ${i + 1}/${sequentialResults.length}...`)
+        
+        const publicInputs = result.proof.publicInputs
+        const outputCommitment2FromProof = publicInputs[3] || '0'
+        const swapAmountFromProof = publicInputs[6] || result.inputAmount.toString()
+        const outputAmountFromProof = publicInputs[7] || result.outputAmount.toString()
+        
+        const changeCommitmentValue = result.changeNote 
+          ? `0x${BigInt(result.changeNote.commitment).toString(16).padStart(64, '0')}`
+          : '0x0000000000000000000000000000000000000000000000000000000000000000'
+        
+        // Get platform fee from quote for this swap
+        const swapQuote = await getSwapQuote(inputToken, outputToken, result.inputAmount)
+        const platformFeeWei = swapQuote.platformFee || 0n
+        
+        const swapRequestBody = {
+          poolAddress: shieldedPool.address,
+          proof: result.proof.proof,
+          root: result.root,
+          inputNullifierHash: result.inputNullifierHash,
+          outputCommitment1: result.outputCommitment1,
+          outputCommitment2: changeCommitmentValue,
+          tokenIn: inputTokenAddress,
+          tokenOut: outputTokenAddress,
+          swapAmount: swapAmountFromProof,
+          outputAmount: outputAmountFromProof,
+          platformFee: platformFeeWei.toString(),
+          minAmountOut: outputAmountFromProof,
+          encryptedMemo: '',
+        }
+        
+        const response = await fetch(`${RELAYER_URL}/api/shielded/relay/swap`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(swapRequestBody),
+        })
+        
+        if (!response.ok) {
+          let errorMessage = `Swap ${i + 1} failed: ${response.statusText}`
+          try {
+            const errorData = await response.json()
+            errorMessage = errorData.message || errorData.error || errorMessage
+            console.error(`[SequentialSwap] Swap ${i + 1} error:`, errorData)
+          } catch (e) {
+            const errorText = await response.text().catch(() => '')
+            console.error(`[SequentialSwap] Swap ${i + 1} error (non-JSON):`, errorText)
+            errorMessage = errorText || errorMessage
+          }
+          throw new Error(errorMessage)
+        }
+        
+        const data = await response.json()
+        txHashes.push(data.txHash)
+        totalOutputAmount += result.outputAmount
+        
+        // Realistic delay: after submission, before confirming
+        await new Promise(resolve => setTimeout(resolve, 150))
+        
+        // Update progress: Confirming
+        setShowProgressGlow(true)
+        setIconPulseKey(prev => prev + 1)
+        setTimeout(() => setShowProgressGlow(false), 400)
+        setSequentialSwapProgress(prev => prev ? { 
+          ...prev, 
+          stage: 'confirming',
+          txHash: data.txHash
+        } : null)
+        
+        // Realistic delay: confirming phase
+        await new Promise(resolve => setTimeout(resolve, 500))
+        
+        console.log(`[SequentialSwap] Swap ${i + 1} sent: ${data.txHash}`)
+        
+        // Complete this swap (remove spent note, add output note, add change note)
+        const currentNotes = getNotes()
+        const spentNote = currentNotes.find(n => n.commitment === result.note.commitment)
+        
+        if (!spentNote) {
+          console.error(`[SequentialSwap] Swap ${i + 1} note not found in current notes!`)
+          throw new Error(`Note for swap ${i + 1} not found in current wallet. It may have already been spent.`)
+        }
+        
+        const spentNoteIndex = currentNotes.findIndex(n => n.commitment === result.note.commitment)
+        
+        await completeSwap(
+          spentNoteIndex,
+          result.outputNote,
+          data.leafIndex1 || undefined,
+          result.changeNote,
+          data.leafIndex2 || undefined
+        )
+        
+        // Dispatch event to refresh UI after each swap
+        window.dispatchEvent(new CustomEvent('shielded-wallet-updated'))
+        
+        // Wait a bit between swaps to avoid rate limiting
+        if (i < sequentialResults.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 1000))
+        }
+      }
+      
+      // After all swaps are submitted, mark as complete
+      setSequentialSwapProgress(prev => prev ? { ...prev, stage: 'complete' } : null)
+      setSequentialSwapTxHashes(txHashes)
+      setTxHash(txHashes[txHashes.length - 1] || null)
+      
+      // Calculate total swap details for success dialog
+      const totalInputAmountFormatted = formatWeiToAmount(quote.inputAmount, SWAP_TOKENS[inputToken].decimals)
+      const totalOutputAmountFormatted = formatWeiToAmount(totalOutputAmount, SWAP_TOKENS[outputToken].decimals)
+      
+      setSwapResult({
+        inputAmount: totalInputAmountFormatted.toFixed(4),
+        inputToken,
+        outputAmount: totalOutputAmountFormatted.toFixed(4),
+        outputToken,
+      })
+      
+      // Start tracking the last transaction
+      const newTracker = new TransactionTrackerClass(1)
+      let isConfirmed = false
+      
+      newTracker.onUpdate(async (trackerState) => {
+        console.log('[SequentialSwap] Tracker update:', trackerState.status, 'txHash:', trackerState.txHash)
+        if (trackerState.status === 'confirmed' && !isConfirmed) {
+          isConfirmed = true
+          console.log('[SequentialSwap] All swaps confirmed!')
+          setStatus('confirmed')
+          
+          // Show finalized micro-state (300-500ms) before success dialog
+          setTimeout(() => {
+            if (sequentialSwapProgress) {
+              setSequentialSwapProgress(prev => prev ? { ...prev, stage: 'finalized' } : null)
+            }
+
+            // After finalized micro-state (500ms), fade out container (200ms), then delay before success dialog
+            setTimeout(() => {
+              setTimeout(() => {
+                setShowSuccessDialog(true)
+              }, 500)
+            }, 500)
+          }, 100)
+          
+          // Refresh notes
+          await getNotes()
+          window.dispatchEvent(new CustomEvent('shielded-wallet-updated'))
+        } else if (trackerState.status === 'failed') {
+          setStatus('failed')
+        } else if (trackerState.status === 'pending') {
+          setStatus('pending')
+          if (sequentialSwapProgress && sequentialSwapProgress.stage === 'submitting') {
+            setSequentialSwapProgress(prev => prev ? { ...prev, stage: 'confirming' } : null)
+          }
+        }
+      })
+      
+      setTracker(newTracker)
+      newTracker.track(txHashes[txHashes.length - 1])
+      
+      // Add to transaction history
+      for (const hash of txHashes) {
+        const result = sequentialResults.find(r => txHashes.indexOf(hash) === sequentialResults.indexOf(r))
+        const inputAmountNum = result ? Number(result.inputAmount) / 10 ** SWAP_TOKENS[inputToken].decimals : 0
+        const outputAmountNum = result ? Number(result.outputAmount) / 10 ** SWAP_TOKENS[outputToken].decimals : 0
+        await addTransaction({
+          txHash: hash,
+          type: 'swap',
+          amount: inputAmountNum.toFixed(4),
+          amountWei: result ? result.inputAmount.toString() : BigInt(0).toString(),
+          token: inputToken,
+          outputToken: outputToken,
+          outputAmount: outputAmountNum.toFixed(4),
+          timestamp: Math.floor(Date.now() / 1000),
+          status: 'confirmed',
+        })
+      }
+      
+      return // Exit early for sequential swap
+    }
+    
+    // Single note swap (original logic)
     const noteToSpend = sortedNotes.find(n => n.amount >= quote.inputAmount)
     
     if (!noteToSpend) {
@@ -309,7 +703,6 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
     }
     
     // Use the quote as-is - prepareShieldedSwap will handle partial swaps with change notes
-    // If note.amount > quote.inputAmount, a change note will be created automatically
     const finalQuote = quote
     
     // Verify the note can cover the swap amount
@@ -336,11 +729,12 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
       setStatus("relaying")
       
       // Get token addresses
+      // Use NATIVE_TOKEN constant for DOGE (matches deployed contract)
       const inputTokenAddress = inputToken === 'DOGE' 
-        ? '0x0000000000000000000000000000000000000000'
+        ? NATIVE_TOKEN
         : SWAP_TOKENS[inputToken].address
       const outputTokenAddress = outputToken === 'DOGE'
-        ? '0x0000000000000000000000000000000000000000'
+        ? NATIVE_TOKEN
         : SWAP_TOKENS[outputToken].address
       
       // Extract public inputs from proof (they contain the data needed for contract)
@@ -389,6 +783,9 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
         throw new Error('Missing swap amounts');
       }
       
+      // Get platform fee from quote (5 DOGE equivalent in output token)
+      const platformFeeWei = finalQuote.platformFee || 0n;
+      
       // Send to relayer
       const swapRequestBody = {
         poolAddress: shieldedPool.address,
@@ -400,7 +797,8 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
         tokenIn: inputTokenAddress,
         tokenOut: outputTokenAddress,
         swapAmount: swapAmountFromProof, // Amount being swapped (from proof's public signals - index 6)
-        outputAmount: outputAmountFromProof, // outputAmount from proof's public signals (required for proof verification - index 7)
+        outputAmount: outputAmountFromProof, // outputAmount from proof's public signals (net amount after fees - index 7)
+        platformFee: platformFeeWei.toString(), // Platform fee (5 DOGE equivalent in output token)
         minAmountOut: finalQuote.outputAmount.toString(), // Use finalQuote's outputAmount as minAmountOut for slippage protection
         encryptedMemo: '', // TODO: Add memo encryption if needed
       };
@@ -410,6 +808,94 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
         outputAmountFromProof,
         finalQuoteInputAmount: finalQuote.inputAmount.toString(),
         finalQuoteOutputAmount: finalQuote.outputAmount.toString(),
+      });
+      
+      // Debug: Log public inputs that will be sent to contract
+      console.log('[Swap] Public inputs from proof:', {
+        root: publicInputs[0],
+        inputNullifierHash: publicInputs[1],
+        outputCommitment1: publicInputs[2],
+        outputCommitment2: publicInputs[3],
+        tokenInAddress: publicInputs[4],
+        tokenOutAddress: publicInputs[5],
+        swapAmount: publicInputs[6],
+        outputAmount: publicInputs[7],
+      });
+      
+      // Debug: Log what contract will receive
+      console.log('[Swap] Contract will receive:', {
+        root: result.merkleRoot,
+        inputNullifier: result.inputNullifierHash,
+        outputCommitment1: result.outputCommitment,
+        outputCommitment2: changeCommitmentValue,
+        tokenIn: inputTokenAddress,
+        tokenOut: outputTokenAddress,
+        swapAmount: swapAmountFromProof,
+        outputAmount: outputAmountFromProof,
+      });
+      
+      // 🔍 DETAILED DIAGNOSTICS: Compare proof public inputs vs contract expectations
+      console.log('[Swap] 🔍 DETAILED DIAGNOSTICS:');
+      console.log('[Swap] Proof public inputs (from circuit):', {
+        '[0] root': publicInputs[0],
+        '[1] inputNullifierHash': publicInputs[1],
+        '[2] outputCommitment1': publicInputs[2],
+        '[3] outputCommitment2': publicInputs[3],
+        '[4] tokenInAddress': publicInputs[4] + ' (circuit expects 0 for native)',
+        '[5] tokenOutAddress': publicInputs[5],
+        '[6] swapAmount': publicInputs[6],
+        '[7] outputAmount': publicInputs[7],
+      });
+      
+      // Calculate what contract will construct for publicInputs array
+      const contractTokenInUint = inputTokenAddress === '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE' || inputTokenAddress === '0x0000000000000000000000000000000000000000' 
+        ? '0' 
+        : BigInt(inputTokenAddress).toString();
+      const contractTokenOutUint = outputTokenAddress === '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE' || outputTokenAddress === '0x0000000000000000000000000000000000000000'
+        ? '0'
+        : BigInt(outputTokenAddress).toString();
+      
+      const contractPublicInputs = [
+        BigInt(result.merkleRoot).toString(),
+        BigInt(result.inputNullifierHash).toString(),
+        BigInt(result.outputCommitment).toString(),
+        BigInt(changeCommitmentValue || '0x0').toString(),
+        contractTokenInUint,
+        contractTokenOutUint,
+        swapAmountFromProof.toString(),
+        outputAmountFromProof.toString(),
+      ];
+      
+      console.log('[Swap] Contract publicInputs array (what verifier will receive):', {
+        '[0] root': contractPublicInputs[0],
+        '[1] inputNullifier': contractPublicInputs[1],
+        '[2] outputCommitment1': contractPublicInputs[2],
+        '[3] outputCommitment2': contractPublicInputs[3],
+        '[4] tokenInUint': contractPublicInputs[4] + ' (contract converts NATIVE_TOKEN to 0)',
+        '[5] tokenOutUint': contractPublicInputs[5],
+        '[6] swapAmount': contractPublicInputs[6],
+        '[7] outputAmount': contractPublicInputs[7],
+      });
+      
+      // Compare proof vs contract public inputs
+      const mismatches: string[] = [];
+      for (let i = 0; i < 8; i++) {
+        if (publicInputs[i] !== contractPublicInputs[i]) {
+          mismatches.push(`Index ${i}: proof="${publicInputs[i]}" vs contract="${contractPublicInputs[i]}"`);
+        }
+      }
+      
+      if (mismatches.length > 0) {
+        console.error('[Swap] ❌ PUBLIC INPUT MISMATCH DETECTED:', mismatches);
+      } else {
+        console.log('[Swap] ✓ Public inputs match between proof and contract');
+      }
+      
+      // Log Merkle root freshness
+      console.log('[Swap] Merkle root info:', {
+        root: result.merkleRoot,
+        rootHex: '0x' + BigInt(result.merkleRoot).toString(16),
+        fetchedAt: new Date().toISOString(),
       });
       
       // Validate request body before sending
@@ -445,6 +931,7 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
             tokenOut: swapRequestBody.tokenOut,
             swapAmount: swapRequestBody.swapAmount,
             outputAmount: swapRequestBody.outputAmount,
+            platformFee: swapRequestBody.platformFee,
             minAmountOut: swapRequestBody.minAmountOut,
             encryptedMemo: swapRequestBody.encryptedMemo || '',
           }),
@@ -526,9 +1013,25 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
           missing: data.missing,
           required: data.required,
         })
-        const errorMsg = data.missing 
+        
+        // Provide more helpful error messages
+        let errorMsg = data.missing 
           ? `Missing parameters: ${Array.isArray(data.missing) ? data.missing.join(', ') : data.missing}`
           : (data.message || data.error || 'Relayer transaction failed')
+        
+        // Add specific guidance for InvalidProof errors
+        if (data.error === 'InvalidProof' || (data.message && data.message.includes('ZK proof verification failed'))) {
+          errorMsg = `ZK proof verification failed. This could mean:
+1. The Merkle root is stale - try refreshing the page or waiting a few seconds
+2. The circuit WASM/zkey files are out of sync with the contract verifier
+3. The proof generation had an error
+
+Please try:
+- Refreshing the page to get the latest Merkle root
+- Ensuring you have the latest circuit files
+- If the issue persists, clear your browser cache and try again`
+        }
+        
         throw new Error(errorMsg)
       }
       
@@ -558,6 +1061,7 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
       
       if (spentNoteIndex !== -1) {
         // completeSwap will remove the spent note and add both output notes (swapped + change)
+        // It also dispatches 'shielded-wallet-updated' event to immediately update UI
         completeSwap(
           spentNoteIndex,
           result.outputNote,
@@ -573,6 +1077,9 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
           outputToken: finalQuote.outputToken,
           changeNoteAmount: result.changeNote?.amount.toString() || '0',
         })
+        
+        // Balance update is handled by completeSwap() via 'shielded-wallet-updated' event
+        // This ensures the shielded balance card updates immediately
       } else {
         console.warn('[Swap] Could not find spent note in wallet state')
       }
@@ -583,7 +1090,7 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
       // Start tracking transaction
       const newTracker = new TransactionTrackerClass(1)
       let isConfirmed = false
-      newTracker.onUpdate((trackerState) => {
+      newTracker.onUpdate(async (trackerState) => {
         console.log('[Swap] Tracker update:', trackerState.status, 'txHash:', trackerState.txHash)
         if (trackerState.status === 'confirmed' && !isConfirmed) {
           isConfirmed = true
@@ -605,9 +1112,23 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
             status: 'confirmed',
           })
           
-          // Trigger UI refresh events
-          window.dispatchEvent(new Event('refresh-balance'))
+          // AFTER CONFIRMATION: Shielded balance already updated optimistically (immediately after submission)
+          // Dispatch event to ensure UI updates immediately
           window.dispatchEvent(new CustomEvent('shielded-wallet-updated'))
+          
+          // NOTE: Swap doesn't change public balance, so no refresh needed
+          // But we sync notes to catch any discrepancies from optimistic updates
+          try {
+            const { syncNotesWithChain } = await import('@/lib/shielded/shielded-service')
+            const { shieldedPool } = await import('@/lib/dogeos-config')
+            await syncNotesWithChain(shieldedPool.address)
+            // Dispatch again after sync to ensure balance is accurate
+            window.dispatchEvent(new CustomEvent('shielded-wallet-updated'))
+          } catch (syncError) {
+            console.warn('[Swap] Failed to sync notes after confirmation:', syncError)
+            // Still dispatch event even if sync fails - optimistic update is better than no update
+            window.dispatchEvent(new CustomEvent('shielded-wallet-updated'))
+          }
           
           // Note: Success dialog will be shown by useEffect when status === "confirmed"
         } else if (trackerState.status === 'failed') {
@@ -649,6 +1170,13 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
     setStatus("idle")
     setTxHash(null)
     setSwapResult(null)
+    setLiquidityCheck(null)
+    setShowConfirmDialog(false)
+    setShowSuccessDialog(false)
+    setPendingSwap(null)
+    setSimulationWarning(null)
+    setSequentialSwapProgress(null)
+    setSequentialSwapTxHashes([])
     if (tracker) {
       tracker.stop()
       tracker.reset()
@@ -657,6 +1185,14 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
     setTrackerStatus("idle")
     // Trigger component reset in AppCard
     onReset?.()
+    
+    // CRITICAL: Subtle refresh to ensure all balances and data are up-to-date
+    // This happens after the success dialog closes, so it's unnoticeable to the user
+    // router.refresh() does a soft refresh without full page reload - no flicker or visible reload
+    // The delay ensures the dialog close animation completes first
+    setTimeout(() => {
+      router.refresh() // Soft refresh - re-fetches data without full page reload
+    }, 300) // Delay to let dialog close animation complete (250ms animation + 50ms buffer)
   }
   
   // Cleanup tracker on unmount
@@ -697,11 +1233,11 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
         <div className="space-y-4">
           {/* 🆕 Simulation Warning */}
           {simulationWarning?.show && (
-            <Alert variant="destructive" className="mb-4">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription className="space-y-2">
-                <div className="font-semibold">Transaction Validation Failed</div>
-                <div>{simulationWarning.suggestion || simulationWarning.message}</div>
+            <Alert className="bg-red-500/10 border-red-500/30 mb-4">
+              <AlertCircle className="h-4 w-4 text-red-400" />
+              <AlertDescription className="text-red-50 space-y-2">
+                <div className="font-semibold text-red-100">Transaction Validation Failed</div>
+                <div className="text-red-100">{simulationWarning.suggestion || simulationWarning.message}</div>
                 {simulationWarning.errorCode === 'UNKNOWN_ROOT' && (
                   <Button
                     onClick={async () => {
@@ -711,6 +1247,12 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
                         // Trigger balance refresh
                         window.dispatchEvent(new Event('refresh-balance'))
                         window.dispatchEvent(new CustomEvent('shielded-wallet-updated'))
+                        
+                        // Refresh public balance
+                        if (wallet?.refreshBalance) {
+                          wallet.refreshBalance().catch(err => console.warn('[Swap] Failed to refresh public balance:', err))
+                        }
+                        
                         toast({
                           title: "Notes Synced",
                           description: "Your notes have been synced. Please try again.",
@@ -747,14 +1289,14 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
           )}
           
           {/* Input Token */}
-          <Card className="p-4">
-            <div className="flex justify-between items-center mb-2">
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
               <Label>You Pay</Label>
               <button 
-                className="text-xs text-primary hover:underline"
+                className="text-xs text-primary hover:underline h-auto p-0"
                 onClick={handleSetMax}
               >
-                Max: {largestNoteAmount > 0n ? formatWeiToAmount(largestNoteAmount, SWAP_TOKENS[inputToken].decimals).toFixed(4) : '0.0000'}
+                Max: {inputBalance > 0n ? formatWeiToAmount(inputBalance, SWAP_TOKENS[inputToken].decimals).toFixed(4) : '0.0000'}
               </button>
             </div>
             <div className="flex gap-2">
@@ -779,56 +1321,64 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
                     }
                   }
                 }}
-                className="text-xl"
+                className="text-xl [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                 min="0"
                 step="0.0001"
               />
               <Select value={inputToken} onValueChange={(v) => handleInputTokenChange(v as SwapToken)}>
-                <SelectTrigger className="w-32">
+                <SelectTrigger className="min-w-[140px] [&_[data-slot=select-value]]:!-webkit-line-clamp-[unset] [&_[data-slot=select-value]]:overflow-visible">
                   <SelectValue>
                     <div className="flex items-center gap-2">
                       <img 
                         src={TOKEN_LOGOS[inputToken] || TOKEN_LOGOS.DOGE} 
                         alt={inputToken} 
-                        className="w-4 h-4 rounded-full"
+                        className="w-4 h-4 rounded-full flex-shrink-0"
                       />
-                      <span>{inputToken}</span>
+                      <span className="whitespace-nowrap">{inputToken}</span>
                     </div>
                   </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                  {Object.keys(SWAP_TOKENS).map((token) => (
-                    <SelectItem key={token} value={token}>
-                      <div className="flex items-center gap-2">
-                        <img 
-                          src={TOKEN_LOGOS[token] || TOKEN_LOGOS.DOGE} 
-                          alt={token} 
-                          className="w-4 h-4 rounded-full"
-                        />
-                        <span>{token}</span>
-                      </div>
-                    </SelectItem>
-                  ))}
+                  {Object.keys(SWAP_TOKENS).map((token) => {
+                    const tokenConfig = SWAP_TOKENS[token]
+                    return (
+                      <SelectItem key={token} value={token}>
+                        <div className="flex items-center gap-2">
+                          <img 
+                            src={TOKEN_LOGOS[token] || TOKEN_LOGOS.DOGE} 
+                            alt={token} 
+                            className="w-4 h-4 rounded-full"
+                          />
+                          <span>{tokenConfig?.symbol || token}</span>
+                        </div>
+                      </SelectItem>
+                    )
+                  })}
                 </SelectContent>
               </Select>
             </div>
-          </Card>
+          </div>
           
-          {/* Swap Button */}
-          <div className="flex justify-center">
+          {/* Swap Button with Divider */}
+          <div className="relative flex items-center justify-center my-4 gap-3">
+            {/* Left divider segment - Fade to solid gradient */}
+            <div className="flex-1 h-px bg-gradient-to-r from-transparent via-zinc-700/50 to-zinc-700/50"></div>
+            {/* Swap Button */}
             <Button
               variant="outline"
               size="icon"
-              className="rounded-full"
+              className="rounded-full h-9 w-9 border-zinc-700/50 hover:border-[#C2A633]/50 bg-transparent hover:bg-zinc-900/30 transition-all flex-shrink-0"
               onClick={handleSwapTokens}
             >
-              <ArrowDownUp className="h-4 w-4" />
+              <ArrowDownUp className="h-[18px] w-[18px]" />
             </Button>
+            {/* Right divider segment - Fade to solid gradient */}
+            <div className="flex-1 h-px bg-gradient-to-r from-zinc-700/50 via-zinc-700/50 to-transparent"></div>
           </div>
           
           {/* Output Token */}
-          <Card className="p-4">
-            <div className="flex justify-between items-center mb-2">
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
               <Label>You Receive</Label>
               {isLoadingQuote && (
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -844,7 +1394,7 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
                   placeholder={isLoadingQuote ? "Computing..." : "0.0"}
                   value={quote ? formatWeiToAmount(quote.outputAmount, SWAP_TOKENS[outputToken].decimals).toFixed(4) : ""}
                   readOnly
-                  className="text-xl bg-muted"
+                  className="text-xl"
                   disabled={isLoadingQuote}
                 />
                 {isLoadingQuote && (
@@ -854,37 +1404,40 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
                 )}
               </div>
               <Select value={outputToken} onValueChange={(v) => setOutputToken(v as SwapToken)}>
-                <SelectTrigger className="w-32">
+                <SelectTrigger className="min-w-[140px] [&_[data-slot=select-value]]:!-webkit-line-clamp-[unset] [&_[data-slot=select-value]]:overflow-visible">
                   <SelectValue>
                     <div className="flex items-center gap-2">
                       <img 
                         src={TOKEN_LOGOS[outputToken] || TOKEN_LOGOS.USDC} 
                         alt={outputToken} 
-                        className="w-4 h-4 rounded-full"
+                        className="w-4 h-4 rounded-full flex-shrink-0"
                       />
-                      <span>{outputToken}</span>
+                      <span className="whitespace-nowrap">{outputToken}</span>
                     </div>
                   </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {Object.keys(SWAP_TOKENS)
                     .filter(t => t !== inputToken)
-                    .map((token) => (
-                      <SelectItem key={token} value={token}>
-                        <div className="flex items-center gap-2">
-                          <img 
-                            src={TOKEN_LOGOS[token] || TOKEN_LOGOS.USDC} 
-                            alt={token} 
-                            className="w-4 h-4 rounded-full"
-                          />
-                          <span>{token}</span>
-                        </div>
-                      </SelectItem>
-                    ))}
+                    .map((token) => {
+                      const tokenConfig = SWAP_TOKENS[token]
+                      return (
+                        <SelectItem key={token} value={token}>
+                          <div className="flex items-center gap-2">
+                            <img 
+                              src={TOKEN_LOGOS[token] || TOKEN_LOGOS.USDC} 
+                              alt={token} 
+                              className="w-4 h-4 rounded-full"
+                            />
+                            <span>{tokenConfig?.symbol || token}</span>
+                          </div>
+                        </SelectItem>
+                      )
+                    })}
                 </SelectContent>
               </Select>
             </div>
-          </Card>
+          </div>
           
           {/* Loading State - Quote Computing */}
           {(isLoadingQuote || isCheckingLiquidity) && inputAmount && parseFloat(inputAmount) > 0 && (
@@ -899,7 +1452,7 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
           )}
           
           {/* Estimated Fees */}
-          {quote && !isLoadingQuote && !isCheckingLiquidity && (
+          {quote && !quote.error && !isLoadingQuote && !isCheckingLiquidity && (
             <EstimatedFees
               amount={quote.inputAmount}
               fee={quote.fee}
@@ -910,7 +1463,7 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
           )}
           
           {/* Quote Details */}
-          {quote && !isLoadingQuote && !isCheckingLiquidity && (
+          {quote && !quote.error && !isLoadingQuote && !isCheckingLiquidity && (
             <div className="p-3 rounded-lg bg-muted/50 text-sm space-y-1">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Rate</span>
@@ -922,15 +1475,50 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
                   {quote.priceImpact.toFixed(2)}%
                 </span>
               </div>
+              {quote.platformFee !== undefined && quote.swapFee !== undefined && (
+                <>
+                  <div className="flex justify-between pt-1 border-t border-white/10">
+                    <span className="text-muted-foreground">Swap Fee (0.3%)</span>
+                    <span className="text-yellow-400">
+                      -{formatWeiToAmount(quote.swapFee, SWAP_TOKENS[outputToken].decimals).toFixed(4)} {outputToken}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Platform Fee</span>
+                    <span className="text-yellow-400">
+                      -{formatWeiToAmount(quote.platformFee, SWAP_TOKENS[outputToken].decimals).toFixed(4)} {outputToken}
+                    </span>
+                  </div>
+                </>
+              )}
             </div>
           )}
           
+          {/* Quote Error - Amount Too Small */}
+          {quote?.error && (
+            <Alert className="bg-orange-500/10 border-orange-500/30">
+              <AlertCircle className="h-4 w-4 text-orange-400" />
+              <AlertDescription className="text-orange-50">
+                <strong className="text-orange-100 font-semibold">Swap Amount Too Small</strong>
+                <p className="mt-1 text-sm text-orange-100">
+                  {quote.error}
+                </p>
+                {quote.minimumRequired && (
+                  <p className="mt-2 text-xs text-orange-200/80">
+                    The platform fee ({formatWeiToAmount(quote.platformFee || 0n, SWAP_TOKENS[outputToken].decimals).toFixed(4)} {outputToken}) exceeds the swap output. 
+                    Please shield more {inputToken} first to make a viable swap.
+                  </p>
+                )}
+              </AlertDescription>
+            </Alert>
+          )}
+          
           {/* Liquidity Warning */}
-          {liquidityCheck && !liquidityCheck.hasLiquidity && quote && (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>
-                <strong>Insufficient Liquidity:</strong> The contract has{" "}
+          {liquidityCheck && !liquidityCheck.hasLiquidity && quote && !quote.error && (
+            <Alert className="bg-orange-500/10 border-orange-500/30">
+              <AlertCircle className="h-4 w-4 text-orange-400" />
+              <AlertDescription className="text-orange-50">
+                <strong className="text-orange-100 font-semibold">Insufficient Liquidity:</strong> The contract has{" "}
                 {formatWeiToAmount(liquidityCheck.availableBalance, SWAP_TOKENS[outputToken].decimals).toFixed(4)}{" "}
                 {outputToken} available, but {formatWeiToAmount(liquidityCheck.requiredAmount, SWAP_TOKENS[outputToken].decimals).toFixed(4)}{" "}
                 {outputToken} is required. Someone must shield {outputToken} first to provide liquidity.
@@ -938,23 +1526,32 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
             </Alert>
           )}
           
-          {/* Privacy Note */}
-          <Alert>
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
-              <strong>Private Swap:</strong> On-chain observers will only see that a swap occurred,
-              not the tokens, amounts, or your identity.
-            </AlertDescription>
-          </Alert>
-          
           <Button 
-            className="w-full min-h-[44px] sm:min-h-0 relative overflow-hidden bg-white/10 border border-white/20 hover:border-[#B89A2E]/50 transition-all duration-500 group py-3 sm:py-2"
+            className="w-full min-h-[44px] sm:min-h-0 relative overflow-hidden bg-zinc-900/70 border border-zinc-700/80 hover:border-[#C2A633]/50 transition-all duration-300 group py-3 sm:py-2 backdrop-blur-sm"
             onClick={handleSwap}
-            disabled={!quote || inputBalance === 0n || parseFloat(inputAmount) <= 0 || isLoadingQuote || isCheckingLiquidity || (liquidityCheck && !liquidityCheck.hasLiquidity)}
+            disabled={!quote || quote.error || inputBalance === 0n || parseFloat(inputAmount) <= 0 || isLoadingQuote || isCheckingLiquidity || (liquidityCheck && !liquidityCheck.hasLiquidity)}
+            style={{
+              boxShadow: '0 0 0 1px rgba(194, 166, 51, 0.08)',
+              transition: 'all 0.3s ease-out',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.boxShadow = '0 0 0 1px rgba(194, 166, 51, 0.25), 0 0 12px rgba(194, 166, 51, 0.1)'
+              e.currentTarget.style.background = 'rgba(39, 39, 42, 0.85)'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.boxShadow = '0 0 0 1px rgba(194, 166, 51, 0.08)'
+              e.currentTarget.style.background = 'rgba(24, 24, 27, 0.7)'
+            }}
           >
-            {/* Fill animation from left to right - slower and more natural */}
-            <span className="absolute inset-0 bg-[#B89A2E] transform -translate-x-full group-hover:translate-x-0 transition-transform duration-[1300ms] ease-in-out" />
-            <span className="relative z-10 flex items-center justify-center text-sm sm:text-base text-white group-hover:text-black transition-colors duration-[1300ms] ease-in-out">
+            {/* Subtle shimmer effect on hover */}
+            <span 
+              className="absolute inset-0 transform -translate-x-full group-hover:translate-x-0 transition-transform duration-[1500ms] ease-out opacity-0 group-hover:opacity-100"
+              style={{
+                background: 'linear-gradient(90deg, transparent, rgba(194, 166, 51, 0.05), transparent)',
+                width: '100%',
+              }}
+            />
+            <span className="relative z-10 flex items-center justify-center text-sm sm:text-base text-[#C2A633]/90 group-hover:text-[#C2A633] transition-colors duration-300 font-medium">
               {isLoadingQuote || isCheckingLiquidity ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin flex-shrink-0" />
@@ -962,8 +1559,8 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
                 </>
               ) : (
                 <>
-                  <ArrowDownUp className="h-4 w-4 mr-2 flex-shrink-0" strokeWidth={1.75} />
-                  {liquidityCheck && !liquidityCheck.hasLiquidity ? "Insufficient Liquidity" : "Swap Privately"}
+                  <ArrowDownUp className="h-4 w-4 mr-2 flex-shrink-0 transition-transform duration-300 group-hover:scale-[1.05]" strokeWidth={1.75} />
+                  {quote?.error ? "Amount Too Small" : liquidityCheck && !liquidityCheck.hasLiquidity ? "Insufficient Liquidity" : "Swap Privately"}
                 </>
               )}
             </span>
@@ -971,8 +1568,116 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
         </div>
       )}
       
-      {/* Progress Indicator - Only show during processing, hide when confirmed */}
-      {status !== "confirmed" && (
+      {/* Sequential Swap Progress - Matches sequential transfer design */}
+      {sequentialSwapProgress && (status !== "confirmed" || sequentialSwapProgress.stage === "finalized") && !showSuccessDialog && (
+        <div 
+          className={cn(
+            "transition-opacity duration-200",
+            status === "confirmed" && sequentialSwapProgress.stage !== "finalized" ? "opacity-0 pointer-events-none" : "opacity-100"
+          )}
+        >
+          <div className="p-3 sm:p-4 bg-zinc-900/50 border border-[#C2A633]/20 rounded-lg">
+            <div className="space-y-2 sm:space-y-3">
+              {/* Icon on left, text on right - matches TransactionProgress layout */}
+              <div className="flex items-center gap-3 sm:gap-4">
+                {/* Icon - Spinner (EXACT SAME as shield interface) */}
+                <div className="flex-shrink-0">
+                  {sequentialSwapProgress.stage === 'finalized' ? (
+                    // Checkmark on finalized - single soft pulse
+                    <Check 
+                      className="h-5 w-5 text-[#C2A633]" 
+                      strokeWidth={2.5}
+                      style={{
+                        animation: 'softPulse 1.5s ease-in-out 1',
+                        filter: 'drop-shadow(0 0 2px rgba(194, 166, 51, 0.3))'
+                      }}
+                    />
+                  ) : (
+                    // Loader2 spinner - EXACT SAME as shield interface
+                    <Loader2 
+                      className="h-5 w-5 animate-spin text-[#C2A633]" 
+                      style={{
+                        filter: 'drop-shadow(0 0 2px rgba(194, 166, 51, 0.3))'
+                      }}
+                    />
+                  )}
+                </div>
+                
+                {/* Text on right - EXACT SAME styling as shield interface */}
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs sm:text-sm font-medium text-white">
+                    {(() => {
+                      const stageMessages = {
+                        preparing: `Preparing swap`,
+                        generating: `Generating privacy proof`,
+                        submitting: `Submitting to network`,
+                        confirming: `Confirming on-chain`,
+                        complete: `Finalizing swap`,
+                        finalized: `✓ Swap finalized`
+                      }
+                      return stageMessages[sequentialSwapProgress.stage] || `Processing swap...`
+                    })()}
+                  </p>
+                  {(() => {
+                    const secondaryMessages: Record<string, string> = {
+                      preparing: `Initializing swap sequence`,
+                      generating: `This typically takes a few seconds.`,
+                      submitting: `Relayer is submitting your transaction...`,
+                      confirming: `Transaction is being confirmed on-chain`,
+                      complete: `Finalizing shielded assets…`
+                    }
+                    const message = secondaryMessages[sequentialSwapProgress.stage]
+                    return message ? (
+                      <p className="text-[10px] sm:text-xs text-gray-400 mt-0.5 sm:mt-1 break-words">
+                        {message}
+                      </p>
+                    ) : null
+                  })()}
+                </div>
+              </div>
+              
+              {/* Progress Bar - Reuse EXACT SAME component as sequential/shield/unshield */}
+              {(() => {
+                // Stage-based progress mapping (internal only, never shown to user)
+                const progressByPhase: Record<string, number> = {
+                  preparing: 0.05,   // 5% - Start low, show preparing first
+                  generating: 0.25,  // 25% - After preparing, move to generating
+                  submitting: 0.55,  // 55% - After generating, move to submitting
+                  confirming: 0.80,  // 80% - After submitting, move to confirming
+                  complete: 0.95,    // 95% - After confirming, move to complete
+                  finalized: 1.00    // 100% (stays full during micro-state)
+                }
+                
+                // Calculate progress based on current swap and stage
+                let progressValue = 0
+                
+                if (sequentialSwapProgress.total > 0) {
+                  // Calculate base progress from swap number (0 to total-1)
+                  const baseProgress = (sequentialSwapProgress.current - 1) / sequentialSwapProgress.total
+                  // Add stage progress for current swap (0 to 1/total)
+                  const stageProgress = progressByPhase[sequentialSwapProgress.stage] || 0
+                  const stageContribution = stageProgress / sequentialSwapProgress.total
+                  progressValue = Math.min(baseProgress + stageContribution, 1.0)
+                } else {
+                  // Before we know total swaps, just use stage progress directly
+                  progressValue = progressByPhase[sequentialSwapProgress.stage] || 0
+                }
+                
+                return (
+                  <ShieldProgressBar 
+                    progress={progressValue}
+                    showGlow={showProgressGlow}
+                    flowingGradient={true}
+                  />
+                )
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Progress Indicator - Only show during processing, hide when confirmed (single swap only) */}
+      {!sequentialSwapProgress && status !== "confirmed" && status !== "idle" && (
         <TransactionProgress
           status={status === "idle" ? "idle" : (status === "error" ? "failed" : status)}
           message={
@@ -1012,6 +1717,22 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
                 <span className="text-gray-400">Price Impact</span>
                 <span className={quote.priceImpact > 1 ? "text-red-400" : "text-white"}>{quote.priceImpact.toFixed(2)}%</span>
               </div>
+              {quote.swapFee !== undefined && (
+                <div className="flex justify-between items-center gap-2 pt-1 border-t border-[#C2A633]/10">
+                  <span className="text-gray-400">Swap Fee (0.3%)</span>
+                  <span className="text-red-400 text-right break-all">-{formatWeiToAmount(quote.swapFee, SWAP_TOKENS[outputToken].decimals).toFixed(4)} {outputToken}</span>
+                </div>
+              )}
+              {quote.platformFee !== undefined && (
+                <div className="flex justify-between items-center gap-2">
+                  <span className="text-gray-400">Platform Fee</span>
+                  <span className="text-yellow-400 text-right break-all">-{formatWeiToAmount(quote.platformFee, SWAP_TOKENS[outputToken].decimals).toFixed(4)} {outputToken}</span>
+                </div>
+              )}
+              <div className="flex justify-between items-center gap-2 pt-1 border-t border-[#C2A633]/10">
+                <span className="text-gray-400">You Receive</span>
+                <span className="text-green-400 font-semibold text-right break-all">{formatWeiToAmount(quote.outputAmount, SWAP_TOKENS[outputToken].decimals).toFixed(4)} {outputToken}</span>
+              </div>
             </div>
           ) : undefined
         }
@@ -1023,21 +1744,22 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
         onOpenChange={(open) => {
           // Only allow closing via buttons, not by clicking outside or scrolling
           if (!open && status === "confirmed") {
-            reset()
+            reset() // reset() includes subtle refresh
           } else if (status === "confirmed") {
             setShowSuccessDialog(true)
           }
         }}
-        onClose={reset}
+        onClose={reset} // reset() includes subtle refresh
         title="Swap Successful!"
         message={swapResult 
           ? `Successfully swapped ${swapResult.inputAmount} ${swapResult.inputToken} = ${swapResult.outputAmount} ${swapResult.outputToken}.`
           : "Your shielded balance has been updated. The swap completed successfully."
         }
         txHash={txHash}
+        txHashes={sequentialSwapTxHashes.length > 0 ? sequentialSwapTxHashes : undefined}
         blockExplorerUrl={dogeosTestnet.blockExplorers.default.url}
         actionText="Make Another Swap"
-        onAction={reset}
+        onAction={reset} // reset() includes subtle refresh
       />
       
       {status === "error" && (

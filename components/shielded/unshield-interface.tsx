@@ -1,16 +1,18 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Progress } from "@/components/ui/progress"
-import { Loader2, LogOut, AlertCircle, Check, Shield, ShieldOff, Info, Coins, Layers, ExternalLink } from "lucide-react"
+import { Loader2, LogOut, AlertCircle, Check, Shield, ShieldOff, Info, ExternalLink, CheckCircle2, Copy } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { ShieldedNote, formatWeiToAmount } from "@/lib/shielded/shielded-note"
-import { prepareUnshield, completeUnshield, getNotes } from "@/lib/shielded/shielded-service"
-import { addTransaction, initTransactionHistory } from "@/lib/shielded/transaction-history"
+import { prepareUnshield, prepareBatchUnshield, completeUnshield, completeBatchUnshield, getNotes } from "@/lib/shielded/shielded-service"
+import { addTransaction, initTransactionHistory, updateTransactionStatus } from "@/lib/shielded/transaction-history"
 import { useWallet } from "@/lib/wallet-context"
 import { shieldedPool, dogeosTestnet } from "@/lib/dogeos-config"
 import { getUSDValue, formatUSD } from "@/lib/price-service"
@@ -22,13 +24,14 @@ import { ConfirmationDialog } from "@/components/shielded/confirmation-dialog"
 import { SuccessDialog } from "@/components/shielded/success-dialog"
 import { formatErrorWithSuggestion } from "@/lib/shielded/error-suggestions"
 import { syncNotesWithChain } from "@/lib/shielded/shielded-service"
-
-const NATIVE_TOKEN = '0x0000000000000000000000000000000000000000'
 import Link from "next/link"
 import { ShieldPlus } from "lucide-react"
 
 const SHIELDED_POOL_ADDRESS = shieldedPool.address
 const RELAYER_URL = process.env.NEXT_PUBLIC_INDEXER_URL || 'https://dogenadocash.onrender.com'
+
+// Native token address constant (accessible throughout the module)
+const NATIVE_TOKEN = '0x0000000000000000000000000000000000000000' as `0x${string}`
 
 // Helper to get token decimals
 function getTokenDecimals(tokenSymbol: string): number {
@@ -38,8 +41,6 @@ function getTokenDecimals(tokenSymbol: string): number {
 
 // Helper to get token metadata
 function getTokenMetadata(tokenSymbol: string): { symbol: string; address: `0x${string}`; decimals: number } {
-  const NATIVE_TOKEN = '0x0000000000000000000000000000000000000000' as `0x${string}`;
-  
   if (tokenSymbol === 'DOGE') {
     return {
       symbol: 'DOGE',
@@ -89,14 +90,29 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
   
   const [amount, setAmount] = useState("")
   const [recipientAddress, setRecipientAddress] = useState("")
+  const [isAddressFocused, setIsAddressFocused] = useState(false)
+  const [addressCopied, setAddressCopied] = useState(false)
+  const addressInputRef = useRef<HTMLInputElement>(null)
   const [status, setStatus] = useState<TransactionStatus>("idle")
+  
+  // Real-time address validation for public addresses (0x...)
+  const isValidPublicAddress = (addr: string): boolean => {
+    if (!addr || addr.trim() === '') return false
+    // Must start with 0x and be 42 characters (0x + 40 hex chars)
+    return /^0x[a-fA-F0-9]{40}$/.test(addr.trim())
+  }
+  const isAddressValid = recipientAddress ? isValidPublicAddress(recipientAddress) : null
+  const showAddressError = recipientAddress && recipientAddress.trim() !== '' && !isAddressValid
   const [txHash, setTxHash] = useState<string | null>(null)
+  const [allTxHashes, setAllTxHashes] = useState<string[]>([]) // Track all transaction hashes for multi-tx unshields
   const [tracker, setTracker] = useState<TransactionTrackerClass | null>(null)
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
   const [showSuccessDialog, setShowSuccessDialog] = useState(false)
   const [pendingUnshield, setPendingUnshield] = useState<() => Promise<void> | null>(null)
   const [withdrawnAmount, setWithdrawnAmount] = useState<string | null>(null)
   const [fee, setFee] = useState<string | null>(null)
+  const [isExecuting, setIsExecuting] = useState(false) // Prevent duplicate execution
+  const isExecutingRef = useRef(false) // Synchronous guard to prevent duplicate submissions
   const [simulationWarning, setSimulationWarning] = useState<{
     show: boolean
     message: string
@@ -125,9 +141,6 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
   const [relayerInfo, setRelayerInfo] = useState<RelayerInfo | null>(null)
   const [isLoadingRelayerInfo, setIsLoadingRelayerInfo] = useState(true)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
-  const [consolidateProgress, setConsolidateProgress] = useState<{ current: number; total: number; totalReceived: number } | null>(null)
-  const [consolidateTxHashes, setConsolidateTxHashes] = useState<string[]>([])
-  const [consolidateTotalReceived, setConsolidateTotalReceived] = useState<number>(0)
   const [usdValue, setUsdValue] = useState<string | null>(null)
   
   const spendableNotes = useMemo(() => {
@@ -260,13 +273,26 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
   }
   
   const calculateMaxUnshieldable = (): bigint => {
-    if (!largestNote || !relayerInfo) return 0n
-    // Use token decimals for minFee
-    const minFee = parseUnits(relayerInfo.minFee, tokenDecimals)
-    if (largestNote.amount <= minFee) return 0n
-    const feeResult = calculateFeeForNote(largestNote.amount)
-    if (feeResult.error) return 0n
-    return feeResult.received
+    // V3: Return total shielded balance (what user can request to unshield)
+    // Fees will be deducted automatically, so user can unshield their full balance
+    // This allows custom amount unshield from total balance
+    // Consistent with transfer interface - Max shows full balance, fees computed separately
+    return totalBalance
+  }
+  
+  // Helper function to get max unshieldable amount (used in error messages)
+  const getMaxUnshieldAmount = (): bigint => {
+    return totalReceivableAfterFees
+  }
+  
+  // Get the maximum amount that can be safely entered (rounded down to 4 decimals)
+  // This ensures when parsed back, it will never exceed totalBalance
+  const getMaxAmountSafe = (): string => {
+    if (totalBalance === 0n) return "0"
+    const maxAmount = formatUnits(totalBalance, tokenDecimals)
+    // Round DOWN to 4 decimals to ensure parsed value <= totalBalance
+    const rounded = Math.floor(Number(maxAmount) * 10000) / 10000
+    return rounded.toFixed(4)
   }
   
   const findBestNote = (requestedAmount: bigint): { note: ShieldedNote; noteIndex: number } | null => {
@@ -323,18 +349,394 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
     return parseUnits(amountNum.toString(), tokenDecimals)
   }
   
+  // V3: Find optimal note combination for custom amount unshield
+  const findOptimalNoteCombination = (requestedAmount: bigint): {
+    fullNotes: Array<{ note: ShieldedNote; index: number }>;
+    partialNote: { note: ShieldedNote; index: number; unshieldAmount: bigint } | null;
+    totalFee: bigint;
+    changeAmount: bigint;
+    actualRequestedAmount?: bigint; // Adjusted amount if full balance was requested
+  } | null => {
+    if (!relayerInfo) return null
+    
+    // Check if requested amount exceeds total balance
+    // Allow small tolerance for rounding (0.0001 DOGE)
+    const roundingTolerance = parseUnits("0.0001", tokenDecimals)
+    if (requestedAmount > totalBalance + roundingTolerance) {
+      return null // Will trigger error message in getSelectedNoteInfo
+    }
+    
+    // If requested amount is slightly above totalBalance due to rounding, clamp it to totalBalance
+    const clampedRequestedAmount = requestedAmount > totalBalance ? totalBalance : requestedAmount
+    
+    const feePercent = BigInt(Math.floor(relayerInfo.feePercent * 100))
+    const minFee = parseUnits(relayerInfo.minFee, tokenDecimals)
+    
+    // Track if this is a full balance request (needed for tolerance check later)
+    // Use tolerance check to account for floating point precision differences
+    // If requested amount is within 0.01% of total balance, treat it as full balance request
+    const tolerance = totalBalance / 10000n // 0.01% tolerance
+    const isFullBalanceRequest = clampedRequestedAmount >= (totalBalance - tolerance) && clampedRequestedAmount <= totalBalance
+    
+    // If user wants to unshield full balance, we need to account for fees
+    // The key insight: when user requests full balance, they want to unshield everything possible
+    // So we should set actualRequestedAmount to a value that will be satisfied by the note's net value
+    let actualRequestedAmount = clampedRequestedAmount
+    if (isFullBalanceRequest) {
+      // User wants to unshield full balance - calculate what they can actually receive
+      // We'll use the total balance minus the estimated fee as the target
+      // This ensures the note's net value will satisfy the request
+      let estimatedFee = (clampedRequestedAmount * feePercent) / 10000n
+      if (estimatedFee < minFee) estimatedFee = minFee
+      actualRequestedAmount = clampedRequestedAmount - estimatedFee
+      
+      // Ensure it's still positive
+      if (actualRequestedAmount <= 0n) {
+        return null // Can't unshield - balance too small after fees
+      }
+      
+      // For full balance requests, we want to use the note's net value
+      // So set the target to be slightly less than the note's net value to ensure it fits
+      // But actually, we should just use the note's net value directly
+      // The note selection will use netFromNote, so we need actualRequestedAmount <= netFromNote
+      // Since we don't know the note's net value yet, we'll use a conservative estimate
+      // and let the note selection handle it
+    }
+    
+    // Get all notes for this token
+    const tokenMeta = getTokenMetadata(selectedToken)
+    const allNotes = getNotes()
+    const candidateNotes = allNotes
+      .map((note, idx) => ({ note, index: idx }))
+      .filter(({ note }) => {
+        if (!note.tokenAddress) {
+          return selectedToken === 'DOGE' && (!note.token || note.token === 'DOGE')
+        }
+        return note.tokenAddress.toLowerCase() === tokenMeta.address.toLowerCase()
+      })
+      .filter(({ note }) => note.leafIndex !== undefined && note.amount > 0n)
+      .sort((a, b) => Number(a.note.amount - b.note.amount)) // Smallest first
+    
+    if (candidateNotes.length === 0) return null
+    
+    const fullNotes: Array<{ note: ShieldedNote; index: number }> = []
+    let remainingAmount = actualRequestedAmount
+    let totalFee = 0n
+    
+    console.log(`[CustomAmount] Finding optimal combination for ${formatUnits(actualRequestedAmount, tokenDecimals)} ${selectedToken}:`, {
+      requestedAmountWei: requestedAmount.toString(),
+      requestedAmountHuman: formatUnits(requestedAmount, tokenDecimals),
+      actualRequestedAmountWei: actualRequestedAmount.toString(),
+      actualRequestedAmountHuman: formatUnits(actualRequestedAmount, tokenDecimals),
+      isFullBalanceRequest,
+      candidateNotesCount: candidateNotes.length,
+    })
+    
+    // Step 1: Use full notes (unshield entire note)
+    // IMPORTANT: Limit to 100 full notes to respect contract batch limit
+    const MAX_BATCH_NOTES = 100
+    
+    // First pass: Collect potentially usable notes (including small ones that might work in groups)
+    // For batch unshield, we need to estimate the fee per note in a batch
+    // The batch fee is calculated as: (totalFee / batchSize) * batchSize, then divided by batchSize
+    // So fee per note = (totalFee / batchSize) rounded down, then divided by batchSize
+    // This can be higher than individual minFee, so we need to check notes against batch fee per note
+    
+    // Estimate: if we batch unshield all notes, what would be the fee per note?
+    // Total fee for all notes = sum of individual fees (but in batch it's calculated differently)
+    // For estimation, use: totalBalance * feePercent / 10000, then divide by estimated batch size
+    const estimatedTotalFee = (totalBalance * feePercent) / 10000n
+    const estimatedTotalFeeWithMin = estimatedTotalFee > minFee ? estimatedTotalFee : minFee
+    // Estimate batch size (will be refined as we select notes, but use conservative estimate)
+    const estimatedBatchSize = BigInt(Math.min(candidateNotes.length, 100))
+    // In batch, fee is: (totalFee / batchSize) * batchSize (rounded down for divisibility)
+    // Then fee per note = adjustedTotalFee / batchSize
+    // For estimation, use: totalFee / batchSize (this is the fee per note)
+    const estimatedBatchFeePerNote = estimatedTotalFeeWithMin / estimatedBatchSize
+    // Use the higher of individual minFee or estimated batch fee per note
+    // Add 10% buffer to account for rounding differences
+    const effectiveMinFee = estimatedBatchFeePerNote > minFee 
+      ? (estimatedBatchFeePerNote * 110n) / 100n  // 10% buffer
+      : minFee
+    
+    const usableNotes: Array<{ note: ShieldedNote; index: number; noteFee: bigint; netFromNote: bigint }> = []
+    const dustNotes: Array<{ note: ShieldedNote; index: number; noteFee: bigint }> = []
+    
+    for (const { note, index } of candidateNotes) {
+      // Calculate fee for this note (based on full note amount)
+      let noteFee = (note.amount * feePercent) / 10000n
+      if (noteFee < minFee) noteFee = minFee
+      
+      // For batch unshield, check if note can cover the batch fee per note
+      // This is critical: in batch, fee per note = totalFee / batchSize, which can be higher than individual minFee
+      if (note.amount <= effectiveMinFee) {
+        // Note is too small for batch unshield - treat as dust
+        dustNotes.push({ note, index, noteFee })
+        continue
+      }
+      
+      const netFromNote = note.amount - noteFee
+      
+      if (netFromNote <= 0n) {
+        // Individual dust note - but might be usable in a group
+        dustNotes.push({ note, index, noteFee })
+      } else {
+        // Usable note (can cover batch fee per note)
+        usableNotes.push({ note, index, noteFee, netFromNote })
+      }
+    }
+    
+    // Sort usable notes by net value (smallest first, to use smaller notes first)
+    usableNotes.sort((a, b) => Number(a.netFromNote - b.netFromNote))
+    
+    // Try to use dust notes as a group if they become profitable together
+    // CRITICAL: For batch unshield, we need to check if each dust note can cover the batch fee per note
+    // The key insight: feePerProof = totalFee / batchSize, so larger batches = lower per-note fees
+    // For full balance requests, we should estimate with dust notes included to get accurate feePerProof
+    let dustGroupNetValue = 0n
+    if (dustNotes.length > 0 && dustNotes.length <= MAX_BATCH_NOTES) {
+      const totalDustValue = dustNotes.reduce((sum, d) => sum + d.note.amount, 0n)
+      const totalDustFees = dustNotes.reduce((sum, d) => sum + d.noteFee, 0n)
+      dustGroupNetValue = totalDustValue - totalDustFees
+      
+      // KEY INSIGHT: feePerProof = totalFee / batchSize
+      // Larger batches = smaller feePerProof = dust notes might become viable
+      // For full balance requests, estimate batch size INCLUDING dust notes + usable notes
+      // This gives us the actual (lower) feePerProof that dust notes would pay
+      const estimatedUsableNotesToUse = Math.min(usableNotes.length, MAX_BATCH_NOTES - dustNotes.length)
+      const estimatedFinalBatchSizeWithDust = BigInt(dustNotes.length + estimatedUsableNotesToUse)
+      
+      // Estimate total fee based on total balance (matches prepareBatchUnshield)
+      const estimatedTotalFeeFromBalance = (totalBalance * feePercent) / 10000n
+      const estimatedTotalFeeWithMin = estimatedTotalFeeFromBalance > minFee ? estimatedTotalFeeFromBalance : minFee
+      
+      // Calculate feePerProof for batch WITH dust notes (this is what dust notes would actually pay)
+      const estimatedFeePerProofWithDust = estimatedTotalFeeWithMin / estimatedFinalBatchSizeWithDust
+      
+      // Add 20% buffer to account for rounding differences
+      const estimatedFeePerProofWithDustBuffered = (estimatedFeePerProofWithDust * 120n) / 100n
+      
+      // Check if ALL dust notes can cover the feePerProof when batched with larger notes
+      const allDustNotesCanCoverFeeWithDust = dustNotes.every(d => d.note.amount >= estimatedFeePerProofWithDustBuffered)
+      
+      // For comparison: what if we DON'T include dust (smaller batch = higher feePerProof)
+      const estimatedFinalBatchSizeWithoutDust = BigInt(Math.min(usableNotes.length, MAX_BATCH_NOTES))
+      const estimatedFeePerProofWithoutDust = estimatedTotalFeeWithMin / estimatedFinalBatchSizeWithoutDust
+      
+      // Include dust if:
+      // 1. They're profitable as a group, AND
+      // 2. Each can cover feePerProof when batched (lower fee due to larger batch), OR
+      // 3. For full balance requests, if they're profitable and batch includes larger notes (to reduce fee)
+      const shouldIncludeDust = dustGroupNetValue > 0n && (
+        allDustNotesCanCoverFeeWithDust || 
+        (isFullBalanceRequest && estimatedFinalBatchSizeWithDust > BigInt(dustNotes.length) && 
+         estimatedFeePerProofWithDust < estimatedFeePerProofWithoutDust && // Larger batch helps
+         allDustNotesCanCoverFeeWithDust) // Still need to cover the lower fee
+      )
+      
+      if (shouldIncludeDust) {
+        console.log(`[CustomAmount] Including ${dustNotes.length} dust notes in batch (${dustNotes.length} + ${estimatedUsableNotesToUse} usable = ${estimatedFinalBatchSizeWithDust} total):`, {
+          totalValue: formatUnits(totalDustValue, tokenDecimals),
+          totalFees: formatUnits(totalDustFees, tokenDecimals),
+          netValue: formatUnits(dustGroupNetValue, tokenDecimals),
+          feePerProofWithDust: formatUnits(estimatedFeePerProofWithDust, tokenDecimals),
+          feePerProofWithDustBuffered: formatUnits(estimatedFeePerProofWithDustBuffered, tokenDecimals),
+          feePerProofWithoutDust: formatUnits(estimatedFeePerProofWithoutDust, tokenDecimals),
+          note: `Batch size ${estimatedFinalBatchSizeWithDust} reduces feePerProof from ${formatUnits(estimatedFeePerProofWithoutDust, tokenDecimals)} to ${formatUnits(estimatedFeePerProofWithDust, tokenDecimals)}`,
+        })
+        
+        // Add all dust notes to fullNotes as a group (they must be used together)
+        // Check if we have room and if the group net value helps satisfy the request
+        if (fullNotes.length + dustNotes.length <= MAX_BATCH_NOTES && dustGroupNetValue <= remainingAmount) {
+          for (const dust of dustNotes) {
+            fullNotes.push({ note: dust.note, index: dust.index })
+            totalFee += dust.noteFee
+          }
+          remainingAmount -= dustGroupNetValue
+          console.log(`[CustomAmount] Added ${dustNotes.length} dust notes as a group, remaining: ${formatUnits(remainingAmount, tokenDecimals)}`)
+        }
+      } else {
+        if (dustGroupNetValue <= 0n) {
+          console.log(`[CustomAmount] ${dustNotes.length} dust notes together still unprofitable (total: ${formatUnits(totalDustValue, tokenDecimals)}, fees: ${formatUnits(totalDustFees, tokenDecimals)}, net: ${formatUnits(dustGroupNetValue, tokenDecimals)})`)
+        } else {
+          console.log(`[CustomAmount] ${dustNotes.length} dust notes cannot cover batch fee per note (${formatUnits(estimatedFeePerProofWithDustBuffered, tokenDecimals)}), skipping from batch`)
+        }
+      }
+    }
+    
+    // Now process usable notes (normal notes with positive net value)
+    for (const { note, index, noteFee, netFromNote } of usableNotes) {
+      // CRITICAL: Stop if we've already satisfied the request
+      if (remainingAmount <= 0n) break
+      
+      // Contract limit: Cannot batch unshield more than 100 notes
+      if (fullNotes.length >= MAX_BATCH_NOTES) {
+        // We've reached the limit, use partial unshield for remainder
+        break
+      }
+      
+      // If this note's net (after fee) is more than remaining, use it partially
+      if (netFromNote > remainingAmount) {
+        // This note will be partial - we'll handle it separately
+        break
+      }
+      
+      // Check if this note is already in fullNotes (shouldn't happen, but safeguard)
+      const alreadyAdded = fullNotes.some(fn => 
+        fn.note.commitment === note.commitment || 
+        (fn.note.leafIndex !== undefined && note.leafIndex !== undefined && fn.note.leafIndex === note.leafIndex)
+      )
+      if (alreadyAdded) {
+        console.warn(`[CustomAmount] Skipping duplicate note: commitment=${note.commitment.toString(16).slice(0, 16)}..., leafIndex=${note.leafIndex}`)
+        continue
+      }
+      
+      // Use this note fully (netFromNote <= remainingAmount, including exact match)
+      fullNotes.push({ note, index })
+      totalFee += noteFee
+      const oldRemaining = remainingAmount
+      remainingAmount -= netFromNote // Reduce by net amount after fee
+      
+      // If we've exactly satisfied the request, we're done
+      if (remainingAmount === 0n) {
+        break
+      }
+      
+      console.log(`[CustomAmount] Using full note ${fullNotes.length}:`, {
+        noteAmount: formatUnits(note.amount, tokenDecimals),
+        noteFee: formatUnits(noteFee, tokenDecimals),
+        netFromNote: formatUnits(netFromNote, tokenDecimals),
+        remainingBefore: formatUnits(oldRemaining, tokenDecimals),
+        remainingAfter: formatUnits(remainingAmount, tokenDecimals),
+      })
+      
+      // SAFETY CHECK: Stop immediately if we've overshot (shouldn't happen, but protect against bugs)
+      if (remainingAmount < 0n) {
+        console.warn(`[CustomAmount] OVERSHOT! remainingAmount became negative: ${remainingAmount.toString()} (${formatUnits(remainingAmount, tokenDecimals)})`)
+        // Remove the last note that caused overshoot
+        fullNotes.pop()
+        totalFee -= noteFee
+        remainingAmount = oldRemaining
+        break
+      }
+    }
+    
+    console.log(`[CustomAmount] After full notes selection:`, {
+      fullNotesCount: fullNotes.length,
+      remainingAmount: formatUnits(remainingAmount, tokenDecimals),
+      totalFeeSoFar: formatUnits(totalFee, tokenDecimals),
+    })
+    
+    // Step 2: Find note for partial unshield (if needed)
+    let partialNote: { note: ShieldedNote; index: number; unshieldAmount: bigint } | null = null
+    let changeAmount = 0n
+    
+    if (remainingAmount > 0n) {
+      // Find smallest note that can cover remaining amount + fee
+      for (const { note, index } of candidateNotes) {
+        // Skip if already used as full note
+        if (fullNotes.some(fn => fn.index === index)) continue
+        
+        // CRITICAL: Skip dust notes (notes where amount <= minFee)
+        // For partial unshield, we need at least remainingAmount + fee, so check if note can cover that
+        let partialFee = (remainingAmount * feePercent) / 10000n
+        if (partialFee < minFee) partialFee = minFee
+        
+        // Skip if note is too small to cover even the minimum fee
+        if (note.amount <= minFee) {
+          console.log(`[CustomAmount] Skipping dust note for partial: ${formatUnits(note.amount, tokenDecimals)} ${selectedToken} (minFee: ${formatUnits(minFee, tokenDecimals)})`)
+          continue
+        }
+        
+        // Check if note can cover remaining amount + fee
+        if (note.amount >= remainingAmount + partialFee) {
+          partialNote = {
+            note,
+            index,
+            unshieldAmount: remainingAmount, // Unshield this amount
+          }
+          totalFee += partialFee
+          changeAmount = note.amount - remainingAmount - partialFee
+          break
+        }
+      }
+      
+      // If no note can cover remaining amount, check if it's acceptable for full balance request
+      if (!partialNote && remainingAmount > 0n) {
+        // For full balance requests, if we've used all available notes and there's a remainder,
+        // it means the remainder is unusable dust notes (too small to cover fees)
+        // The user will receive the net value from usable notes, which is acceptable
+        if (isFullBalanceRequest && fullNotes.length > 0) {
+          // For full balance requests, we've used all usable notes
+          // The remainder is dust notes that can't be unshielded - this is acceptable
+          // User will receive the net value from all usable notes (which is what they can actually unshield)
+          console.log(`[CustomAmount] Full balance request: allowing remainder ${formatUnits(remainingAmount, tokenDecimals)} ${selectedToken} (unusable dust notes that can't cover fees)`)
+          remainingAmount = 0n // Treat as satisfied - user gets net value from usable notes
+        } else {
+          return null // Can't satisfy the request
+        }
+      }
+    }
+    
+    return { fullNotes, partialNote, totalFee, changeAmount, actualRequestedAmount, isFullBalanceRequest }
+  }
+  
   const getSelectedNoteInfo = () => {
     const requestedWei = parseInputAmount()
     if (requestedWei <= 0n) return null
-    const result = findBestNote(requestedWei)
-    if (!result) return { error: "No single note large enough. Use 'Consolidate All' to unshield everything." }
-    const { fee } = calculateFeeForNote(result.note.amount)
+    
+    // V3: Try optimal note combination (supports custom amount from total balance)
+    const combination = findOptimalNoteCombination(requestedWei)
+    
+    if (!combination) {
+      // Fallback to single note check (for backward compatibility)
+      const result = findBestNote(requestedWei)
+      if (!result) {
+        // Show total balance (what user can request), not net after fees
+        // Consistent with transfer interface behavior
+        return { 
+          error: `Insufficient balance. You have ${formatUnits(totalBalance, tokenDecimals)} ${selectedToken} available to unshield.` 
+        }
+      }
+      
+      // Single note partial unshield
+      const { fee } = calculateFeeForNote(requestedWei)
+      if (result.note.amount < requestedWei + fee) {
+        return { error: `Note too small. Need ${formatUnits(requestedWei + fee, tokenDecimals)} ${selectedToken} (requested + fee).` }
+      }
+      
+      const changeAmount = result.note.amount - requestedWei - fee
+      return {
+        note: result.note,
+        noteAmount: result.note.amount,
+        fee,
+        youReceive: requestedWei - fee, // Amount you actually receive (requested - fees)
+        requestedAmount: requestedWei,
+        changeAmount: changeAmount > 0n ? changeAmount : 0n,
+        isSingleNote: true,
+      }
+    }
+    
+    // Custom amount using optimal combination
+    const { fullNotes, partialNote, totalFee, changeAmount, actualRequestedAmount } = combination
+    const totalNotes = fullNotes.length + (partialNote ? 1 : 0)
+    
+    // For user clarity: show fees as deducted from requested amount
+    // If user requested full balance, they'll receive the actualRequestedAmount (already adjusted for fees)
+    // Otherwise, they'll receive requested - fees
+    const finalYouReceive = actualRequestedAmount !== undefined && requestedWei === totalBalance
+      ? actualRequestedAmount  // Full balance: user receives the adjusted amount (already has fees deducted)
+      : requestedWei - totalFee  // Partial: show requested - fees
+    
     return {
-      note: result.note,
-      noteAmount: result.note.amount,
-      fee,
-      youReceive: requestedWei,
-      change: result.note.amount - fee - requestedWei,
+      fullNotes,
+      partialNote,
+      totalFee,
+      youReceive: finalYouReceive,
+      requestedAmount: requestedWei, // Keep original requested amount for display
+      changeAmount: changeAmount > 0n ? changeAmount : 0n,
+      noteCount: totalNotes,
+      isCustomAmount: true,
     }
   }
   
@@ -351,164 +753,148 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
     }
   }
 
-  const handleConsolidateAll = async () => {
-    if (!wallet?.address) {
-      toast({ title: "Wallet Required", description: "Please connect your wallet first", variant: "destructive" })
-      return
-    }
-    if (!relayerInfo?.available) {
-      toast({ title: "Relayer Offline", description: "Cannot consolidate while relayer is offline", variant: "destructive" })
-      return
-    }
-    // Get token metadata for validation
-    const tokenMeta = getTokenMetadata(selectedToken)
-    
-    // Only consolidate notes for the selected token
-    // Also validate that notes have correct tokenAddress and reasonable amounts
-    const freshNotes = getNotes().filter(n => {
-      if (n.leafIndex === undefined || n.amount <= 0n) return false
-      
-      // Check token symbol match
-      const noteToken = n.token || 'DOGE'
-      if (noteToken !== selectedToken) return false
-      
-      // For ERC20 tokens, also check tokenAddress matches
-      if (selectedToken !== 'DOGE') {
-        const noteTokenAddress = n.tokenAddress?.toLowerCase()
-        const expectedTokenAddress = tokenMeta.address.toLowerCase()
-        if (noteTokenAddress && noteTokenAddress !== expectedTokenAddress) {
-          console.warn(`[Consolidate] Note tokenAddress mismatch: ${noteTokenAddress} vs ${expectedTokenAddress}, skipping`)
-          return false
-        }
-      }
-      
-      return true
-    })
-    
-    // Log all notes found for debugging
-    console.log(`[Consolidate] Found ${freshNotes.length} notes for ${selectedToken}:`, 
-      freshNotes.map(n => {
-        const commitmentStr = typeof n.commitment === 'bigint'
-          ? '0x' + n.commitment.toString(16).padStart(64, '0')
-          : String(n.commitment)
-        const noteDecimals = n.decimals ?? tokenDecimals
-        return {
-          commitment: commitmentStr.slice(0, 12) + '...',
-          amountWei: n.amount.toString(),
-          amountHuman: formatUnits(n.amount, noteDecimals),
-          token: n.token || 'DOGE',
-          tokenAddress: n.tokenAddress || 'N/A',
-          decimals: n.decimals ?? 'N/A',
-        }
-      })
-    )
-    
-    // Use token decimals for minFee
-    const minFee = parseUnits(relayerInfo.minFee, tokenDecimals)
-    const worthyNotes = freshNotes.filter(n => {
-      const noteDecimals = n.decimals ?? tokenDecimals
-      // Validate note amount is reasonable (at least 0.0001 tokens)
-      const minReasonableAmount = parseUnits('0.0001', noteDecimals)
-      if (n.amount < minReasonableAmount) {
-        console.warn(`[Consolidate] Note amount too small (${formatUnits(n.amount, noteDecimals)} ${n.token || 'DOGE'}), skipping`)
-        return false
-      }
-      return n.amount > minFee
-    })
-    
-    console.log(`[Consolidate] After filtering (minFee: ${formatUnits(minFee, tokenDecimals)}), ${worthyNotes.length} notes to consolidate`)
-    
-    if (worthyNotes.length === 0) {
-      toast({ title: "No Notes to Consolidate", description: "All notes are too small (dust)", variant: "destructive" })
-      return
-    }
-    setStatus("consolidating")
-    // Start at 0 - shows "Processing note 0 of X" (0 notes completed)
-    setConsolidateProgress({ current: 0, total: worthyNotes.length, totalReceived: 0 })
-    setConsolidateTxHashes([])
+  // Batch unshield removed - use custom amount unshield with max instead
+  
+  // V3: Execute custom amount unshield (mixed batch: full notes + partial note)
+  const executeCustomAmountUnshield = async (
+    combination: NonNullable<ReturnType<typeof findOptimalNoteCombination>>,
+    requestedAmount: bigint
+  ) => {
+    setStatus("proving")
     setErrorMessage(null)
-    let totalReceived = 0
-    const txHashes: string[] = []
-    const skippedNotes: number[] = [] // Track notes that were already spent
     
-    for (let i = 0; i < worthyNotes.length; i++) {
-      const note = worthyNotes[i]
-      let originalNoteIndex: number | undefined = undefined // Declare outside try for catch block access
+    try {
+      const tokenAddress = selectedToken === 'DOGE' 
+        ? NATIVE_TOKEN
+        : shieldedPool.supportedTokens[selectedToken]?.address
       
-      try {
-        const commitmentStr = typeof note.commitment === 'bigint'
-          ? '0x' + note.commitment.toString(16).padStart(64, '0')
-          : String(note.commitment)
-        // Use note's decimals if available, otherwise use tokenDecimals from selectedToken
-        const noteDecimals = note.decimals ?? tokenDecimals
-        console.log(`[Consolidate] Processing note ${i + 1}/${worthyNotes.length}:`, {
-          commitment: commitmentStr.slice(0, 12) + '...',
-          amountWei: note.amount.toString(),
-          amountHuman: formatUnits(note.amount, noteDecimals),
-          token: note.token || 'DOGE',
-          tokenAddress: note.tokenAddress || 'N/A',
-          noteDecimals: note.decimals ?? 'N/A',
-          selectedToken,
-          selectedTokenDecimals: tokenDecimals,
+      if (!tokenAddress && selectedToken !== 'DOGE') {
+        throw new Error(`Token ${selectedToken} not configured`)
+      }
+      
+      const txHashes: string[] = [] // Track all transaction hashes
+      let totalReceived = 0n
+      
+      // Step 1: Batch unshield full notes (if any)
+      if (combination.fullNotes.length > 0) {
+        // Deduplicate notes by commitment/leafIndex to prevent using same note twice
+        const uniqueFullNotes = combination.fullNotes.filter((fn, idx, arr) => 
+          arr.findIndex(n => n.note.commitment === fn.note.commitment || 
+                            (n.note.leafIndex !== undefined && fn.note.leafIndex !== undefined && 
+                             n.note.leafIndex === fn.note.leafIndex)) === idx
+        )
+        
+        if (uniqueFullNotes.length !== combination.fullNotes.length) {
+          console.warn(`[CustomAmount] Filtered out ${combination.fullNotes.length - uniqueFullNotes.length} duplicate note(s) from batch`)
+        }
+        
+        const fullNoteIndices = uniqueFullNotes.map(fn => fn.index)
+        
+        // Calculate fee for full notes (total fee minus partial fee)
+        const partialFee = combination.partialNote 
+          ? calculateFeeForNote(combination.partialNote.unshieldAmount).fee 
+          : 0n
+        const fullNotesFee = combination.totalFee - partialFee
+        
+        console.log(`[CustomAmount] Batch unshielding ${combination.fullNotes.length} full notes...`)
+        const batchResult = await prepareBatchUnshield(
+          recipientAddress,
+          fullNoteIndices,
+          SHIELDED_POOL_ADDRESS,
+          relayerInfo?.address || undefined,
+          Number(formatUnits(fullNotesFee, tokenDecimals))
+        )
+        
+        // CRITICAL: Use batchResult.totalFee (adjusted to be divisible by batch size) instead of fullNotesFee
+        // prepareBatchUnshield adjusts the fee to be evenly divisible by batch size (contract requirement)
+        const adjustedBatchFee = batchResult.totalFee
+        
+        console.log(`[CustomAmount] Fee adjustment:`, {
+          originalFullNotesFee: fullNotesFee.toString(),
+          adjustedBatchFee: adjustedBatchFee.toString(),
+          batchSize: combination.fullNotes.length,
+          difference: (fullNotesFee - adjustedBatchFee).toString(),
         })
         
-        // Find the note's index in the ORIGINAL walletState.notes array (not filtered)
-        // This is critical: prepareUnshield uses walletState.notes[noteIndex], so we need the original index
-        const allNotes = getNotes() // Get all notes (unfiltered)
-        originalNoteIndex = allNotes.findIndex(n => n.commitment === note.commitment)
-        if (originalNoteIndex === -1) {
-          console.warn(`[Consolidate] Note ${i + 1} not found in wallet notes, skipping (may have been removed)`)
-          setConsolidateProgress({ current: i + 1, total: worthyNotes.length, totalReceived })
-          continue
+        // Submit batch
+        const batchResponse = await fetch(`${RELAYER_URL}/api/shielded/relay/batch-unshield`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            poolAddress: SHIELDED_POOL_ADDRESS,
+            proofs: batchResult.proofs.map(p => p.proof),
+            roots: batchResult.roots,
+            nullifierHashes: batchResult.nullifierHashes,
+            recipient: recipientAddress,
+            token: tokenAddress || NATIVE_TOKEN,
+            amounts: batchResult.amounts.map(a => a.toString()),
+            changeCommitments: batchResult.changeCommitments,
+            totalFee: adjustedBatchFee.toString(), // Use adjusted fee from prepareBatchUnshield
+            publicInputs: batchResult.proofs.map(p => p.publicInputs), // For debugging
+          }),
+        })
+        
+        const batchData = await batchResponse.json()
+        if (!batchData.success || !batchData.txHash) {
+          // Use backend's error message and suggestion if available
+          const errorMsg = batchData.error || batchData.message || 'Batch unshield failed'
+          const suggestion = batchData.suggestion || 'Please try again or contact support if the issue persists.'
+          const fullError = suggestion ? `${errorMsg}\n\n${suggestion}` : errorMsg
+          throw new Error(fullError)
         }
         
-        // Verify the note at this index matches what we expect
-        const foundNote = allNotes[originalNoteIndex]
-        if (foundNote.commitment !== note.commitment || foundNote.amount !== note.amount) {
-          console.error(`[Consolidate] Note mismatch at index ${originalNoteIndex}:`, {
-            expected: { commitment: note.commitment.toString().slice(0, 20), amount: note.amount.toString() },
-            found: { commitment: foundNote.commitment.toString().slice(0, 20), amount: foundNote.amount.toString() },
-          })
-          setConsolidateProgress({ current: i + 1, total: worthyNotes.length, totalReceived })
-          continue
+        txHashes.push(batchData.txHash) // Track batch transaction hash
+        // batchResult.totalAmount is already net (after fees deducted)
+        console.log(`[CustomAmount] Batch unshield completed:`, {
+          batchTxHash: batchData.txHash,
+          batchTotalAmountWei: batchResult.totalAmount.toString(),
+          batchTotalAmountHuman: Number(formatUnits(batchResult.totalAmount, tokenDecimals)).toFixed(4),
+          totalReceivedBefore: totalReceived.toString(),
+        })
+        totalReceived += batchResult.totalAmount
+        console.log(`[CustomAmount] totalReceived after batch:`, {
+          totalReceivedWei: totalReceived.toString(),
+          totalReceivedHuman: Number(formatUnits(totalReceived, tokenDecimals)).toFixed(4),
+        })
+        
+        // Remove full notes
+        await completeBatchUnshield(fullNoteIndices)
+      }
+      
+      // Step 2: Partial unshield remaining note (if any)
+      if (combination.partialNote) {
+        console.log(`[CustomAmount] Partially unshielding ${formatUnits(combination.partialNote.unshieldAmount, tokenDecimals)} ${selectedToken}...`)
+        
+        // CRITICAL: After batch unshield, notes were removed, so indices changed
+        // Find the partial note again by commitment/leafIndex (not by stale index)
+        const partialNoteCommitment = combination.partialNote.note.commitment
+        const partialNoteLeafIndex = combination.partialNote.note.leafIndex
+        
+        // Refresh notes and find the partial note by its unique identifier
+        const currentNotes = getNotes()
+        const partialNoteIndex = currentNotes.findIndex(note => 
+          note.commitment === partialNoteCommitment && 
+          note.leafIndex === partialNoteLeafIndex
+        )
+        
+        if (partialNoteIndex === -1) {
+          throw new Error('Partial note not found after batch unshield. It may have been spent.')
         }
         
-        // Get token address for consolidation
-        const tokenAddress = selectedToken === 'DOGE' 
-          ? NATIVE_TOKEN
-          : shieldedPool.supportedTokens[selectedToken]?.address
+        const partialFee = calculateFeeForNote(combination.partialNote.unshieldAmount).fee
         
-        if (!tokenAddress && selectedToken !== 'DOGE') {
-          throw new Error(`Token ${selectedToken} not configured`)
-        }
+        const proofResult = await prepareUnshield(
+          recipientAddress,
+          partialNoteIndex, // Use the refreshed index
+          combination.partialNote.unshieldAmount,
+          SHIELDED_POOL_ADDRESS,
+          relayerInfo?.address || undefined,
+          0,
+          partialFee
+        )
         
-        // Check if note is already spent BEFORE generating proof
-        // noteDecimals is already defined above, use it for fee calculation
-        const { fee: relayerFeeWei, error: feeError } = calculateFeeForNote(note.amount)
-        
-        if (feeError) {
-          console.warn(`[Consolidate] Note ${i + 1} too small: ${feeError}`)
-          setConsolidateProgress({ current: i + 1, total: worthyNotes.length, totalReceived })
-          continue // Skip this note, continue with others
-        }
-        
-        // Pass fee directly in wei to avoid precision loss during conversion
-        // Use originalNoteIndex (index in walletState.notes array, not filtered array)
-        const proofResult = await prepareUnshield(wallet.address, originalNoteIndex, SHIELDED_POOL_ADDRESS, relayerInfo?.address || undefined, 0, relayerFeeWei)
-        
-        // Check if nullifier is already spent
-        const isSpent = await checkNullifierSpent(proofResult.nullifierHash)
-        if (isSpent) {
-          console.warn(`[Consolidate] Note ${i + 1} already spent, removing from local state`)
-          skippedNotes.push(i + 1)
-          // Remove the spent note from local state (use originalNoteIndex)
-          completeUnshield(originalNoteIndex)
-          // Update progress (note was processed, just skipped)
-          setConsolidateProgress({ current: i + 1, total: worthyNotes.length, totalReceived })
-          continue
-        }
-        
-        const response = await fetch(`${RELAYER_URL}/api/shielded/relay/unshield`, {
+        // Submit partial unshield
+        const partialResponse = await fetch(`${RELAYER_URL}/api/shielded/relay/unshield`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -516,112 +902,116 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
             proof: proofResult.proof.proof,
             root: proofResult.root,
             nullifierHash: proofResult.nullifierHash,
-            recipient: wallet.address,
-            amount: proofResult.amount.toString(),  // Recipient net amount
-            fee: relayerFeeWei.toString(),  // Relayer fee
-            token: tokenAddress,  // Token address (native = 0x0...0)
+            recipient: recipientAddress,
+            amount: proofResult.amount.toString(),
+            changeCommitment: proofResult.changeCommitment || '0x0000000000000000000000000000000000000000000000000000000000000000',
+            fee: partialFee.toString(),
+            token: tokenAddress || NATIVE_TOKEN,
           }),
         })
-        const data = await response.json()
-        if (!response.ok) {
-          // Check if error is due to already spent
-          if (data.error?.includes('already') || data.error?.includes('spent') || data.message?.includes('already') || data.message?.includes('spent')) {
-            console.warn(`[Consolidate] Note ${i + 1} already spent (from relayer), removing from local state`)
-            skippedNotes.push(i + 1)
-            completeUnshield(originalNoteIndex) // Use originalNoteIndex
-            setConsolidateProgress({ current: i + 1, total: worthyNotes.length, totalReceived })
-            continue
-          }
-          // Use error message from response, fallback to error field, then generic message
-          const errorMessage = data.message || data.error || 'Relayer failed'
-          throw new Error(errorMessage)
-        }
-        txHashes.push(data.txHash)
-        // Convert amountReceived from token base units to human-readable using token decimals
-        const receivedAmount = Number(formatUnits(BigInt(data.amountReceived), tokenDecimals))
-        totalReceived += receivedAmount
-        completeUnshield(originalNoteIndex) // Use originalNoteIndex
         
-        console.log(`[Consolidate] Successfully processed note ${i + 1}/${worthyNotes.length}:`, {
-          txHash: data.txHash,
-          received: receivedAmount,
-          totalReceived,
+        const partialData = await partialResponse.json()
+        if (!partialData.success || !partialData.txHash) {
+          throw new Error(partialData.error || 'Partial unshield failed')
+        }
+        
+        txHashes.push(partialData.txHash) // Track partial transaction hash
+        // proofResult.amount is the actual amount received (requested - fees)
+        console.log(`[CustomAmount] Partial unshield completed:`, {
+          partialTxHash: partialData.txHash,
+          proofResultAmountWei: proofResult.amount.toString(),
+          proofResultAmountHuman: Number(formatUnits(proofResult.amount, tokenDecimals)).toFixed(4),
+          requestedUnshieldAmountWei: combination.partialNote.unshieldAmount.toString(),
+          requestedUnshieldAmountHuman: Number(formatUnits(combination.partialNote.unshieldAmount, tokenDecimals)).toFixed(4),
+          totalReceivedBefore: totalReceived.toString(),
+        })
+        totalReceived += proofResult.amount
+        console.log(`[CustomAmount] totalReceived after partial:`, {
+          totalReceivedWei: totalReceived.toString(),
+          totalReceivedHuman: Number(formatUnits(totalReceived, tokenDecimals)).toFixed(4),
         })
         
-        // Add to transaction history
-        addTransaction({
-          type: 'unshield',
-          txHash: data.txHash,
-          timestamp: Math.floor(Date.now() / 1000),
-          token: selectedToken,
-          amount: Number(formatUnits(BigInt(data.amountReceived), tokenDecimals)).toFixed(4),
-          amountWei: data.amountReceived,
-          recipientPublicAddress: wallet.address,
-          relayerFee: Number(formatUnits(relayerFeeWei, tokenDecimals)).toFixed(4),
-          status: 'confirmed',
-        })
-        
-        // Update progress AFTER successful processing - shows how many notes completed
-        // i + 1 because we just completed note at index i (0-indexed), so we've completed i+1 notes
-        setConsolidateProgress({ current: i + 1, total: worthyNotes.length, totalReceived })
-        setConsolidateTxHashes([...txHashes])
-      } catch (error: any) {
-        console.error(`[Consolidate] Error on note ${i + 1}/${worthyNotes.length}:`, error)
-        // Check if error is due to already spent
-        if (error.message?.includes('already') || error.message?.includes('spent') || error.message?.includes('NullifierAlreadySpent')) {
-          console.warn(`[Consolidate] Note ${i + 1} already spent, removing from local state`)
-          skippedNotes.push(i + 1)
-          // Try to remove the note if we can find it (use originalNoteIndex if available)
-          try {
-            if (originalNoteIndex !== undefined && originalNoteIndex !== -1) {
-              completeUnshield(originalNoteIndex)
-            } else {
-              // Fallback: find note in full array
-              const allNotes = getNotes()
-              const foundIndex = allNotes.findIndex(n => n.commitment === note.commitment)
-              if (foundIndex !== -1) {
-                completeUnshield(foundIndex)
-              }
-            }
-          } catch (e) {
-            console.warn('[Consolidate] Could not remove spent note:', e)
-          }
-          setConsolidateProgress({ current: i + 1, total: worthyNotes.length, totalReceived })
-          continue
-        }
-        // For other errors, log but continue processing remaining notes
-        console.error(`[Consolidate] Failed to process note ${i + 1}, continuing with remaining notes:`, error.message)
-        setErrorMessage(`Failed on note ${i + 1}: ${error.message}. Continuing with remaining notes...`)
-        setConsolidateProgress({ current: i + 1, total: worthyNotes.length, totalReceived })
-        // Continue to next note instead of stopping
-        continue
+        // Complete partial unshield (removes note, adds change note)
+        // Use the refreshed index (or find by note object for robustness)
+        await completeUnshield(
+          partialNoteIndex, // Use the refreshed index
+          proofResult.changeNote || null,
+          partialData.changeLeafIndex,
+          proofResult.nullifierHash,
+          SHIELDED_POOL_ADDRESS
+        )
       }
-    }
-    
-    // Show info about skipped notes if any
-    if (skippedNotes.length > 0) {
-      console.log(`[Consolidate] Skipped ${skippedNotes.length} already-spent note(s): ${skippedNotes.join(', ')}`)
+      
+      // Phase 2: Completion Acknowledge (300-600ms)
+      // This gives the user a sense of closure before showing success
+      setStatus("completing")
+      
+      // Use the last transaction hash for backward compatibility (single txHash state)
+      // But also pass txHashes array to SuccessDialog to show all transactions
+      const finalTxHash = txHashes[txHashes.length - 1] || ''
+      setTxHash(finalTxHash)
+      // IMPORTANT: Use actual totalReceived (sum of batchResult.totalAmount + proofResult.amount)
+      // NOT requestedAmount, because actual received may differ due to fee adjustments or note filtering
+      const actualReceived = Number(formatUnits(totalReceived, tokenDecimals))
+      console.log(`[CustomAmount] Setting withdrawnAmount:`, {
+        totalReceivedWei: totalReceived.toString(),
+        totalReceivedHuman: actualReceived.toFixed(4),
+        requestedAmountWei: requestedAmount.toString(),
+        requestedAmountHuman: Number(formatUnits(requestedAmount, tokenDecimals)).toFixed(4),
+        fullNotesCount: combination.fullNotes.length,
+        hasPartialNote: !!combination.partialNote,
+        totalFee: Number(formatUnits(combination.totalFee, tokenDecimals)).toFixed(4),
+        txHashes: txHashes,
+        txHashesCount: txHashes.length,
+      })
+      setWithdrawnAmount(actualReceived.toFixed(4))
+      setFee(Number(formatUnits(combination.totalFee, tokenDecimals)).toFixed(4))
+      // Store all transaction hashes for SuccessDialog
+      setAllTxHashes(txHashes)
+      
+      // Phase 3: Show success dialog after brief completion acknowledgment
+      // Hold duration: 400ms for completion phase + 500ms pause = 900ms total
+      setTimeout(() => {
+        // Pause on completion for 500ms before transitioning to success
+        setTimeout(() => {
+          setStatus("confirmed")
+          // Small delay before showing dialog to allow fade-out of progress indicator
+          setTimeout(() => {
+            setShowSuccessDialog(true)
+          }, 150) // Fade-out duration (150ms)
+        }, 500) // Pause on completion (500ms)
+      }, 400) // Completion phase duration (400ms)
+      
+      // OPTIMISTIC UPDATE: Shielded balance updates immediately (notes removed from local storage)
+      // This provides instant feedback for better UX
+      window.dispatchEvent(new CustomEvent('shielded-wallet-updated'))
+      
+      // NOTE: Public balance refresh happens AFTER confirmation (when transaction is mined)
+      // We don't refresh here because transaction isn't mined yet
+      
+      // Add to transaction history
+      addTransaction({
+        type: 'unshield',
+        txHash: finalTxHash,
+        timestamp: Math.floor(Date.now() / 1000),
+        token: selectedToken,
+        amount: Number(formatUnits(totalReceived, tokenDecimals)).toFixed(4),
+        amountWei: totalReceived.toString(),
+        recipientPublicAddress: recipientAddress,
+        relayerFee: Number(formatUnits(combination.totalFee, tokenDecimals)).toFixed(4),
+        status: 'confirmed',
+      })
+      
+    } catch (error: any) {
+      console.error('[CustomAmount] Unshield failed:', error)
+      setErrorMessage(error.message || 'Failed to unshield')
+      setStatus("error")
       toast({
-        title: "Note Cleanup",
-        description: `Removed ${skippedNotes.length} already-spent note(s) from your wallet. Your balance has been updated.`,
-        variant: "default",
+        title: "Unshield Failed",
+        description: error.message || 'Failed to unshield. Please try again.',
+        variant: "destructive",
       })
     }
-    
-    // Log final consolidation summary
-    console.log(`[Consolidate] Consolidation complete:`, {
-      totalNotes: worthyNotes.length,
-      processed: txHashes.length,
-      skipped: skippedNotes.length,
-      totalReceived,
-      txHashes,
-    })
-    
-    setConsolidateTotalReceived(totalReceived)
-    setWithdrawnAmount(totalReceived.toFixed(4))
-      setStatus("confirmed")
-      setShowSuccessDialog(true)
-      onSuccess?.()
   }
   
   // Execute unshield (internal - called after confirmation)
@@ -632,23 +1022,42 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
       toast({ title: "Invalid Amount", description: "Please enter a valid amount", variant: "destructive" })
       return
     }
-    if (!recipientAddress || !recipientAddress.startsWith("0x") || recipientAddress.length !== 42) {
+    // Validate recipient address (use the same validation function)
+    if (!isValidPublicAddress(recipientAddress)) {
       toast({ title: "Invalid Address", description: "Please enter a valid wallet address", variant: "destructive" })
       return
     }
+    
+    // V3: Try optimal note combination first (supports custom amount from total balance)
+    const combination = findOptimalNoteCombination(requestedWei)
+    
+    if (combination && (combination.fullNotes.length > 0 || combination.partialNote)) {
+      // Custom amount unshield using optimal combination (mixed batch)
+      await executeCustomAmountUnshield(combination, requestedWei)
+      return
+    }
+    
+    // Fallback to single note unshield
     const result = findBestNote(requestedWei)
     if (!result) {
-      toast({ title: "Insufficient Balance", description: "No single note large enough. Use 'Consolidate All'.", variant: "destructive" })
+      const totalBalance = totalReceivableAfterFees
+      toast({ 
+        title: "Insufficient Balance", 
+        description: `You have ${formatUnits(totalBalance, tokenDecimals)} ${selectedToken} available. Enter the max amount to unshield everything.`, 
+        variant: "destructive" 
+      })
       return
     }
     const { note: selectedNote, noteIndex: actualNoteIndex } = result
     
-    // Check if note is too small to unshield
-    const feeCheck = calculateFeeForNote(selectedNote.amount)
-    if (feeCheck.error) {
+    // Calculate fee based on requested amount (not note amount) for partial unshield
+    const { fee: relayerFeeWei } = calculateFeeForNote(requestedWei)
+    
+    // Check if note can cover requested amount + fee
+    if (selectedNote.amount < requestedWei + relayerFeeWei) {
       toast({
-        title: "Note Too Small",
-        description: feeCheck.error,
+        title: "Insufficient Funds",
+        description: `Note has ${formatWeiToAmount(selectedNote.amount)} ${selectedToken}, but need ${formatWeiToAmount(requestedWei + relayerFeeWei)} ${selectedToken} (requested + fee)`,
         variant: "destructive",
       })
       return
@@ -656,10 +1065,8 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
     
     try {
       setStatus("proving")
-      const { fee: relayerFeeWei } = feeCheck
-      // Pass fee directly in wei to avoid precision loss during conversion
-      // All tokens on DogeOS testnet use 18 decimals, so this works for all tokens
-      const proofResult = await prepareUnshield(recipientAddress, actualNoteIndex, SHIELDED_POOL_ADDRESS, relayerInfo?.address || undefined, 0, relayerFeeWei)
+      // V3: Pass requestedAmount as 3rd parameter for partial unshield support
+      const proofResult = await prepareUnshield(recipientAddress, actualNoteIndex, requestedWei, SHIELDED_POOL_ADDRESS, relayerInfo?.address || undefined, 0, relayerFeeWei)
       
       // Get token address for the request
       const tokenAddress = selectedToken === 'DOGE' 
@@ -730,8 +1137,7 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
       
       setStatus("relaying")
       
-      // Prepare request body - ALWAYS include token parameter
-      // This is critical: backend uses token parameter to determine which function to call
+      // Prepare request body - V3: Include changeCommitment for partial unshield
       const requestBody = {
         poolAddress: SHIELDED_POOL_ADDRESS,
         proof: proofResult.proof.proof,
@@ -739,6 +1145,7 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
         nullifierHash: proofResult.nullifierHash,
         recipient: recipientAddress,
         amount: proofResult.amount.toString(),  // Recipient net amount
+        changeCommitment: proofResult.changeCommitment || '0x0000000000000000000000000000000000000000000000000000000000000000',  // V3: Change commitment
         fee: relayerFeeWei.toString(),  // Relayer fee
         token: tokenAddress || NATIVE_TOKEN,  // Token address - ALWAYS include (native = 0x0...0)
       }
@@ -803,12 +1210,16 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
         throw new Error('Cannot unshield: amount received would be zero')
       }
       
-      // Complete unshield immediately (removes note from wallet)
-      await completeUnshield(actualNoteIndex)
+      // V3: Complete unshield - pass changeNote (without leafIndex for now, will update after confirmation)
+      // Note: changeLeafIndex will be extracted from backend response (which reads it from transaction events)
+      await completeUnshield(actualNoteIndex, proofResult.changeNote || null, data.changeLeafIndex, proofResult.nullifierHash, SHIELDED_POOL_ADDRESS)
       
-      // Trigger balance refresh immediately after note removal
-      window.dispatchEvent(new Event('refresh-balance'))
+      // OPTIMISTIC UPDATE: Shielded balance updates immediately (note removed from local storage)
+      // This provides instant feedback for better UX
       window.dispatchEvent(new CustomEvent('shielded-wallet-updated'))
+      
+      // NOTE: Public balance refresh happens AFTER confirmation (in tracker callback)
+      // We don't refresh here because transaction isn't mined yet
       
       // Update status to pending (tracker will update to confirmed)
       setStatus("pending")
@@ -816,32 +1227,79 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
       // Start tracking transaction
       const newTracker = new TransactionTrackerClass(1)
       let isConfirmed = false
-      newTracker.onUpdate((trackerState) => {
+      newTracker.onUpdate(async (trackerState) => {
         console.log('[Unshield] Tracker update:', trackerState.status, 'txHash:', trackerState.txHash)
         if (trackerState.status === 'confirmed' && !isConfirmed) {
           isConfirmed = true
           console.log('[Unshield] Transaction confirmed! Setting status and showing dialog')
-          // Set status first
-          setStatus('confirmed')
+          // Phase 2: Completion Acknowledge (300-600ms)
+          setStatus('completing')
+          
+          // V3: Update change note's leaf index if we have it and change note exists
+          if (proofResult.changeNote && data.changeLeafIndex !== undefined) {
+            try {
+              const { getNotes } = await import('@/lib/shielded/shielded-service');
+              const notes = getNotes();
+              const changeNote = notes.find(n => 
+                n.commitment === proofResult.changeNote!.commitment && 
+                n.ownerPubkey === proofResult.changeNote!.ownerPubkey
+              );
+              if (changeNote && changeNote.leafIndex === undefined) {
+                changeNote.leafIndex = data.changeLeafIndex;
+                const { saveNotesToStorage } = await import('@/lib/shielded/shielded-service');
+                await saveNotesToStorage(notes);
+                console.log(`[Unshield] Updated change note leaf index to ${data.changeLeafIndex}`);
+              }
+            } catch (updateError) {
+              console.warn('[Unshield] Failed to update change note leaf index:', updateError);
+            }
+          }
           // Add to transaction history
           addTransaction({
             type: 'unshield',
             txHash: data.txHash,
             timestamp: Math.floor(Date.now() / 1000),
             token: selectedToken,
-            amount: receivedAmount,
+            amount: Number(receivedAmount).toFixed(4), // Format to 4 decimals
             amountWei: data.amountReceived,
             recipientPublicAddress: wallet.address,
             relayerFee: feeAmount,
             status: 'confirmed',
           })
-          // Note: Success dialog will be shown by useEffect when status === "confirmed"
-          // Trigger balance refresh immediately and again after delay
+          // Phase 3: Show success dialog after brief completion acknowledgment
+          // Hold duration: 400ms for completion phase + 500ms pause = 900ms total
+          setTimeout(() => {
+            // Pause on completion for 500ms before transitioning to success
+            setTimeout(() => {
+              setStatus('confirmed')
+              // Note: Success dialog will be shown by useEffect when status === "confirmed"
+              // Small delay before showing dialog to allow fade-out of progress indicator
+            }, 500) // Pause on completion (500ms)
+          }, 400) // Completion phase duration (400ms)
+          
+          // AFTER CONFIRMATION: Refresh public balance (transaction is now mined)
+          // This is when the public balance actually changes on-chain
           window.dispatchEvent(new Event('refresh-balance'))
-          window.dispatchEvent(new CustomEvent('shielded-wallet-updated'))
+          if (wallet?.refreshBalance) {
+            wallet.refreshBalance().catch(err => console.warn('[Unshield] Failed to refresh public balance:', err))
+          }
+          
+          // AFTER CONFIRMATION: Sync shielded notes with chain (ensures accuracy)
+          // This catches any discrepancies from optimistic updates
+          try {
+            await syncNotesWithChain(SHIELDED_POOL_ADDRESS)
+            window.dispatchEvent(new CustomEvent('shielded-wallet-updated'))
+          } catch (syncError) {
+            console.warn('[Unshield] Failed to sync notes after confirmation:', syncError)
+          }
+          
+          // Additional refresh after short delay as backup
           setTimeout(() => {
             window.dispatchEvent(new Event('refresh-balance'))
             window.dispatchEvent(new CustomEvent('shielded-wallet-updated'))
+            if (wallet?.refreshBalance) {
+              wallet.refreshBalance().catch(err => console.warn('[Unshield] Failed to refresh public balance (backup):', err))
+            }
           }, 1000)
         } else if (trackerState.status === 'failed') {
           setStatus('failed')
@@ -879,12 +1337,14 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
     setRecipientAddress("")
     setStatus("idle")
     setTxHash(null)
+    setAllTxHashes([]) // Reset all transaction hashes
     setWithdrawnAmount(null)
     setFee(null)
     setErrorMessage(null)
-    setConsolidateProgress(null)
-    setConsolidateTxHashes([])
+    setIsExecuting(false)
     setShowSuccessDialog(false) // Clear success dialog state
+    // Ensure balances are refreshed when dialog closes
+    window.dispatchEvent(new CustomEvent('shielded-wallet-updated'))
     if (tracker) {
       tracker.stop()
       tracker.reset()
@@ -906,21 +1366,9 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
     if (maxReceivable > 0n) {
       // Convert from token base units to human-readable using token decimals
       const maxAmount = formatUnits(maxReceivable, tokenDecimals)
-      // Round DOWN to avoid exceeding the actual receivable amount
-      // Parse the string to avoid floating-point precision issues
-      const parts = maxAmount.split('.')
-      if (parts.length === 1) {
-        // No decimal part
-        setAmount(parts[0])
-      } else {
-        // Has decimal part - truncate to tokenDecimals places (no rounding)
-        const integerPart = parts[0]
-        const decimalPart = parts[1].slice(0, tokenDecimals).padEnd(Math.min(tokenDecimals, parts[1].length), '0')
-        // Format with appropriate decimal places (max 8 for display)
-        const displayDecimals = Math.min(tokenDecimals, 8)
-        const truncatedDecimal = decimalPart.slice(0, displayDecimals)
-        setAmount(`${integerPart}.${truncatedDecimal}`)
-      }
+      // Format to 4 decimal places to exactly match "Max: 6.0030" display format
+      const formatted = Number(maxAmount).toFixed(4)
+      setAmount(formatted)
     }
   }
   
@@ -930,7 +1378,6 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
   }
   
   const selectedInfo = getSelectedNoteInfo()
-  const needsConsolidation = spendableNotes.length > 1
   
   return (
     <>
@@ -946,14 +1393,15 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
               onSuccess?.()
             }
           }}
-          title="Unshield Successful!"
-          message={`Successfully unshielded ${withdrawnAmount && Number(withdrawnAmount) > 0 ? Number(withdrawnAmount).toFixed(4) : '0'} ${selectedToken} to your public wallet.`}
+          title="Unshield Complete"
+          message="Assets have been released from the shielded balance."
           onClose={() => {
             setShowSuccessDialog(false)
             reset()
             onSuccess?.()
           }}
-          txHash={txHash}
+          txHash={allTxHashes.length === 0 ? txHash : null} // Use txHash only if no txHashes array
+          txHashes={allTxHashes.length > 0 ? allTxHashes : undefined} // Pass txHashes if multiple transactions
           blockExplorerUrl={dogeosTestnet.blockExplorers.default.url}
           actionText="Unshield More"
           onAction={() => {
@@ -962,10 +1410,14 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
             onSuccess?.()
           }}
           details={
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-gray-400">Unshielded Amount</span>
-                <span className="text-green-400 font-semibold">{withdrawnAmount && Number(withdrawnAmount) > 0 ? Number(withdrawnAmount).toFixed(4) : '0.0000'} {selectedToken}</span>
+            <div className="space-y-2.5 text-sm">
+              <div className="p-2.5 sm:p-3 rounded-xl bg-zinc-800/40 backdrop-blur-sm border border-[#C2A633]/20 flex justify-between items-center">
+                <span className="text-gray-400">Amount</span>
+                <span className="text-white font-semibold">{withdrawnAmount && Number(withdrawnAmount) > 0 ? Number(withdrawnAmount).toFixed(4) : '0.0000'} {selectedToken}</span>
+              </div>
+              <div className="p-2.5 sm:p-3 rounded-xl bg-zinc-800/40 backdrop-blur-sm border border-[#C2A633]/20 flex justify-between items-center">
+                <span className="text-gray-400">Destination</span>
+                <span className="text-white font-mono text-xs">{recipientAddress.slice(0, 8)}…{recipientAddress.slice(-6)}</span>
               </div>
             </div>
           }
@@ -973,101 +1425,15 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
       )}
       
       <div className="space-y-4">
-      <div>
-        <h3 className="text-lg font-display font-medium">Send to Public Address</h3>
-        <p className="text-sm font-body text-muted-foreground">Unshield your shielded {selectedToken} to any public wallet address</p>
-      </div>
-      
-      <div className="p-4 rounded-lg bg-gradient-to-r from-primary/10 to-transparent border">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Coins className="h-5 w-5 text-primary" />
-            <span className="font-medium">Available to Unshield</span>
-          </div>
-          <div className="text-right">
-            {notes.length === 0 && wallet?.isConnected ? (
-              <div className="flex items-center gap-2 text-white/50">
-                <Loader2 className="w-4 h-4 animate-spin" />
-                <span className="text-sm">Loading balance...</span>
-              </div>
-            ) : (
-              <div className="text-xl font-mono font-bold tracking-[-0.01em]">{Number(formatUnits(totalBalance, tokenDecimals)).toFixed(4)} <span className="font-body text-sm text-white/70">{selectedToken}</span></div>
-            )}
-          </div>
-        </div>
-        {largestNote && (
-          <div className="mt-2 pt-2 border-t border-muted text-xs text-muted-foreground">
-            <Info className="h-3 w-3 inline mr-1" />
-            Max single unshield: {Number(formatUnits(largestNote.amount, tokenDecimals)).toFixed(4)} {selectedToken}
-          </div>
-        )}
-      </div>
-      
-      {needsConsolidation && status === "idle" && (
-        <div className="p-4 rounded-lg border-2 border-dashed border-primary/30 bg-primary/5">
-          <div className="flex items-start gap-3">
-            <Layers className="h-5 w-5 text-primary mt-0.5" />
-            <div className="flex-1">
-              <h4 className="font-medium flex items-center gap-2">
-                Consolidate All Notes
-                <span className="text-xs bg-green-500/20 text-green-500 px-2 py-0.5 rounded-full">Recommended</span>
-              </h4>
-              <p className="text-sm text-muted-foreground mt-1">
-                Unshield all available notes directly to your connected wallet
-              </p>
-              <div className="mt-2 text-sm">
-                {isLoadingRelayerInfo ? (
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    <span>Computing notes...</span>
-                  </div>
-                ) : (
-                  <>
-                    <div className="flex items-center gap-2">
-                      <span className="text-muted-foreground">You'll receive:</span>
-                      <span className="font-medium text-green-500">~{Number(formatUnits(totalReceivableAfterFees, tokenDecimals)).toFixed(4)} {selectedToken}</span>
-                    </div>
-                    {usdValue && (
-                      <div className="text-muted-foreground mt-1">
-                        {usdValue}
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
-              <Button 
-                className="mt-3 w-full" 
-                variant="outline" 
-                onClick={handleConsolidateAll} 
-                disabled={isLoadingRelayerInfo || !relayerInfo?.available || !wallet?.address || totalBalance === 0n}
-              >
-                {isLoadingRelayerInfo ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Computing notes...
-                  </>
-                ) : (
-                  <>
-                    <Layers className="h-4 w-4 mr-2" />
-                    Consolidate All to {wallet?.address ? `${wallet.address.slice(0, 6)}...${wallet.address.slice(-4)}` : 'Wallet'}
-                  </>
-                )}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-      
-      
       {status === "idle" && (
         <div className="space-y-4">
           {/* 🆕 Simulation Warning */}
           {simulationWarning?.show && (
-            <Alert variant="destructive" className="mb-4">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription className="space-y-2">
-                <div className="font-semibold">Transaction Validation Failed</div>
-                <div>{simulationWarning.suggestion || simulationWarning.message}</div>
+            <Alert className="bg-red-500/10 border-red-500/30 mb-4">
+              <AlertCircle className="h-4 w-4 text-red-400" />
+              <AlertDescription className="text-red-50 space-y-2">
+                <div className="font-semibold text-red-100">Transaction Validation Failed</div>
+                <div className="text-red-100">{simulationWarning.suggestion || simulationWarning.message}</div>
                 {simulationWarning.errorCode === 'UNKNOWN_ROOT' && (
                   <Button
                     onClick={async () => {
@@ -1111,37 +1477,133 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
               </AlertDescription>
             </Alert>
           )}
-          
-          {needsConsolidation && (
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div>
-              <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-background px-2 text-muted-foreground">Or unshield specific amount</span>
-              </div>
-            </div>
-          )}
           <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="amount">Amount to Unshield</Label>
-              <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={handleSetMax}>
-                Max: {Number(formatUnits(calculateMaxUnshieldable(), tokenDecimals)).toFixed(4)}
-              </Button>
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="amount">Amount Unshield</Label>
+                <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={handleSetMax}>
+                  Max: {getMaxAmountSafe()}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">Unshield any amount from your total shielded balance</p>
             </div>
-            <Input id="amount" type="number" placeholder="Enter amount" value={amount} onChange={(e) => setAmount(e.target.value)} />
+            <Input id="amount" type="number" placeholder="Enter amount" value={amount} onChange={(e) => setAmount(e.target.value)} className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
           </div>
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <Label htmlFor="recipient">Recipient Address</Label>
               <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={fillConnectedAddress}>Use my wallet</Button>
             </div>
-            <Input id="recipient" placeholder="0x... (any wallet address)" value={recipientAddress} onChange={(e) => setRecipientAddress(e.target.value)} />
-            <p className="text-xs text-muted-foreground">You can send unshield to any public wallet address</p>
+            <div className="relative">
+              <style dangerouslySetInnerHTML={{__html: `
+                #unshield-recipient {
+                  background-color: transparent !important;
+                  background: transparent !important;
+                }
+                #unshield-recipient:-webkit-autofill,
+                #unshield-recipient:-webkit-autofill:hover,
+                #unshield-recipient:-webkit-autofill:focus,
+                #unshield-recipient:-webkit-autofill:active {
+                  -webkit-box-shadow: 0 0 0 30px rgba(0, 0, 0, 0.4) inset !important;
+                  -webkit-text-fill-color: white !important;
+                  background-color: transparent !important;
+                  background: transparent !important;
+                }
+              `}} />
+              <div
+                className={`
+                  relative flex items-center gap-2
+                  border border-white/10 rounded-md
+                  transition-all duration-200
+                  ${isAddressFocused 
+                    ? 'ring-2 ring-[#C2A633]/30 ring-offset-0 ring-offset-black shadow-[0_0_0_1px_rgba(194,166,51,0.2),0_0_12px_rgba(194,166,51,0.1)] border-[#C2A633]/40' 
+                    : showAddressError
+                    ? 'border-red-400/50'
+                    : isAddressValid
+                    ? 'border-[#C2A633]/30'
+                    : 'border-white/10'
+                  }
+                `}
+                style={{
+                  backgroundColor: 'rgba(0, 0, 0, 0.6)',
+                }}
+              >
+                {/* Always show input field - keep it editable */}
+                <input
+                  ref={addressInputRef}
+                  id="unshield-recipient"
+                  type="text"
+                  placeholder="0x... (any wallet address)"
+                  value={recipientAddress}
+                  onChange={(e) => setRecipientAddress(e.target.value)}
+                  onFocus={() => setIsAddressFocused(true)}
+                  onBlur={() => setIsAddressFocused(false)}
+                  className={`
+                    flex-1 border-0 outline-none
+                    px-4 py-2.5 text-sm
+                    font-mono text-white placeholder:text-white/30
+                    focus:ring-0 focus:outline-none
+                  `}
+                  style={{ 
+                    caretColor: '#C2A633',
+                    backgroundColor: 'transparent',
+                    background: 'transparent',
+                    color: 'white',
+                  }}
+                  autoComplete="off"
+                  data-lpignore="true"
+                  data-form-type="other"
+                />
+                {recipientAddress && (
+                  <>
+                    {/* Show validation indicator */}
+                    {isAddressValid ? (
+                      <CheckCircle2 className="h-4 w-4 text-[#C2A633] flex-shrink-0 mr-1" />
+                    ) : showAddressError ? (
+                      <AlertCircle className="h-4 w-4 text-red-400 flex-shrink-0 mr-1" />
+                    ) : null}
+                    <button
+                      type="button"
+                      onClick={async (e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        try {
+                          await navigator.clipboard.writeText(recipientAddress)
+                          setAddressCopied(true)
+                          toast({
+                            title: "Copied",
+                            description: "Address copied to clipboard",
+                          })
+                          setTimeout(() => setAddressCopied(false), 2000)
+                        } catch (err) {
+                          console.error('Failed to copy:', err)
+                        }
+                      }}
+                      className="p-2 hover:bg-white/5 rounded transition-colors flex-shrink-0"
+                      title="Copy full address"
+                    >
+                      {addressCopied ? (
+                        <Check className="h-4 w-4 text-[#C2A633]" />
+                      ) : (
+                        <Copy className="h-4 w-4 text-white/50 hover:text-white/80" />
+                      )}
+                    </button>
+                  </>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground mt-1.5">You can send unshield to any public wallet address</p>
+              {showAddressError && (
+                <p className="text-xs text-red-400 mt-1.5">
+                  Invalid address. Must start with '0x' followed by 40 hexadecimal characters.
+                </p>
+              )}
+            </div>
           </div>
           {amount && relayerInfo && selectedInfo && !('error' in selectedInfo) && (
             <EstimatedFees
-              amount={selectedInfo.noteAmount}
-              fee={selectedInfo.fee}
-              received={BigInt(Math.floor(parseFloat(amount) * (10 ** tokenDecimals)))}
+              amount={BigInt(Math.floor(parseFloat(amount) * (10 ** tokenDecimals)))}
+              fee={selectedInfo.isCustomAmount ? (selectedInfo.totalFee || 0n) : (selectedInfo.fee || 0n)}
+              received={selectedInfo.youReceive}
               token={selectedToken}
               tokenDecimals={tokenDecimals}
             />
@@ -1149,14 +1611,14 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
           
           {amount && relayerInfo && selectedInfo && 'error' in selectedInfo && (
             <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/30">
-              <div className="text-sm text-red-400 flex items-center gap-2">
-                <AlertCircle className="h-4 w-4" />
+              <div className="text-sm text-red-100 flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 text-red-400" />
                 {selectedInfo.error}
               </div>
             </div>
           )}
           <Button 
-            className="w-full min-h-[44px] sm:min-h-0 relative overflow-hidden bg-white/10 border border-white/20 hover:border-[#B89A2E]/50 transition-all duration-500 group py-3 sm:py-2"
+            className="w-full min-h-[44px] sm:min-h-0 relative overflow-hidden bg-zinc-900/70 border border-zinc-700/80 hover:border-[#C2A633]/50 transition-all duration-300 group py-3 sm:py-2 backdrop-blur-sm"
             onClick={() => {
               if (selectedInfo && !('error' in selectedInfo)) {
                 setSimulationWarning(null) // Clear any previous warnings
@@ -1164,12 +1626,30 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
                 setShowConfirmDialog(true)
               }
             }} 
-            disabled={!relayerInfo?.available || !selectedInfo || 'error' in selectedInfo || totalBalance === 0n}
+            disabled={!relayerInfo?.available || !selectedInfo || 'error' in selectedInfo || totalBalance === 0n || !isAddressValid}
+            style={{
+              boxShadow: '0 0 0 1px rgba(194, 166, 51, 0.08)',
+              transition: 'all 0.3s ease-out',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.boxShadow = '0 0 0 1px rgba(194, 166, 51, 0.25), 0 0 12px rgba(194, 166, 51, 0.1)'
+              e.currentTarget.style.background = 'rgba(39, 39, 42, 0.85)'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.boxShadow = '0 0 0 1px rgba(194, 166, 51, 0.08)'
+              e.currentTarget.style.background = 'rgba(24, 24, 27, 0.7)'
+            }}
           >
-            {/* Fill animation from left to right - slower and more natural */}
-            <span className="absolute inset-0 bg-[#B89A2E] transform -translate-x-full group-hover:translate-x-0 transition-transform duration-[1300ms] ease-in-out" />
-            <span className="relative z-10 flex items-center justify-center text-sm sm:text-base text-white group-hover:text-black transition-colors duration-[1300ms] ease-in-out">
-              <ShieldOff className="h-4 w-4 mr-2 flex-shrink-0" strokeWidth={1.75} />
+            {/* Subtle shimmer effect on hover */}
+            <span 
+              className="absolute inset-0 transform -translate-x-full group-hover:translate-x-0 transition-transform duration-[1500ms] ease-out opacity-0 group-hover:opacity-100"
+              style={{
+                background: 'linear-gradient(90deg, transparent, rgba(194, 166, 51, 0.05), transparent)',
+                width: '100%',
+              }}
+            />
+            <span className="relative z-10 flex items-center justify-center text-sm sm:text-base text-[#C2A633]/90 group-hover:text-[#C2A633] transition-colors duration-300 font-medium">
+              <ShieldOff className="h-4 w-4 mr-2 flex-shrink-0 transition-transform duration-300 group-hover:scale-[1.05]" strokeWidth={1.75} />
               Unshield to Public Wallet
             </span>
           </Button>
@@ -1177,39 +1657,57 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
           {/* Confirmation Dialog */}
           <ConfirmationDialog
             open={showConfirmDialog}
-            onOpenChange={setShowConfirmDialog}
+            onOpenChange={(open) => {
+              setShowConfirmDialog(open)
+            }}
             title="Confirm Unshield"
-            description={`You are about to unshield ${amount ? Number(amount).toFixed(4) : '0'} ${selectedToken} to ${recipientAddress.slice(0, 6)}...${recipientAddress.slice(-4)}. A relayer fee will be deducted.`}
+            description={`You're about to unshield your ${selectedToken}. Please check the details below before confirming to unshield.`}
             confirmText="Confirm Unshield"
             cancelText="Cancel"
             onConfirm={async () => {
-              if (pendingUnshield) {
-                await pendingUnshield()
+              // BULLETPROOF: Multiple guards to prevent duplicate execution
+              if (isExecuting || !pendingUnshield) {
+                console.warn('[Consolidate] Confirmation blocked: isExecuting=', isExecuting, 'pendingUnshield=', !!pendingUnshield)
+                return
               }
+              
+              // Set executing IMMEDIATELY to prevent any other calls
+              setIsExecuting(true)
+              
+              // Capture the pending function and clear it immediately to prevent reuse
+              const executeFn = pendingUnshield
               setPendingUnshield(null)
+              setShowConfirmDialog(false)
+              
+              try {
+                await executeFn()
+              } catch (error: any) {
+                console.error('[Unshield] Execution error:', error)
+              } finally {
+                isExecutingRef.current = false
+                setIsExecuting(false)
+              }
             }}
             isLoading={status === "proving" || status === "relaying"}
             details={
               selectedInfo && !('error' in selectedInfo) ? (
                 <div className="space-y-1.5 sm:space-y-2 text-xs sm:text-sm">
                   <div className="flex justify-between items-center gap-2">
-                    <span className="text-gray-400">Note Amount</span>
-                    <span className="text-white text-right break-all">{Number(formatUnits(selectedInfo.noteAmount, tokenDecimals)).toFixed(4)} {selectedToken}</span>
+                    <span className="text-gray-400">Recipient Address</span>
+                    <span className="text-white text-right break-all font-mono">{recipientAddress.slice(0, 6)}...{recipientAddress.slice(-4)}</span>
+                  </div>
+                  <div className="flex justify-between items-center gap-2">
+                    <span className="text-gray-400">Amount to Unshield</span>
+                    <span className="text-white text-right break-all">{amount ? Number(amount).toFixed(4) : '0.0000'} {selectedToken}</span>
                   </div>
                   <div className="flex justify-between items-center gap-2">
                     <span className="text-gray-400">Relayer Fee</span>
-                    <span className="text-red-400 text-right break-all">-{Number(formatUnits(selectedInfo.fee, tokenDecimals)).toFixed(4)} {selectedToken}</span>
+                    <span className="text-red-400 text-right break-all">-{Number(formatUnits(selectedInfo.isCustomAmount ? (selectedInfo.totalFee || 0n) : (selectedInfo.fee || 0n), tokenDecimals)).toFixed(4)} {selectedToken}</span>
                   </div>
                   <div className="flex justify-between items-center gap-2 pt-2 border-t border-[#C2A633]/10">
-                    <span className="text-gray-400">You Receive</span>
-                    <span className="text-green-400 font-semibold text-right break-all">{amount ? Number(amount).toFixed(4) : '0'} {selectedToken}</span>
+                    <span className="text-gray-400">Total Receive</span>
+                    <span className="text-green-400 font-semibold text-right break-all">{Number(formatUnits(selectedInfo.youReceive, tokenDecimals)).toFixed(4)} {selectedToken}</span>
                   </div>
-                  {selectedInfo.change > 0n && (
-                    <div className="flex justify-between items-center gap-2 text-[10px] sm:text-xs text-gray-500">
-                      <span>Change (returned to shielded)</span>
-                      <span className="text-right break-all">{Number(formatUnits(selectedInfo.change, tokenDecimals)).toFixed(4)} {selectedToken}</span>
-                    </div>
-                  )}
                 </div>
               ) : undefined
             }
@@ -1217,115 +1715,24 @@ export function UnshieldInterface({ notes, onSuccess, selectedToken = "DOGE", on
         </div>
       )}
       
-      {status === "consolidating" && consolidateProgress && (
-        <div className="space-y-4">
-          <div className="p-6 rounded-lg bg-white/5 border border-white/10">
-            <div className="flex flex-col items-center space-y-4">
-              {/* Animated Icon */}
-              <div className="relative">
-                <div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center">
-                  <Layers className="h-8 w-8 text-white/80 animate-pulse" strokeWidth={1.5} />
-                </div>
-                <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-[#C2A633] flex items-center justify-center">
-                  <Loader2 className="h-3 w-3 text-black animate-spin" />
-                </div>
-              </div>
-              
-              {/* Progress Info */}
-              <div className="w-full max-w-xs space-y-3">
-                <div className="text-center space-y-2">
-                  <h4 className="text-base font-display font-semibold text-white">
-                    Consolidating Notes
-                  </h4>
-                  <p className="text-sm font-body text-white/70">
-                    Processing note {consolidateProgress.current} of {consolidateProgress.total}...
-                  </p>
-                </div>
-                
-                {/* Progress Bar */}
-                <div className="relative w-full h-2 bg-white/5 rounded-full overflow-hidden">
-                  <div 
-                    className="absolute top-0 left-0 h-full w-full bg-white rounded-full origin-left transition-transform duration-300 ease-out"
-                    style={{ 
-                      transform: `scaleX(${consolidateProgress.total > 0 ? consolidateProgress.current / consolidateProgress.total : 0})`
-                    }}
-                  />
-                </div>
-                
-                {/* Received Amount */}
-                <div className="text-center">
-                  <p className="text-sm font-body text-white/60">Received so far:</p>
-                  <p className="text-lg font-display font-semibold text-[#C2A633]">
-                    {consolidateProgress.totalReceived.toFixed(4)} {selectedToken}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-      
-      {/* Progress Indicator - Only show during processing, hide when confirmed/success */}
-      {status !== "confirmed" && status !== "success" && (
-        <TransactionProgress
-          status={status === "idle" ? "idle" : (status === "error" ? "failed" : status)}
-          message={
-            status === "proving" ? "This may take 10-30 seconds..."
-            : status === "relaying" ? "Relayer is submitting your transaction..."
-            : status === "pending" ? "Waiting for blockchain confirmation..."
-            : status === "consolidating" ? `Consolidating notes (${consolidateProgress?.current || 0}/${consolidateProgress?.total || 0})...`
-            : undefined
-          }
-          txHash={txHash}
-          blockExplorerUrl={dogeosTestnet.blockExplorers.default.url}
-        />
-      )}
-      
-      {status === "success" && consolidateTxHashes.length > 0 && (
-        <div className="space-y-4">
-          <div className="p-6 rounded-lg bg-white/5 border border-white/10">
-            <div className="flex items-start gap-4">
-              <div className="flex-shrink-0 w-12 h-12 rounded-full bg-[#C2A633]/20 flex items-center justify-center">
-                <Check className="h-6 w-6 text-[#C2A633]" strokeWidth={2.5} />
-              </div>
-              <div className="flex-1 space-y-3">
-                <div>
-                  <h4 className="text-lg font-display font-semibold text-white mb-2">
-                    Consolidation Complete!
-                  </h4>
-                  <p className="text-sm font-body text-white/70 leading-relaxed">
-                    Successfully consolidated {consolidateTxHashes.length} note{consolidateTxHashes.length > 1 ? 's' : ''} and received {consolidateTotalReceived.toFixed(4)} {selectedToken}.
-                  </p>
-                </div>
-                <div className="pt-3 border-t border-white/10 space-y-2">
-                  <p className="text-xs font-medium text-white/60">
-                    Transaction Links ({consolidateTxHashes.length}):
-                  </p>
-                  <div className="max-h-48 overflow-y-auto space-y-1.5">
-                    {consolidateTxHashes.map((hash, i) => (
-                      <a 
-                        key={hash} 
-                        href={`https://blockscout.testnet.dogeos.com/tx/${hash}`} 
-                        target="_blank" 
-                        rel="noopener noreferrer" 
-                        className="inline-flex items-center gap-2 text-xs text-[#C2A633] hover:text-[#C2A633]/80 transition-colors group font-medium"
-                      >
-                        <span className="font-mono">Transaction {i + 1}: {hash.slice(0, 10)}...{hash.slice(-8)}</span>
-                        <ExternalLink className="h-3 w-3 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all" />
-                      </a>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          <Button 
-            className="w-full bg-white/5 hover:bg-white/10 text-[#C2A633] border border-[#C2A633]/50 hover:border-[#C2A633] font-body font-medium transition-all" 
-            onClick={reset}
-          >
-            Done
-          </Button>
+      {/* Progress Indicator - Show during processing and completion phase */}
+      {(status === "proving" || status === "relaying" || status === "pending" || status === "completing") && (
+        <div className={cn(
+          "transition-opacity duration-150",
+          status === "confirmed" ? "opacity-0 pointer-events-none" : "opacity-100"
+        )}>
+          <TransactionProgress
+            status={status === "idle" ? "idle" : (status === "error" ? "failed" : status)}
+            provingText="Generating unshield proof"
+            message={
+              status === "proving" ? "This typically takes a few seconds."
+              : status === "relaying" ? "Relayer is submitting your transaction..."
+              : status === "pending" ? "Waiting for blockchain confirmation..."
+              : undefined
+            }
+            txHash={status === "completing" ? null : txHash} // Hide txHash during completing phase
+            blockExplorerUrl={dogeosTestnet.blockExplorers.default.url}
+          />
         </div>
       )}
       

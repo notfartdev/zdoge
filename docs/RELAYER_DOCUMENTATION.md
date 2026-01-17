@@ -22,7 +22,7 @@ Your codebase has **two separate relayer services**:
    - Supports all tokens (DOGE, USDC, USDT, WETH, LBTC, USD1)
 
 2. **Shielded Relayer** (`backend/src/shielded/shielded-routes.ts`)
-   - For the new `ShieldedPoolMultiToken` contract
+   - For the `ShieldedPoolMultiToken` contract (V4)
    - Uses `unshieldNative()` and `transfer()` functions
    - **Currently only supports DOGE** (see limitations below)
 
@@ -298,10 +298,11 @@ For MVP, accept DOGE fees for all tokens. This is the simplest and most reliable
   - Transfer endpoint: Lines 474-650
 
 ### Contract Functions
-- **ShieldedPoolMultiToken:** `contracts/src/ShieldedPoolMultiToken.sol`
+- **ShieldedPoolMultiToken V4:** `contracts/src/ShieldedPoolMultiToken.sol`
   - `unshieldNative()`: Lines 284-294
   - `unshieldToken()`: Lines 299-311
   - `_unshield()` (internal): Lines 313-374
+  - **Version:** V4 (January 2025) - All security fixes deployed
 
 ### Frontend Integration
 - **Unshield Interface:** `components/shielded/unshield-interface.tsx`

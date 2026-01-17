@@ -100,6 +100,14 @@ export function toBytes32(value: bigint): `0x${string}` {
 }
 
 /**
+ * Convert bigint to bytes32 hex string (alias for consistency)
+ * Ensures proper padding and leading zeros are preserved
+ */
+export function bigIntToBytes32(value: bigint): `0x${string}` {
+  return toBytes32(value);
+}
+
+/**
  * Convert hex string to bigint
  */
 export function fromHex(hex: string): bigint {

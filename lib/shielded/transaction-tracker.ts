@@ -125,10 +125,19 @@ export class TransactionTrackerClass {
           this.notify();
         }
       } catch (error: any) {
-        // Transaction not found yet - still pending
-        if (!error.message?.includes('not found')) {
-          console.error('[TransactionTracker] Error polling:', error);
+        // Transaction not found yet - this is expected when transaction is just submitted
+        // Only log actual errors (network issues, RPC errors, etc.), not "not found" errors
+        const isNotFoundError = 
+          error.name === 'TransactionReceiptNotFoundError' ||
+          error.message?.includes('not found') ||
+          error.message?.includes('could not be found') ||
+          error.code === 'CALL_EXCEPTION';
+        
+        if (!isNotFoundError) {
+          // This is a real error (network issue, RPC problem, etc.)
+          console.warn('[TransactionTracker] Error polling (will retry):', error.message || error);
         }
+        // Silently continue polling if it's just a "not found" error (expected)
       }
     }, 2000);
 

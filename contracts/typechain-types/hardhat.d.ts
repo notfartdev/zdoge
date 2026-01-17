@@ -50,6 +50,10 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.IERC165__factory>;
     getContractFactory(
+      name: "Pausable",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.Pausable__factory>;
+    getContractFactory(
       name: "ReentrancyGuard",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.ReentrancyGuard__factory>;
@@ -89,6 +93,10 @@ declare module "hardhat/types/runtime" {
       name: "ISwapVerifier",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.ISwapVerifier__factory>;
+    getContractFactory(
+      name: "ITransferMultiVerifier",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.ITransferMultiVerifier__factory>;
     getContractFactory(
       name: "ITransferVerifier",
       signerOrOptions?: ethers.Signer | FactoryOptions
@@ -142,13 +150,13 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.ShieldedPoolMultiToken__factory>;
     getContractFactory(
+      name: "ShieldedPoolMultiTokenV3",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.ShieldedPoolMultiTokenV3__factory>;
+    getContractFactory(
       name: "ShieldVerifier",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.ShieldVerifier__factory>;
-    getContractFactory(
-      name: "Groth16Verifier",
-      signerOrOptions?: ethers.Signer | FactoryOptions
-    ): Promise<Contracts.Groth16Verifier__factory>;
     getContractFactory(
       name: "SwapVerifier",
       signerOrOptions?: ethers.Signer | FactoryOptions
@@ -173,6 +181,22 @@ declare module "hardhat/types/runtime" {
       name: "VerifierAdapter",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.VerifierAdapter__factory>;
+    getContractFactory(
+      name: "Groth16Verifier",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.Groth16Verifier__factory>;
+    getContractFactory(
+      name: "Groth16Verifier",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.Groth16Verifier__factory>;
+    getContractFactory(
+      name: "TransferVerifier",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.TransferVerifier__factory>;
+    getContractFactory(
+      name: "UnshieldVerifierV3",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.UnshieldVerifierV3__factory>;
 
     getContractAt(
       name: "IERC1155Errors",
@@ -219,6 +243,11 @@ declare module "hardhat/types/runtime" {
       address: string | ethers.Addressable,
       signer?: ethers.Signer
     ): Promise<Contracts.IERC165>;
+    getContractAt(
+      name: "Pausable",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.Pausable>;
     getContractAt(
       name: "ReentrancyGuard",
       address: string | ethers.Addressable,
@@ -269,6 +298,11 @@ declare module "hardhat/types/runtime" {
       address: string | ethers.Addressable,
       signer?: ethers.Signer
     ): Promise<Contracts.ISwapVerifier>;
+    getContractAt(
+      name: "ITransferMultiVerifier",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.ITransferMultiVerifier>;
     getContractAt(
       name: "ITransferVerifier",
       address: string | ethers.Addressable,
@@ -335,15 +369,15 @@ declare module "hardhat/types/runtime" {
       signer?: ethers.Signer
     ): Promise<Contracts.ShieldedPoolMultiToken>;
     getContractAt(
+      name: "ShieldedPoolMultiTokenV3",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.ShieldedPoolMultiTokenV3>;
+    getContractAt(
       name: "ShieldVerifier",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
     ): Promise<Contracts.ShieldVerifier>;
-    getContractAt(
-      name: "Groth16Verifier",
-      address: string | ethers.Addressable,
-      signer?: ethers.Signer
-    ): Promise<Contracts.Groth16Verifier>;
     getContractAt(
       name: "SwapVerifier",
       address: string | ethers.Addressable,
@@ -374,6 +408,26 @@ declare module "hardhat/types/runtime" {
       address: string | ethers.Addressable,
       signer?: ethers.Signer
     ): Promise<Contracts.VerifierAdapter>;
+    getContractAt(
+      name: "Groth16Verifier",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.Groth16Verifier>;
+    getContractAt(
+      name: "Groth16Verifier",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.Groth16Verifier>;
+    getContractAt(
+      name: "TransferVerifier",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.TransferVerifier>;
+    getContractAt(
+      name: "UnshieldVerifierV3",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.UnshieldVerifierV3>;
 
     deployContract(
       name: "IERC1155Errors",
@@ -411,6 +465,10 @@ declare module "hardhat/types/runtime" {
       name: "IERC165",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IERC165>;
+    deployContract(
+      name: "Pausable",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.Pausable>;
     deployContract(
       name: "ReentrancyGuard",
       signerOrOptions?: ethers.Signer | DeployContractOptions
@@ -451,6 +509,10 @@ declare module "hardhat/types/runtime" {
       name: "ISwapVerifier",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.ISwapVerifier>;
+    deployContract(
+      name: "ITransferMultiVerifier",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.ITransferMultiVerifier>;
     deployContract(
       name: "ITransferVerifier",
       signerOrOptions?: ethers.Signer | DeployContractOptions
@@ -504,13 +566,13 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.ShieldedPoolMultiToken>;
     deployContract(
+      name: "ShieldedPoolMultiTokenV3",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.ShieldedPoolMultiTokenV3>;
+    deployContract(
       name: "ShieldVerifier",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.ShieldVerifier>;
-    deployContract(
-      name: "Groth16Verifier",
-      signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.Groth16Verifier>;
     deployContract(
       name: "SwapVerifier",
       signerOrOptions?: ethers.Signer | DeployContractOptions
@@ -535,6 +597,22 @@ declare module "hardhat/types/runtime" {
       name: "VerifierAdapter",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.VerifierAdapter>;
+    deployContract(
+      name: "Groth16Verifier",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.Groth16Verifier>;
+    deployContract(
+      name: "Groth16Verifier",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.Groth16Verifier>;
+    deployContract(
+      name: "TransferVerifier",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.TransferVerifier>;
+    deployContract(
+      name: "UnshieldVerifierV3",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.UnshieldVerifierV3>;
 
     deployContract(
       name: "IERC1155Errors",
@@ -581,6 +659,11 @@ declare module "hardhat/types/runtime" {
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IERC165>;
+    deployContract(
+      name: "Pausable",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.Pausable>;
     deployContract(
       name: "ReentrancyGuard",
       args: any[],
@@ -631,6 +714,11 @@ declare module "hardhat/types/runtime" {
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.ISwapVerifier>;
+    deployContract(
+      name: "ITransferMultiVerifier",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.ITransferMultiVerifier>;
     deployContract(
       name: "ITransferVerifier",
       args: any[],
@@ -697,15 +785,15 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.ShieldedPoolMultiToken>;
     deployContract(
+      name: "ShieldedPoolMultiTokenV3",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.ShieldedPoolMultiTokenV3>;
+    deployContract(
       name: "ShieldVerifier",
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.ShieldVerifier>;
-    deployContract(
-      name: "Groth16Verifier",
-      args: any[],
-      signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.Groth16Verifier>;
     deployContract(
       name: "SwapVerifier",
       args: any[],
@@ -736,6 +824,26 @@ declare module "hardhat/types/runtime" {
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.VerifierAdapter>;
+    deployContract(
+      name: "Groth16Verifier",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.Groth16Verifier>;
+    deployContract(
+      name: "Groth16Verifier",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.Groth16Verifier>;
+    deployContract(
+      name: "TransferVerifier",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.TransferVerifier>;
+    deployContract(
+      name: "UnshieldVerifierV3",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.UnshieldVerifierV3>;
 
     // default types
     getContractFactory(

@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { useWallet } from "@/lib/wallet-context"
-import { Wallet, LogOut } from "lucide-react"
+import { Wallet, LogOut, AlertCircle } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -52,8 +52,9 @@ export function WalletConnectButton({ variant = 'quiet' }: WalletConnectButtonPr
   if (error) {
     return (
       <div className="space-y-2">
-        <Alert variant="destructive" className="bg-red-950 border-red-900 text-red-200">
-          <AlertDescription className="font-body text-sm">{error}</AlertDescription>
+        <Alert className="bg-red-500/10 border-red-500/30">
+          <AlertCircle className="h-4 w-4 text-red-400" />
+          <AlertDescription className="font-body text-sm text-red-100">{error}</AlertDescription>
         </Alert>
         <Button
           onClick={handleConnect}

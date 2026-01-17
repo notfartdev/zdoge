@@ -118,13 +118,20 @@ $wasmFile = Join-Path $wasmDir "${circuit}.wasm"
 $zkeyFile = Join-Path $BUILD_DIR "${circuit}_final.zkey"
 $vkFile = Join-Path $BUILD_DIR "${circuit}_verification_key.json"
 
+# Circuit version for cache-busting (must match CIRCUIT_VERSION in shielded-proof-service.ts)
+$CIRCUIT_VERSION = "20260115"
+
 if (Test-Path $wasmFile) { 
-    Copy-Item $wasmFile $PUBLIC_DIR -Force
-    Write-Host "  OK: Copied swap.wasm" -ForegroundColor Green
+    # Copy both unversioned (for backward compatibility) and versioned (for current code)
+    Copy-Item $wasmFile (Join-Path $PUBLIC_DIR "${circuit}.wasm") -Force
+    Copy-Item $wasmFile (Join-Path $PUBLIC_DIR "${circuit}_${CIRCUIT_VERSION}.wasm") -Force
+    Write-Host "  OK: Copied swap.wasm and swap_${CIRCUIT_VERSION}.wasm" -ForegroundColor Green
 }
 if (Test-Path $zkeyFile) { 
-    Copy-Item $zkeyFile $PUBLIC_DIR -Force
-    Write-Host "  OK: Copied swap_final.zkey" -ForegroundColor Green
+    # Copy both unversioned and versioned
+    Copy-Item $zkeyFile (Join-Path $PUBLIC_DIR "${circuit}_final.zkey") -Force
+    Copy-Item $zkeyFile (Join-Path $PUBLIC_DIR "${circuit}_final_${CIRCUIT_VERSION}.zkey") -Force
+    Write-Host "  OK: Copied swap_final.zkey and swap_final_${CIRCUIT_VERSION}.zkey" -ForegroundColor Green
 }
 if (Test-Path $vkFile) { 
     Copy-Item $vkFile $PUBLIC_DIR -Force
@@ -140,7 +147,14 @@ Write-Host "Files updated:"
 Write-Host "  - circuits/shielded/build/swap.wasm"
 Write-Host "  - circuits/shielded/build/swap_final.zkey"
 Write-Host "  - public/circuits/shielded/swap.wasm"
+Write-Host "  - public/circuits/shielded/swap_${CIRCUIT_VERSION}.wasm"
 Write-Host "  - public/circuits/shielded/swap_final.zkey"
+Write-Host "  - public/circuits/shielded/swap_final_${CIRCUIT_VERSION}.zkey"
+Write-Host "  - public/circuits/shielded/swap_verification_key.json"
+Write-Host ""
+Write-Host "⚠️  IMPORTANT: Verify the generated verifier matches deployed swapVerifier!" -ForegroundColor Yellow
+Write-Host "   Deployed swapVerifier: 0xE264695FF93e2baa700C3518227EBc917092bd3A" -ForegroundColor Cyan
+Write-Host "   If it doesn't match, you may need to use the original circuit source." -ForegroundColor Yellow
 Write-Host ""
 Write-Host "You can now test the swap functionality!"
 Write-Host ""

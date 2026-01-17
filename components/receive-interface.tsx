@@ -8,7 +8,8 @@ import {
   Check, 
   Shield,
   Download,
-  Wallet
+  Wallet,
+  Loader2
 } from "lucide-react"
 import { WalletIcon } from "@/components/wallet-icon"
 import { WalletConnectButton } from "@/components/wallet-connect-button"
@@ -245,8 +246,8 @@ export function ReceiveInterface() {
                 <img src={shieldedQrCode} alt="Shielded Address QR" className="w-full h-full object-contain" />
               </div>
             ) : isInitializing ? (
-              <div className="p-4 bg-white rounded-lg w-[200px] h-[200px] flex items-center justify-center">
-                <p className="text-sm font-body text-gray-500">Initializing...</p>
+              <div className="p-4 bg-transparent border border-zinc-700/50 rounded-lg w-[200px] h-[200px] flex items-center justify-center">
+                <Loader2 className="h-6 w-6 animate-spin text-[#C2A633]" />
               </div>
             ) : (
               <div className="p-4 bg-white rounded-lg w-[200px] h-[200px] flex items-center justify-center">
@@ -258,9 +259,12 @@ export function ReceiveInterface() {
           {/* Address - Fixed height, matches public */}
           <div className="p-3 rounded-lg bg-primary/5 border border-primary/20 min-h-[60px] flex items-center">
             {isInitializing ? (
-              <p className="text-sm font-body text-white/70 w-full text-center">
-                Initializing shielded wallet...
-              </p>
+              <div className="w-full flex items-center justify-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin text-[#C2A633]" />
+                <p className="text-sm font-body text-white/70">
+                  Initializing shielded wallet...
+                </p>
+              </div>
             ) : !shieldedAddress ? (
               <div className="w-full text-center space-y-2">
                 <p className="text-sm font-body text-white/70">

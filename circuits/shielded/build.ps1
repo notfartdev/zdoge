@@ -5,7 +5,9 @@ $ErrorActionPreference = "Stop"
 
 $CIRCUIT_DIR = $PSScriptRoot
 $BUILD_DIR = Join-Path $CIRCUIT_DIR "build"
-$PTAU_FILE = Join-Path $CIRCUIT_DIR "..\pot20_final.ptau"
+# Use pot16 for unshield (39,960 constraints) - faster than pot20
+# pot16 supports up to 65,536 constraints, which is sufficient
+$PTAU_FILE = Join-Path $CIRCUIT_DIR "..\pot16_final.ptau"
 
 Write-Host "=======================================================" -ForegroundColor Green
 Write-Host "      Dogenado Shielded Circuits Build Script          " -ForegroundColor Green
@@ -26,8 +28,11 @@ if (-not $snarkjsCheck) {
 
 # Check PTAU file
 if (-not (Test-Path $PTAU_FILE)) {
-    Write-Host "Downloading Powers of Tau..." -ForegroundColor Yellow
-    Invoke-WebRequest -Uri "https://hermez.s3-eu-west-1.amazonaws.com/powersOfTau28_hez_final_15.ptau" -OutFile $PTAU_FILE
+    Write-Host "Downloading Powers of Tau (pot16)..." -ForegroundColor Yellow
+    Write-Host "This is a large file (~1.2GB) and may take several minutes..." -ForegroundColor Yellow
+    # pot16 final PTAU file URL
+    Invoke-WebRequest -Uri "https://hermez.s3-eu-west-1.amazonaws.com/powersOfTau28_hez_final_16.ptau" -OutFile $PTAU_FILE
+    Write-Host "Download complete!" -ForegroundColor Green
 }
 
 # Create build directory

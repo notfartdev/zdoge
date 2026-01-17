@@ -14,6 +14,10 @@ const faqs = [
     answer: "Shield: Free (relayer) or gas fees only. Send/Transfer: ~0.5% relayer fee. Swap: ~0.3% swap fee + 0.5% relayer fee if applicable. Unshield: ~0.5% relayer fee. Direct transactions only require gas fees."
   },
   {
+    question: "What are dust notes and how can I use them?",
+    answer: "Dust notes are very small notes (e.g., 0.001 DOGE) that are too small to transfer after fees. They remain in your wallet and cannot be used individually. You can use them in batch unshield operations by combining them with other notes - fees are distributed across all notes in the batch, making them usable."
+  },
+  {
     question: "How do I receive private transfers?",
     answer: "Your wallet automatically discovers incoming transfers via encrypted memos. No manual action needed - just ensure your wallet is connected and the sender has your shielded address."
   },

@@ -294,18 +294,20 @@ export const contracts = {
 };
 
 // Shielded Pool (Zcash-style private transfers + swaps)
-// Redeployed to DogeOS Testnet on Jan 8, 2026 with change notes support for swaps
+// V4 deployed Jan 2025 with all security fixes
 export const shieldedPool = {
-  // Main pool contract - handles shield/transfer/unshield/swap (with change notes support)
-  // LATEST CONTRACT (supports partial swaps with change notes - full Zcash-style)
-  // Matches latest circuit rebuild (43,662 constraints, 8 public inputs)
-  address: '0x2e93EC915E439920a770e5c9d8c207A6160929a8' as `0x${string}`,
+  // Main pool contract V4 - All security fixes applied
+  // V4 FEATURES: Swap rate validation, rug pull prevention, platform fee enforcement, change commitment validation,
+  //              root manipulation protection, commitment uniqueness, proof malleability protection
+  // V3 FEATURES: Partial unshield (e.g., unshield 5 DOGE from 10 DOGE note) + Platform fee (5 DOGE per swap)
+  // V2 FEATURES: batchTransfer, batchUnshield, privacy-preserving events, token blacklist
+  address: '0x37A7bA0f6769ae08c4331A48f737d4Ffe1bb721a' as `0x${string}`, // V4 - All security fixes deployed (verifiers fixed - canonical validation removed)
   
-  // Real ZK verifier contracts (production-ready) - All verifiers match their circuits
-  shieldVerifier: '0x2cD2A2126825fC8000C1AD2dFD25D15F8Cc365f1' as `0x${string}`,
-  transferVerifier: '0x0568BF5FaAEf348B71BdD18a05e1EC55a23459B2' as `0x${string}`,
-  unshieldVerifier: '0x7DFEa7a81B6f7098DB4a973b052A08899865b60b' as `0x${string}`,
-  swapVerifier: '0xE264695FF93e2baa700C3518227EBc917092bd3A' as `0x${string}`, // Supports change notes (outputCommitment2) - matches latest circuit
+  // Real ZK verifier contracts (production-ready) - V4: All verifiers match zkey files
+  shieldVerifier: '0xD5AB6Ee21afcb4468DD11dA9a2BF58005A9cB5f9' as `0x${string}`, // V4: Generated from shield_final.zkey (2 inputs) - canonical validation removed
+  transferVerifier: '0xBAa02AB5Ca5bC2F5c0bC95d0fEE176F06c9DBb0D' as `0x${string}`, // V4: Generated from transfer_final.zkey (6 inputs) - canonical validation removed
+  unshieldVerifier: '0x0FFd1824c84b064083F377392537645313eEA540' as `0x${string}`, // V4: Generated from unshield_final.zkey (7 inputs) - canonical validation removed
+  swapVerifier: '0xFB463d228d5f1BB7aF5672b3197871Cc9b87b1A5' as `0x${string}`, // V4: Generated from swap_final.zkey (8 inputs) - canonical validation removed
   
   // Circuit files for frontend proof generation
   circuitFiles: {

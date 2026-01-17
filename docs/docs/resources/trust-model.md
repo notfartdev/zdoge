@@ -76,9 +76,14 @@ The web interface you interact with:
   - UI doesn't leak private information
 
 - **Mitigation:**
-  - Open-source code (you can verify)
-  - Always verify transactions in your wallet before signing
-  - Don't trust UI blindly - check on-chain data
+  - ✅ **Frontend Verification System** - Cryptographic hash verification (SHA-384)
+  - ✅ **In-browser verification** - Visit `/verify` to verify circuit files
+  - ✅ **Published hashes** - Compare with documentation/GitHub
+  - ✅ **Open-source code** - You can verify and build from source
+  - ✅ **Always verify transactions** in your wallet before signing
+  - ✅ **Don't trust UI blindly** - Check on-chain data
+
+See [Frontend Verification Guide](/resources/frontend-verification) for details.
 
 ### 4. **RPC Providers** (Low Trust)
 Blockchain RPC endpoints used for data:

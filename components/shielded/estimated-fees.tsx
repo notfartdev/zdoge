@@ -24,19 +24,18 @@ export function EstimatedFees({
   isLoading = false,
   className,
 }: EstimatedFeesProps) {
-  // Format amounts with reasonable decimals (max 4-6, remove trailing zeros)
+  // Format amounts with 4 decimal places to match "Max: 6.0030" display format
   const formatDisplayAmount = (value: bigint, decimals: number): string => {
     const formatted = formatWeiToAmount(value, decimals)
     const num = parseFloat(formatted)
     if (isNaN(num)) return formatted
-    // Limit to 6 decimals max, remove trailing zeros
-    return num.toFixed(6).replace(/\.?0+$/, '')
+    // Use 4 decimal places to match Max display format
+    return num.toFixed(4)
   }
 
   const amountFormatted = formatDisplayAmount(amount, tokenDecimals)
   const feeFormatted = formatDisplayAmount(fee, tokenDecimals)
   const receivedFormatted = formatDisplayAmount(received, tokenDecimals)
-  const feePercent = amount > 0n ? (Number(fee) / Number(amount)) * 100 : 0
 
   if (isLoading) {
     return (
@@ -69,9 +68,6 @@ export function EstimatedFees({
           <div className="pt-2 border-t border-[#C2A633]/10 flex justify-between items-center gap-2">
             <span className="text-gray-400">You Receive</span>
             <span className="text-green-400 font-mono font-semibold text-right break-all">{receivedFormatted} {token}</span>
-          </div>
-          <div className="text-[10px] sm:text-xs text-gray-500 pt-1">
-            Fee: {feePercent.toFixed(2)}%
           </div>
         </div>
       </div>

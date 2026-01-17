@@ -12,7 +12,7 @@ services:
       - key: DOGEOS_RPC_URL
         value: https://rpc.testnet.dogeos.com
       - key: SHIELDED_POOL_ADDRESS
-        value: 0xc5F64faee07A6EFE235C12378101D62e370c0cD5
+        value: 0x05D32B760ff49678FD833a4E2AbD516586362b17
       # IMPORTANT: Set RELAYER_PRIVATE_KEY in Render dashboard (not here for security)
       # The relayer wallet needs DOGE for gas to submit transactions
       # - key: RELAYER_PRIVATE_KEY

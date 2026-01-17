@@ -14,19 +14,50 @@ interface PriceCache {
 let priceCache: PriceCache | null = null;
 
 /**
+ * Default fallback prices (used when API fails)
+ */
+const DEFAULT_PRICES: Record<string, number> = {
+  USDC: 1,
+  USDT: 1,
+  WETH: 3500,
+  DOGE: 0.35,
+  LBTC: 100000,
+};
+
+/**
  * Fetch current prices from CoinGecko
+ * SECURITY: Includes timeout, error handling, and graceful degradation
  */
 async function fetchPrices(): Promise<Record<string, number>> {
   const ids = Object.values(priceConfig.tokenIds).join(',');
   
   try {
-    const response = await fetch(
-      `${priceConfig.apiUrl}/simple/price?ids=${ids}&vs_currencies=usd`,
-      { next: { revalidate: 300 } } // Cache for 5 minutes
-    );
+    // SECURITY: Add timeout to prevent hanging requests (10 seconds)
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    
+    let response: Response;
+    try {
+      response = await fetch(
+        `${priceConfig.apiUrl}/simple/price?ids=${ids}&vs_currencies=usd`,
+        {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json',
+          },
+          signal: controller.signal, // Abort signal for timeout
+          // Client-side fetch - no Next.js server options
+          cache: 'no-store', // Always fetch fresh data, rely on our cache
+        }
+      );
+    } finally {
+      clearTimeout(timeoutId);
+    }
     
     if (!response.ok) {
-      throw new Error('Failed to fetch prices');
+      // Log but don't throw - return default prices instead
+      console.warn(`[Price] API returned ${response.status} ${response.statusText}, using default prices`);
+      return DEFAULT_PRICES;
     }
     
     const data = await response.json();
@@ -43,17 +74,27 @@ async function fetchPrices(): Promise<Record<string, number>> {
     if (!prices.USDC) prices.USDC = 1;
     if (!prices.USDT) prices.USDT = 1;
     
+    // Ensure all expected tokens have prices (fallback to defaults if missing)
+    for (const symbol of Object.keys(priceConfig.tokenIds)) {
+      if (!prices[symbol] && DEFAULT_PRICES[symbol]) {
+        prices[symbol] = DEFAULT_PRICES[symbol];
+      }
+    }
+    
     return prices;
-  } catch (error) {
-    console.error('[Price] Failed to fetch prices:', error);
-    // Return default prices on error
-    return {
-      USDC: 1,
-      USDT: 1,
-      WETH: 3500,
-      DOGE: 0.35,
-      LBTC: 100000,
-    };
+  } catch (error: any) {
+    // Handle all errors gracefully (network errors, CORS, timeout, etc.)
+    if (error.name === 'AbortError') {
+      console.warn('[Price] Request timeout, using default prices');
+    } else if (error instanceof TypeError && error.message.includes('fetch')) {
+      // Network error, CORS issue, or fetch not available
+      console.warn('[Price] Network error (CORS/connectivity), using default prices:', error.message);
+    } else {
+      console.warn('[Price] Failed to fetch prices, using default prices:', error.message || error);
+    }
+    
+    // Return default prices on any error - ensures UI continues to work
+    return DEFAULT_PRICES;
   }
 }
 
@@ -77,10 +118,17 @@ export async function getPrices(): Promise<Record<string, number>> {
 
 /**
  * Get price for a specific token
+ * Returns 0 if token not found (handled gracefully by callers)
  */
 export async function getTokenPrice(symbol: string): Promise<number> {
-  const prices = await getPrices();
-  return prices[symbol] || 0;
+  try {
+    const prices = await getPrices();
+    return prices[symbol] || 0;
+  } catch (error) {
+    // Fallback to default price if available, otherwise 0
+    console.warn(`[Price] Failed to get price for ${symbol}, returning default`);
+    return DEFAULT_PRICES[symbol] || 0;
+  }
 }
 
 /**
@@ -101,13 +149,20 @@ export function formatUSD(value: number): string {
 
 /**
  * Calculate USD value for a token amount
+ * Returns 0 if price fetch fails (graceful degradation)
  */
 export async function getUSDValue(
   amount: number,
   tokenSymbol: string
 ): Promise<number> {
-  const price = await getTokenPrice(tokenSymbol);
-  return amount * price;
+  try {
+    const price = await getTokenPrice(tokenSymbol);
+    return amount * price;
+  } catch (error) {
+    console.warn(`[Price] Failed to calculate USD value for ${tokenSymbol}:`, error);
+    // Return 0 instead of throwing - allows UI to continue without USD values
+    return 0;
+  }
 }
 
 /**

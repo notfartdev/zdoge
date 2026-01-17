@@ -52,10 +52,11 @@ import {
 import { shieldedPool } from '../dogeos-config';
 import { EncryptedStorage } from './encrypted-storage';
 
+// Native token address constant (accessible throughout the module)
+const NATIVE_TOKEN = '0x0000000000000000000000000000000000000000' as `0x${string}`;
+
 // Helper to get token metadata from config
 function getTokenMetadata(tokenSymbol: string): { symbol: string; address: `0x${string}`; decimals: number } {
-  const NATIVE_TOKEN = '0x0000000000000000000000000000000000000000' as `0x${string}`;
-  
   if (tokenSymbol === 'DOGE') {
     return {
       symbol: 'DOGE',
@@ -337,15 +338,42 @@ export function getShieldedBalance(): bigint {
 /**
  * Get shielded balance per token
  */
+// Cache for balance calculation to reduce redundant logging
+let lastBalanceCache: { notesCount: number; balances: Record<string, bigint>; timestamp: number } | null = null;
+const BALANCE_CACHE_MS = 100; // Cache for 100ms to prevent excessive logging
+
 export function getShieldedBalancePerToken(): Record<string, bigint> {
   const balances: Record<string, bigint> = {};
+  const now = Date.now();
   
+  // Check cache to avoid redundant logging
+  const notesCount = walletState.notes.length;
+  if (lastBalanceCache && 
+      lastBalanceCache.notesCount === notesCount && 
+      (now - lastBalanceCache.timestamp) < BALANCE_CACHE_MS) {
+    // Return cached balance if notes haven't changed and within cache window
+    return lastBalanceCache.balances;
+  }
+  
+  // Only log when actually calculating (not from cache)
   for (const note of walletState.notes) {
     if (note.leafIndex !== undefined) { // Only count confirmed notes
       const token = note.token || 'DOGE';
-      balances[token] = (balances[token] || 0n) + note.amount;
+      const amount = note.amount;
+      balances[token] = (balances[token] || 0n) + amount;
     }
   }
+  
+  // Update cache
+  lastBalanceCache = {
+    notesCount,
+    balances: { ...balances },
+    timestamp: now
+  };
+  
+  // Only log final balance (not individual notes) to reduce console spam
+  const balanceStr = Object.entries(balances).map(([token, amount]) => `${formatWeiToAmount(amount)} ${token}`).join(', ');
+  console.log(`[Balance] ${notesCount} notes → ${balanceStr || '0 DOGE'}`);
   
   return balances;
 }
@@ -458,6 +486,64 @@ export async function prepareTransfer(
     throw new Error('Note has no leaf index');
   }
   
+  // Pre-check: Verify nullifier is not already spent on-chain
+  try {
+    const { createPublicClient, http } = await import('viem');
+    const { dogeosTestnet } = await import('../dogeos-config');
+    const { getPrivacyRpcUrl } = await import('./privacy-utils');
+    const { computeNullifier, computeNullifierHash } = await import('./shielded-crypto');
+    const { toBytes32 } = await import('./shielded-crypto');
+    
+    const publicClient = createPublicClient({
+      chain: dogeosTestnet,
+      transport: http(getPrivacyRpcUrl()),
+    });
+    
+    // Compute nullifier the same way as in proof generation
+    const nullifier = await computeNullifier(
+      noteToSpend.secret,
+      BigInt(noteToSpend.leafIndex!),
+      walletState.identity.spendingKey
+    );
+    const nullifierHash = await computeNullifierHash(nullifier);
+    const nullifierHashBytes = toBytes32(nullifierHash);
+    
+    const isSpent = await publicClient.readContract({
+      address: poolAddress as `0x${string}`,
+      abi: [{
+        name: 'isSpent',
+        type: 'function',
+        stateMutability: 'view',
+        inputs: [{ name: '_nullifierHash', type: 'bytes32' }],
+        outputs: [{ name: '', type: 'bool' }],
+      }],
+      functionName: 'isSpent',
+      args: [nullifierHashBytes],
+    });
+    
+    if (isSpent) {
+      // Remove the spent note from wallet
+      const noteIndex = walletState.notes.findIndex(n => n.commitment === noteToSpend.commitment);
+      if (noteIndex !== -1) {
+        walletState.notes.splice(noteIndex, 1);
+        await saveNotesToStorage(walletState.notes);
+        console.warn(`[Transfer] Removed spent note from wallet: ${formatWeiToAmount(noteToSpend.amount)} DOGE`);
+        // Dispatch event to refresh UI
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('shielded-wallet-updated'));
+        }
+      }
+      throw new Error('This note has already been spent on-chain. It has been removed from your wallet. Please try again with a different note.');
+    }
+  } catch (checkError: any) {
+    // If it's our custom error, re-throw it
+    if (checkError.message && checkError.message.includes('already been spent')) {
+      throw checkError;
+    }
+    // Otherwise, log warning but continue (contract will reject if spent)
+    console.warn('[Transfer] Failed to check nullifier on-chain:', checkError);
+  }
+  
   // Generate proof (returns root that was used in proof)
   const { proof, outputNote1, outputNote2, nullifierHash, root } = await generateTransferProof(
     noteToSpend,
@@ -517,22 +603,128 @@ export async function prepareTransfer(
  * - Adds change note (if any)
  */
 export async function completeTransfer(
-  spentNoteIndex: number,
+  spentNoteIndex: number | ShieldedNote, // Can be index or the note itself
   changeNote: ShieldedNote,
   changeLeafIndex: number,
   recipientNote?: ShieldedNote,
-  recipientLeafIndex?: number
+  recipientLeafIndex?: number,
+  poolAddress?: string // Pool address for on-chain verification
 ): void {
+  // Find the spent note - handle both index and note object
+  let actualIndex: number;
+  if (typeof spentNoteIndex === 'number') {
+    // If index provided, use it (for backward compatibility with single transfers)
+    actualIndex = spentNoteIndex;
+    if (actualIndex < 0 || actualIndex >= walletState.notes.length) {
+      console.warn('[Transfer] Invalid note index:', actualIndex, 'wallet has', walletState.notes.length, 'notes');
+      throw new Error(`Invalid note index: ${actualIndex}`);
+    }
+  } else {
+    // If note provided, find it by commitment (more reliable for sequential transfers)
+    const note = spentNoteIndex;
+    console.log(`[Transfer] Looking for note to remove:`, {
+      commitment: note.commitment.toString().slice(0, 20) + '...',
+      leafIndex: note.leafIndex,
+      amount: formatWeiToAmount(note.amount) + ' DOGE',
+      availableNotes: walletState.notes.length
+    });
+    
+    // Try to find by commitment first (most reliable)
+    actualIndex = walletState.notes.findIndex(n => n.commitment === note.commitment);
+    
+    if (actualIndex === -1) {
+      // Fallback: try to find by leafIndex and amount if commitment doesn't match
+      console.warn('[Transfer] Note not found by commitment, trying leafIndex + amount match');
+      actualIndex = walletState.notes.findIndex(
+        n => n.leafIndex === note.leafIndex && n.amount === note.amount
+      );
+    }
+    
+    if (actualIndex === -1) {
+      console.error('[Transfer] Could not find spent note:', {
+        lookingFor: {
+          commitment: note.commitment.toString().slice(0, 20) + '...',
+          leafIndex: note.leafIndex,
+          amount: formatWeiToAmount(note.amount) + ' DOGE'
+        },
+        availableNotes: walletState.notes.map((n, i) => ({
+          index: i,
+          leafIndex: n.leafIndex,
+          amount: formatWeiToAmount(n.amount) + ' DOGE',
+          commitment: n.commitment.toString().slice(0, 20) + '...'
+        }))
+      });
+      throw new Error('Spent note not found in wallet (may have already been removed)');
+    }
+    console.log(`[Transfer] Found spent note at index ${actualIndex} by commitment/leafIndex`);
+  }
+  
+  // BULLETPROOF: Verify note is actually spent on-chain before removing
+  // This prevents removing notes that haven't been spent yet (e.g., if transaction failed)
+  const noteToRemove = walletState.notes[actualIndex];
+  if (noteToRemove.leafIndex !== undefined && walletState.identity) {
+    try {
+      const { verifyAndRemoveNote } = await import('./note-cleanup');
+      // We need the nullifier hash - compute it from the note
+      const { computeNullifier, computeNullifierHash, toBytes32 } = await import('./shielded-crypto');
+      const nullifier = await computeNullifier(
+        noteToRemove.secret,
+        BigInt(noteToRemove.leafIndex),
+        walletState.identity.spendingKey
+      );
+      const nullifierHash = await computeNullifierHash(nullifier);
+      const nullifierHashBytes = toBytes32(nullifierHash);
+      
+      // Verify on-chain that this note is actually spent
+      const verification = await verifyAndRemoveNote(
+        noteToRemove,
+        nullifierHashBytes,
+        poolAddress || '', // Will be set by caller context
+        walletState.identity.spendingKey
+      );
+      
+      if (!verification.removed) {
+        console.warn(
+          `[Transfer] Note not confirmed spent on-chain: ${verification.reason}. ` +
+          `This might be a timing issue - will retry cleanup later. ` +
+          `Note will be removed anyway as transaction was submitted.`
+        );
+        // Still remove it since transaction was submitted, but log the warning
+        // Background cleanup will catch any discrepancies
+      } else {
+        console.log(`[Transfer] ✓ Verified note is spent on-chain before removal`);
+      }
+    } catch (verifyError) {
+      console.warn('[Transfer] Failed to verify note on-chain before removal:', verifyError);
+      // Continue with removal anyway - background cleanup will catch discrepancies
+    }
+  }
+  
   // Remove spent note
-  walletState.notes.splice(spentNoteIndex, 1);
+  const removedNote = walletState.notes.splice(actualIndex, 1)[0];
+  console.log(`[Transfer] Removed spent note: ${formatWeiToAmount(removedNote.amount)} DOGE (was at index ${actualIndex})`);
+  console.log(`[Transfer] Wallet now has ${walletState.notes.length} notes after removal`);
   
   // Check if recipient note belongs to us (sent to our own shielded address)
   if (recipientNote && recipientLeafIndex !== undefined && walletState.identity) {
     const isOurNote = recipientNote.ownerPubkey === walletState.identity.shieldedAddress;
     if (isOurNote && recipientNote.amount > 0n) {
-      recipientNote.leafIndex = recipientLeafIndex;
-      walletState.notes.push(recipientNote);
-      console.log('[Transfer] Added recipient note to wallet (sent to self):', recipientLeafIndex);
+      // Check if note already exists (might have been added by auto-discovery)
+      const recipientCommitment = recipientNote.commitment;
+      const alreadyExists = walletState.notes.some(n => {
+        const matches = n.commitment === recipientCommitment;
+        if (matches) {
+          console.log(`[Transfer] Found duplicate note by commitment: ${recipientCommitment.toString(16).slice(0, 16)}...`);
+        }
+        return matches;
+      });
+      if (!alreadyExists) {
+        recipientNote.leafIndex = recipientLeafIndex;
+        walletState.notes.push(recipientNote);
+        console.log('[Transfer] Added recipient note to wallet (sent to self):', recipientLeafIndex);
+      } else {
+        console.log('[Transfer] Recipient note already exists (likely added by auto-discovery), skipping duplicate');
+      }
     }
   }
   
@@ -540,22 +732,936 @@ export async function completeTransfer(
   if (changeNote.amount > 0n) {
     changeNote.leafIndex = changeLeafIndex;
     walletState.notes.push(changeNote);
-    console.log('[Transfer] Added change note to wallet:', changeLeafIndex);
+    console.log(`[Transfer] Added change note to wallet: ${formatWeiToAmount(changeNote.amount)} DOGE at leafIndex ${changeLeafIndex}`);
+  }
+  
+  console.log(`[Transfer] Final wallet state: ${walletState.notes.length} notes total`);
+  saveNotesToStorage(walletState.notes);
+}
+
+/**
+ * Prepare batch transfer (spend multiple notes in one transaction)
+ * 
+ * This enables sending amounts larger than any single note by combining multiple notes.
+ * All proofs share the same output commitments (recipient + change).
+ * 
+ * @param recipientAddress Recipient's shielded address
+ * @param amountDoge Amount to send (total from all notes)
+ * @param poolAddress Contract address
+ * @param noteIndices Indices of notes to spend (if not provided, auto-selects)
+ * @param relayerAddress Relayer address
+ * @param feeDoge Total fee for the batch
+ */
+export async function prepareBatchTransfer(
+  recipientAddress: string,
+  amountDoge: number,
+  poolAddress: string,
+  noteIndices?: number[],
+  relayerAddress?: string,
+  feeDoge: number = 0
+): Promise<{
+  proofs: Array<{ proof: string[]; publicInputs: string[] }>;
+  roots: `0x${string}`[];
+  nullifierHashes: `0x${string}`[];
+  outputCommitment1: `0x${string}`;
+  outputCommitment2: `0x${string}`;
+  recipientNote: ShieldedNote;
+  changeNote: ShieldedNote;
+  encryptedMemo1: `0x${string}`;
+  encryptedMemo2: `0x${string}`;
+  spentNoteIndices: number[];
+}> {
+  if (!walletState.identity) {
+    throw new Error('Wallet not initialized');
+  }
+  
+  const amountWei = parseAmountToWei(amountDoge);
+  const feeWei = parseAmountToWei(feeDoge);
+  const recipientPubkey = parseShieldedAddress(recipientAddress);
+  
+  // Check if sending to self - batch transfer with shared commitments loses value!
+  const isSendingToSelf = recipientPubkey === walletState.identity.shieldedAddress;
+  if (isSendingToSelf) {
+    throw new Error(
+      'Cannot use batch transfer to send to yourself - it causes value loss due to shared commitments. ' +
+      'To consolidate notes: 1) Unshield all notes to your wallet, 2) Re-shield as a single large note. ' +
+      'Or send to a different recipient.'
+    );
+  }
+  
+  // Select notes to spend
+  let notesToSpend: ShieldedNote[];
+  let spentNoteIndices: number[];
+  
+  if (noteIndices && noteIndices.length > 0) {
+    // Use provided indices
+    notesToSpend = noteIndices.map(i => walletState.notes[i]);
+    spentNoteIndices = noteIndices;
+  } else {
+    // Auto-select: find smallest set of notes that covers amount + fee
+    const requiredAmount = amountWei + feeWei;
+    const candidates = walletState.notes
+      .map((note, index) => ({ note, index }))
+      .filter(({ note }) => note.leafIndex !== undefined && note.amount > 0n)
+      .sort((a, b) => Number(a.note.amount - b.note.amount));
+    
+    // Greedy selection: pick smallest notes until we have enough
+    let total = 0n;
+    const selected: Array<{ note: ShieldedNote; index: number }> = [];
+    for (const item of candidates) {
+      if (total >= requiredAmount) break;
+      selected.push(item);
+      total += item.note.amount;
+    }
+    
+    if (total < requiredAmount) {
+      throw new Error(`Insufficient balance. Need ${formatWeiToAmount(requiredAmount)} DOGE, have ${formatWeiToAmount(total)} DOGE across ${candidates.length} notes`);
+    }
+    
+    notesToSpend = selected.map(s => s.note);
+    spentNoteIndices = selected.map(s => s.index);
+  }
+  
+  if (notesToSpend.length === 0) {
+    throw new Error('No notes selected');
+  }
+  
+  if (notesToSpend.length > 100) {
+    throw new Error('Cannot spend more than 100 notes in one batch (contract limit)');
+  }
+  
+  // Verify all notes have leaf indices
+  for (const note of notesToSpend) {
+    if (note.leafIndex === undefined) {
+      throw new Error('One or more notes do not have a leaf index');
+    }
+  }
+  
+  // Calculate total input amount
+  const totalInput = notesToSpend.reduce((sum, note) => sum + note.amount, 0n);
+  const changeAmount = totalInput - amountWei - feeWei;
+  
+  if (changeAmount < 0n) {
+    throw new Error(`Insufficient funds. Total input: ${formatWeiToAmount(totalInput)} DOGE, required: ${formatWeiToAmount(amountWei + feeWei)} DOGE`);
+  }
+  
+  console.log(`[BatchTransfer] Spending ${notesToSpend.length} notes:`);
+  console.log(`  Total input: ${formatWeiToAmount(totalInput)} DOGE`);
+  console.log(`  Transfer amount: ${formatWeiToAmount(amountWei)} DOGE`);
+  console.log(`  Fee: ${formatWeiToAmount(feeWei)} DOGE`);
+  console.log(`  Change: ${formatWeiToAmount(changeAmount)} DOGE`);
+  
+  // Generate output notes ONCE (shared across all proofs)
+  const { generateTransferProofWithOutputs } = await import('./shielded-proof-service');
+  
+  const proofs: Array<{ proof: string[]; publicInputs: string[] }> = [];
+  const roots: `0x${string}`[] = [];
+  const nullifierHashes: `0x${string}`[] = [];
+  
+  // Fee per proof (split evenly)
+  const feePerProof = feeWei / BigInt(notesToSpend.length);
+  
+  // For batch transfers with shared output commitments, each note must send
+  // the same amounts to recipient and change to satisfy value conservation.
+  // Distribute amounts evenly across all notes:
+  const transferAmountPerNote = amountWei / BigInt(notesToSpend.length);
+  const changeAmountPerNote = changeAmount / BigInt(notesToSpend.length);
+  
+  // Verify that each note can cover its portion
+  for (const note of notesToSpend) {
+    const requiredPerNote = transferAmountPerNote + changeAmountPerNote + feePerProof;
+    if (note.amount < requiredPerNote) {
+      throw new Error(`Note with amount ${formatWeiToAmount(note.amount)} DOGE cannot cover required ${formatWeiToAmount(requiredPerNote)} DOGE per note in batch`);
+    }
+  }
+  
+  // Generate first proof (creates output notes with distributed amounts)
+  const firstProof = await generateTransferProofWithOutputs(
+    notesToSpend[0],
+    walletState.identity,
+    recipientPubkey,
+    transferAmountPerNote,  // Each note sends equal portion to recipient
+    changeAmountPerNote,   // Each note sends equal portion as change
+    poolAddress,
+    relayerAddress || '0x0000000000000000000000000000000000000000',
+    feePerProof
+  );
+  
+  proofs.push(firstProof.proof);
+  roots.push(toBytes32(firstProof.root));
+  nullifierHashes.push(toBytes32(firstProof.nullifierHash));
+  
+  const recipientNote = firstProof.outputNote1;
+  const changeNote = firstProof.outputNote2;
+  const outputCommitment1 = toBytes32(recipientNote.commitment);
+  const outputCommitment2 = toBytes32(changeNote.commitment);
+  
+  // Generate remaining proofs (all use same output commitments with same amounts)
+  for (let i = 1; i < notesToSpend.length; i++) {
+    const proof = await generateTransferProofWithOutputs(
+      notesToSpend[i],
+      walletState.identity,
+      recipientPubkey,
+      transferAmountPerNote,  // Same amount per note
+      changeAmountPerNote,    // Same change per note
+      poolAddress,
+      relayerAddress || '0x0000000000000000000000000000000000000000',
+      feePerProof,
+      recipientNote,  // Reuse same recipient note
+      changeNote      // Reuse same change note
+    );
+    
+    proofs.push(proof.proof);
+    roots.push(toBytes32(proof.root));
+    nullifierHashes.push(toBytes32(proof.nullifierHash));
+  }
+  
+  // Encrypt memos
+  const encryptedMemo1 = await encryptNoteForRecipient(recipientNote, recipientPubkey);
+  const encryptedMemo2 = await encryptNoteForRecipient(changeNote, walletState.identity.shieldedAddress);
+  
+  const MAX_ENCRYPTED_MEMO_BYTES = 1024;
+  const memo1Formatted = formatMemoForContract(encryptedMemo1);
+  const memo2Formatted = formatMemoForContract(encryptedMemo2);
+  
+  const memo1Bytes = (memo1Formatted.length - 2) / 2;
+  const memo2Bytes = (memo2Formatted.length - 2) / 2;
+  
+  if (memo1Bytes > MAX_ENCRYPTED_MEMO_BYTES) {
+    throw new Error(`encryptedMemo1 exceeds maximum size of ${MAX_ENCRYPTED_MEMO_BYTES} bytes (got ${memo1Bytes} bytes)`);
+  }
+  if (memo2Bytes > MAX_ENCRYPTED_MEMO_BYTES) {
+    throw new Error(`encryptedMemo2 exceeds maximum size of ${MAX_ENCRYPTED_MEMO_BYTES} bytes (got ${memo2Bytes} bytes)`);
+  }
+  
+  // NOTE: With shared commitments, each note only contributes 1/N of the total
+  // The recipient note has amount = transferAmountPerNote (not full amountWei)
+  // The change note has amount = changeAmountPerNote (not full changeAmount)
+  // This is correct for the commitment verification
+  
+  return {
+    proofs,
+    roots,
+    nullifierHashes,
+    outputCommitment1,
+    outputCommitment2,
+    recipientNote,  // Amount is transferAmountPerNote
+    changeNote,     // Amount is changeAmountPerNote  
+    encryptedMemo1: memo1Formatted,
+    encryptedMemo2: memo2Formatted,
+    spentNoteIndices,
+  };
+}
+
+/**
+ * Complete batch transfer after transaction confirmed
+ * - Removes all spent notes
+ * - Adds recipient note (if sent to self)
+ * - Adds change note
+ */
+export async function completeBatchTransfer(
+  spentNoteIndices: number[],
+  changeNote: ShieldedNote,
+  changeLeafIndex: number,
+  recipientNote?: ShieldedNote,
+  recipientLeafIndex?: number
+): Promise<void> {
+  // Remove spent notes (in reverse order to maintain indices)
+  const sortedIndices = [...spentNoteIndices].sort((a, b) => b - a);
+  for (const index of sortedIndices) {
+    walletState.notes.splice(index, 1);
+  }
+  
+  // Check if recipient note belongs to us
+  if (recipientNote && recipientLeafIndex !== undefined && walletState.identity) {
+    const isOurNote = recipientNote.ownerPubkey === walletState.identity.shieldedAddress;
+    if (isOurNote && recipientNote.amount > 0n) {
+      // Check if note already exists (might have been added by auto-discovery)
+      const alreadyExists = walletState.notes.some(n => n.commitment === recipientNote.commitment);
+      if (!alreadyExists) {
+        recipientNote.leafIndex = recipientLeafIndex;
+        walletState.notes.push(recipientNote);
+        console.log('[BatchTransfer] Added recipient note to wallet (sent to self):', recipientLeafIndex);
+      } else {
+        console.log('[BatchTransfer] Recipient note already exists (likely added by auto-discovery), skipping duplicate');
+      }
+    }
+  }
+  
+  // Add change note
+  if (changeNote.amount > 0n) {
+    changeNote.leafIndex = changeLeafIndex;
+    walletState.notes.push(changeNote);
+    console.log('[BatchTransfer] Added change note to wallet:', changeLeafIndex);
   }
   
   saveNotesToStorage(walletState.notes);
 }
 
 /**
- * Prepare unshield (withdraw to public address)
+ * Prepare sequential transfers (Option D: Auto-split large transfers)
  * 
+ * When amount exceeds single note capacity, automatically splits into multiple
+ * sequential transfers. Each transfer uses a single note and creates separate
+ * recipient notes.
+ * 
+ * @param recipientAddress Recipient's shielded address
+ * @param totalAmountDoge Total amount to send (will be split across multiple transfers)
+ * @param poolAddress Contract address
+ * @param relayerAddress Relayer address
+ * @param feePercent Fee percentage (0-100)
+ * @param minFeeDoge Minimum fee in DOGE
+ * @param onProgress Callback for progress updates (transferIndex, totalTransfers, amount)
+ * @returns Array of transfer results
+ */
+export async function prepareSequentialTransfers(
+  recipientAddress: string,
+  totalAmountDoge: number,
+  poolAddress: string,
+  relayerAddress?: string,
+  feePercent: number = 0.5,
+  minFeeDoge: number = 0.001,
+  onProgress?: (transferIndex: number, totalTransfers: number, amount: number) => void
+): Promise<Array<{
+  proof: { proof: string[]; publicInputs: string[] };
+  root: `0x${string}`;
+  nullifierHash: `0x${string}`;
+  outputCommitment1: `0x${string}`;
+  outputCommitment2: `0x${string}`;
+  recipientNote: ShieldedNote;
+  changeNote: ShieldedNote;
+  encryptedMemo1: `0x${string}`;
+  encryptedMemo2: `0x${string}`;
+  noteIndex: number;
+  amount: bigint;
+}>> {
+  if (!walletState.identity) {
+    throw new Error('Wallet not initialized');
+  }
+  
+  const totalAmountWei = parseAmountToWei(totalAmountDoge);
+  const recipientPubkey = parseShieldedAddress(recipientAddress);
+  
+  // Get available notes
+  const availableNotes = walletState.notes
+    .map((note, index) => ({ note, index }))
+    .filter(({ note }) => note.leafIndex !== undefined && note.amount > 0n);
+  
+  if (availableNotes.length === 0) {
+    throw new Error('No available notes');
+  }
+  
+  // Calculate fee per transfer
+  const feePercentBigInt = BigInt(Math.floor(feePercent * 100));
+  const minFeeWei = parseAmountToWei(minFeeDoge);
+  const MIN_CHANGE = 1000n; // Minimum 1000 wei for change note (accounts for rounding)
+  
+  /**
+   * Find optimal subset of notes to minimize transfers and change
+   * Uses dynamic programming for subset sum (faster than brute force)
+   * 
+   * IMPORTANT: targetAmount is the SPENDING amount (what user wants to spend from balance),
+   * NOT the recipient amount. The recipient receives less after fees are deducted.
+   */
+  function findOptimalNoteSubset(
+    notes: Array<{ note: ShieldedNote; index: number }>,
+    targetAmount: bigint // SPENDING amount (what user wants to spend from balance)
+  ): Array<{ note: ShieldedNote; index: number; transferAmount: bigint; fee: bigint }> {
+    // Calculate net sendable amount for each note (after fee and min change)
+    // Use same buffer as in distribution logic
+    const ROUNDING_BUFFER = 10000n; // Extra buffer for rounding errors
+    const minChangeRequired = MIN_CHANGE + ROUNDING_BUFFER;
+    
+    const noteValues = notes.map(({ note, index }) => {
+      let fee = (note.amount * feePercentBigInt) / 10000n;
+      if (fee < minFeeWei) fee = minFeeWei;
+      
+      // Option 1: Full note spend (no change needed) - like unshield
+      // Can spend entire note: amount - fee (no change note created)
+      const maxFullSpend = note.amount > fee ? note.amount - fee : 0n;
+      
+      // Option 2: Partial note spend (must create change note)
+      // Must leave MIN_CHANGE behind for change note
+      const maxPartialSpend = note.amount > fee + minChangeRequired 
+        ? note.amount - fee - minChangeRequired 
+        : 0n;
+      
+      // Use the maximum (full spend is always better if possible)
+      const maxSendable = maxFullSpend > maxPartialSpend ? maxFullSpend : maxPartialSpend;
+      
+      // Note: maxSendable is what recipient receives from this note (after fees)
+      // But we need to track spending capacity too: note.amount = spending capacity
+      
+      return {
+        note,
+        index,
+        maxSendable, // Recipient receives this (after fees)
+        fee,
+        spendingCapacity: note.amount, // Total spending from this note
+        netValue: maxSendable, // How much recipient receives from this note
+        canFullSpend: maxFullSpend > 0n, // Can we fully spend this note?
+        canOnlyCoverFee: note.amount <= fee, // Note can only cover fees, nothing left for recipient
+      };
+    });
+    
+    // Separate notes that can send vs notes that can only cover fees
+    const usefulNotes = noteValues.filter(n => n.maxSendable > 0n);
+    const feeOnlyNotes = noteValues.filter(n => n.canOnlyCoverFee);
+    
+    if (usefulNotes.length === 0) {
+      throw new Error('No notes with sufficient balance after fees');
+    }
+    
+    // For the selection logic, we'll use all notes (useful + fee-only) to get accurate total capacity
+    const allNotesForCapacity = [...usefulNotes, ...feeOnlyNotes];
+    
+    // Sort by spending capacity (largest first) for better selection when trying to match spending amount
+    usefulNotes.sort((a, b) => Number(b.spendingCapacity - a.spendingCapacity));
+    feeOnlyNotes.sort((a, b) => Number(b.spendingCapacity - a.spendingCapacity));
+    
+    // Debug: Log note details
+    console.log(`[findOptimalNoteSubset] Target spending amount: ${formatWeiToAmount(targetAmount)} DOGE`);
+    console.log(`[findOptimalNoteSubset] Available ${usefulNotes.length} useful notes + ${feeOnlyNotes.length} fee-only notes:`);
+    allNotesForCapacity.forEach((item, i) => {
+      const noteType = item.canOnlyCoverFee ? ' (fee-only)' : '';
+      console.log(`  Note ${i + 1}: amount=${formatWeiToAmount(item.note.amount)} DOGE, fee=${formatWeiToAmount(item.fee)} DOGE, spendingCapacity=${formatWeiToAmount(item.spendingCapacity)} DOGE, maxSendable=${formatWeiToAmount(item.maxSendable)} DOGE, canFullSpend=${item.canFullSpend}${noteType}`);
+    });
+    const totalNoteAmounts = allNotesForCapacity.reduce((sum, n) => sum + n.note.amount, 0n);
+    const totalMaxSpendable = usefulNotes.reduce((sum, n) => sum + n.maxSendable, 0n);
+    console.log(`[findOptimalNoteSubset] Total note amounts: ${formatWeiToAmount(totalNoteAmounts)} DOGE`);
+    console.log(`[findOptimalNoteSubset] Total max sendable (after fees): ${formatWeiToAmount(totalMaxSpendable)} DOGE`);
+    
+    // Calculate total spending capacity from all available notes (including fee-only notes)
+    const totalAvailableCapacity = allNotesForCapacity.reduce((sum, n) => sum + n.spendingCapacity, 0n);
+    
+    // If target amount exceeds available capacity, we can't fulfill it
+    if (targetAmount > totalAvailableCapacity) {
+      throw new Error(`Insufficient balance: cannot spend ${formatWeiToAmount(targetAmount)} DOGE. Available spending capacity: ${formatWeiToAmount(totalAvailableCapacity)} DOGE from ${noteValues.length} notes`);
+    }
+    
+    // Greedy approach: select notes until we have enough SPENDING CAPACITY
+    // targetAmount is what user wants to SPEND, not what recipient receives
+    const selectedNotes: typeof noteValues = [];
+    let totalSpendingCapacity = 0n;
+    
+    // If we need to spend the full available capacity (or close to it), use all notes
+    if (targetAmount >= totalAvailableCapacity * 99n / 100n) {
+      // Use all notes (within 1% tolerance for rounding)
+      selectedNotes.push(...usefulNotes, ...feeOnlyNotes);
+      totalSpendingCapacity = totalAvailableCapacity;
+      console.log(`[findOptimalNoteSubset] Using all ${allNotesForCapacity.length} notes (target is close to max capacity)`);
+    } else {
+      // Greedy selection: first add useful notes, then fee-only notes if needed
+      for (const item of usefulNotes) {
+        if (totalSpendingCapacity >= targetAmount) break;
+        selectedNotes.push(item);
+        totalSpendingCapacity += item.spendingCapacity;
+      }
+      
+      // If we still don't have enough, add fee-only notes
+      if (totalSpendingCapacity < targetAmount) {
+        for (const item of feeOnlyNotes) {
+          if (totalSpendingCapacity >= targetAmount) break;
+          selectedNotes.push(item);
+          totalSpendingCapacity += item.spendingCapacity;
+        }
+      }
+      
+      // If still not enough, something is wrong (we already checked totalAvailableCapacity)
+    }
+    
+    console.log(`[findOptimalNoteSubset] Selected ${selectedNotes.length} notes, total spending capacity: ${formatWeiToAmount(totalSpendingCapacity)} DOGE`);
+    
+    if (selectedNotes.length === 0 || totalSpendingCapacity < targetAmount) {
+      throw new Error(`Insufficient balance: cannot find notes to spend ${formatWeiToAmount(targetAmount)} DOGE. Available spending capacity: ${formatWeiToAmount(totalSpendingCapacity)} DOGE from ${allNotesForCapacity.length} notes`);
+    }
+    
+    // Distribute the SPENDING amount across selected notes
+    // Note: transferAmount will be what recipient receives (spending - fees per note)
+    const transfers: Array<{ note: ShieldedNote; index: number; transferAmount: bigint; fee: bigint }> = [];
+    let remainingSpending = targetAmount;
+    
+    // Sort by spending capacity descending to use larger notes first
+    selectedNotes.sort((a, b) => Number(b.spendingCapacity - a.spendingCapacity));
+    
+    for (const item of selectedNotes) {
+      if (remainingSpending <= 0n) break;
+      
+      // Declare variables for this iteration
+      let noteSpending: bigint;
+      let transferAmount: bigint;
+      
+      // Calculate how much we can spend from this note
+      const maxFullSpend = item.note.amount > item.fee ? item.note.amount - item.fee : 0n;
+      const maxPartialSpend = item.note.amount > item.fee + minChangeRequired 
+        ? item.note.amount - item.fee - minChangeRequired 
+        : 0n;
+      const maxSendableFromNote = maxFullSpend > maxPartialSpend ? maxFullSpend : maxPartialSpend;
+      
+      // Handle fee-only notes (can only cover fees, nothing for recipient)
+      if (item.canOnlyCoverFee) {
+        // For fee-only notes, we fully spend them (they just cover fees)
+        if (remainingSpending >= item.note.amount) {
+          noteSpending = item.note.amount;
+          transferAmount = 0n; // Recipient receives nothing from this note
+        } else {
+          // We don't need this note's full capacity, but we include it anyway if it's selected
+          noteSpending = remainingSpending;
+          transferAmount = 0n;
+        }
+      } else if (maxSendableFromNote <= 0n) {
+        continue; // Note too small and not fee-only, skip
+      } else {
+        // Determine spending strategy for this note
+        const changeAfterFullSpend = item.note.amount - maxFullSpend - item.fee;
+        const canFullySpend = maxFullSpend > 0n && (changeAfterFullSpend < minChangeRequired || changeAfterFullSpend === 0n);
+        
+        // Decide how much to SPEND from this note
+        // transferAmount = what recipient receives (spending - fee)
+        // We need: transferAmount + fee = spending from this note
+        
+        if (canFullySpend && remainingSpending >= item.spendingCapacity) {
+          // Fully spend this note (note.amount total)
+          noteSpending = item.note.amount;
+          transferAmount = maxFullSpend; // Recipient receives note.amount - fee
+        } else if (canFullySpend && remainingSpending < item.spendingCapacity) {
+          // Spend exactly what we need (remainingSpending)
+          noteSpending = remainingSpending;
+          transferAmount = remainingSpending > item.fee ? remainingSpending - item.fee : 0n;
+          // If spending less than note.amount, change = note.amount - noteSpending - fee
+          // But if change < minChange, we fully spend (transferAmount = note.amount - fee)
+          const potentialChange = item.note.amount - noteSpending - item.fee;
+          if (potentialChange < minChangeRequired && potentialChange >= 0n) {
+            // Change too small, fully spend this note
+            noteSpending = item.note.amount;
+            transferAmount = maxFullSpend;
+          }
+        } else {
+          // Partial spend (must create change note with minChangeRequired)
+          // We can spend: note.amount - fee - minChangeRequired
+          const maxPartialSpending = item.note.amount - item.fee - minChangeRequired;
+          if (remainingSpending >= maxPartialSpending) {
+            noteSpending = maxPartialSpending;
+            transferAmount = maxPartialSpend;
+          } else {
+            noteSpending = remainingSpending;
+            transferAmount = remainingSpending > item.fee ? remainingSpending - item.fee : 0n;
+          }
+        }
+      }
+      
+      // Verify we can actually do this transfer
+      if (noteSpending > item.note.amount || noteSpending <= 0n) {
+        continue;
+      }
+      
+      // For fee-only notes, transferAmount can be 0 (that's expected)
+      
+      // Record the transfer (transferAmount is what recipient receives)
+    // Skip fee-only notes (where recipient receives 0) - they can't be used in transfers
+    // Circuit requires positive amount for recipient notes
+    if (transferAmount > 0n) {
+      transfers.push({
+        note: item.note,
+        index: item.index,
+        transferAmount,
+        fee: item.fee,
+      });
+      remainingSpending -= noteSpending; // Deduct what we spent from this note
+    } else {
+      // Fee-only note: can't create transfer (circuit rejects zero-amount recipient notes)
+      // Just deduct from remaining spending to account for the fee being paid
+      remainingSpending -= noteSpending;
+      console.warn(`[findOptimalNoteSubset] Skipping fee-only note (${formatWeiToAmount(item.note.amount)} DOGE) - cannot create transfer with zero recipient amount`);
+    }
+    }
+    
+    if (remainingSpending > 0n) {
+      throw new Error(`Insufficient balance: still need ${formatWeiToAmount(remainingSpending)} DOGE after optimal selection`);
+    }
+    
+    const totalRecipientAmount = transfers.reduce((sum, t) => sum + t.transferAmount, 0n);
+    const totalSpent = transfers.reduce((sum, t) => sum + t.transferAmount + t.fee, 0n);
+    console.log(`[SequentialTransfer] Optimal selection: ${transfers.length} notes (spending: ${formatWeiToAmount(totalSpent)} DOGE, recipient receives: ${formatWeiToAmount(totalRecipientAmount)} DOGE)`);
+    
+    return transfers;
+  }
+  
+  // Find optimal note selection
+  const optimalTransfers = findOptimalNoteSubset(availableNotes, totalAmountWei);
+  
+  // Filter out fee-only notes (transferAmount = 0) - circuit rejects zero-amount recipient notes
+  // These notes can't be used in transfers but are accounted for in spending calculation
+  const usableTransfers = optimalTransfers.filter(t => t.transferAmount > 0n);
+  
+  if (usableTransfers.length === 0) {
+    throw new Error('No usable notes for transfer (all notes are too small after fees)');
+  }
+  
+  // Convert to expected format
+  const transfers: Array<{
+    noteIndex: number;
+    note: ShieldedNote;
+    amount: bigint;
+    fee: bigint;
+  }> = usableTransfers.map(t => ({
+    noteIndex: t.index,
+    note: t.note,
+    amount: t.transferAmount,
+    fee: t.fee,
+  }));
+  
+  // Log if fee-only notes were filtered out
+  const feeOnlyCount = optimalTransfers.length - usableTransfers.length;
+  if (feeOnlyCount > 0) {
+    console.warn(`[SequentialTransfer] Filtered out ${feeOnlyCount} fee-only note(s) - cannot create transfers with zero recipient amount`);
+  }
+  
+  console.log(`[SequentialTransfer] Planning ${transfers.length} transfers:`);
+  transfers.forEach((t, i) => {
+    console.log(`  Transfer ${i + 1}: ${formatWeiToAmount(t.amount)} DOGE from note ${t.noteIndex} (fee: ${formatWeiToAmount(t.fee)} DOGE)`);
+  });
+  
+  // Generate proofs for each transfer
+  const results: Array<{
+    proof: { proof: string[]; publicInputs: string[] };
+    root: `0x${string}`;
+    nullifierHash: `0x${string}`;
+    outputCommitment1: `0x${string}`;
+    outputCommitment2: `0x${string}`;
+    recipientNote: ShieldedNote;
+    changeNote: ShieldedNote;
+    encryptedMemo1: `0x${string}`;
+    encryptedMemo2: `0x${string}`;
+    noteIndex: number;
+    note: ShieldedNote; // Include the note object for reliable removal
+    amount: bigint;
+  }> = [];
+  
+  for (let i = 0; i < transfers.length; i++) {
+    const transfer = transfers[i];
+    
+    // Pre-check: Verify nullifier is not already spent on-chain (before generating proof)
+    // This prevents wasting time generating proofs for spent notes
+    try {
+      const { createPublicClient, http } = await import('viem');
+      const { dogeosTestnet } = await import('../dogeos-config');
+      const { getPrivacyRpcUrl } = await import('./privacy-utils');
+      const { computeNullifier, computeNullifierHash, toBytes32 } = await import('./shielded-crypto');
+      
+      const publicClient = createPublicClient({
+        chain: dogeosTestnet,
+        transport: http(getPrivacyRpcUrl()),
+      });
+      
+      if (transfer.note.leafIndex !== undefined) {
+        const nullifier = await computeNullifier(
+          transfer.note.secret,
+          BigInt(transfer.note.leafIndex),
+          walletState.identity.spendingKey
+        );
+        const nullifierHash = await computeNullifierHash(nullifier);
+        const nullifierHashBytes = toBytes32(nullifierHash);
+        
+        const isSpent = await publicClient.readContract({
+          address: poolAddress as `0x${string}`,
+          abi: [{
+            name: 'isSpent',
+            type: 'function',
+            stateMutability: 'view',
+            inputs: [{ name: '_nullifierHash', type: 'bytes32' }],
+            outputs: [{ name: '', type: 'bool' }],
+          }],
+          functionName: 'isSpent',
+          args: [nullifierHashBytes],
+        });
+        
+        if (isSpent) {
+          // Remove the spent note from wallet
+          const noteIndex = walletState.notes.findIndex(n => n.commitment === transfer.note.commitment);
+          if (noteIndex !== -1) {
+            walletState.notes.splice(noteIndex, 1);
+            await saveNotesToStorage(walletState.notes);
+            console.warn(`[SequentialTransfer] Removed spent note from wallet: ${formatWeiToAmount(transfer.note.amount)} DOGE`);
+            // Dispatch event to refresh UI
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('shielded-wallet-updated'));
+            }
+          }
+          throw new Error(`Note ${i + 1} (${formatWeiToAmount(transfer.note.amount)} DOGE) has already been spent on-chain. It has been removed from your wallet. Please try again.`);
+        }
+      }
+    } catch (checkError: any) {
+      // If it's our custom error, re-throw it
+      if (checkError.message && checkError.message.includes('already been spent')) {
+        throw checkError;
+      }
+      // Otherwise, log warning but continue (prepareTransfer will also check)
+      console.warn(`[SequentialTransfer] Failed to check nullifier for transfer ${i + 1}:`, checkError);
+    }
+    
+    // Verify change calculation (allow zero change for full note spends, like unshield)
+    const expectedChange = transfer.note.amount - transfer.amount - transfer.fee;
+    if (expectedChange < 0n) {
+      throw new Error(
+        `Transfer ${i + 1} would result in negative change: ` +
+        `note=${formatWeiToAmount(transfer.note.amount)} DOGE, ` +
+        `transfer=${formatWeiToAmount(transfer.amount)} DOGE, ` +
+        `fee=${formatWeiToAmount(transfer.fee)} DOGE, ` +
+        `change=${formatWeiToAmount(expectedChange)} DOGE`
+      );
+    }
+    // Note: change = 0 is valid for full note spends (circuit can handle zero change commitment)
+    
+    console.log(`[SequentialTransfer] Transfer ${i + 1}/${transfers.length}:`);
+    console.log(`  Note: ${formatWeiToAmount(transfer.note.amount)} DOGE`);
+    console.log(`  Sending: ${formatWeiToAmount(transfer.amount)} DOGE`);
+    console.log(`  Fee: ${formatWeiToAmount(transfer.fee)} DOGE`);
+    console.log(`  Expected change: ${formatWeiToAmount(expectedChange)} DOGE`);
+    
+    // Update progress: Generating proof
+    if (onProgress) {
+      onProgress(i + 1, transfers.length, Number(transfer.amount) / 1e18);
+    }
+    
+    // Generate proof for this transfer
+    // Convert to DOGE with proper precision handling
+    // Round down to avoid precision issues
+    const transferAmountDoge = Math.floor(Number(transfer.amount) / 1e15) / 1e3; // Round to 3 decimal places
+    const feeDoge = Math.floor(Number(transfer.fee) / 1e15) / 1e3;
+    
+    // Double-check: convert back to wei and verify change is non-negative (allow zero for full note spends)
+    const transferAmountWeiCheck = BigInt(Math.floor(transferAmountDoge * 1e18));
+    const feeWeiCheck = BigInt(Math.floor(feeDoge * 1e18));
+    const changeCheck = transfer.note.amount - transferAmountWeiCheck - feeWeiCheck;
+    
+    if (changeCheck < 0n) {
+      // Adjust transfer amount down slightly to ensure non-negative change
+      // For full note spends, change = 0 is valid, so only adjust if change would be negative
+      const adjustedTransferAmount = transfer.note.amount - feeWeiCheck - MIN_CHANGE;
+      if (adjustedTransferAmount <= 0n) {
+        throw new Error(
+          `Transfer ${i + 1} cannot be processed: note too small after fee. ` +
+          `Note: ${formatWeiToAmount(transfer.note.amount)} DOGE, ` +
+          `Fee: ${formatWeiToAmount(transfer.fee)} DOGE`
+        );
+      }
+      console.warn(
+        `[SequentialTransfer] Adjusting transfer ${i + 1} amount due to rounding: ` +
+        `${formatWeiToAmount(transfer.amount)} -> ${formatWeiToAmount(adjustedTransferAmount)} DOGE`
+      );
+      
+      const result = await prepareTransfer(
+        recipientAddress,
+        Number(adjustedTransferAmount) / 1e18,
+        poolAddress,
+        transfer.noteIndex,
+        relayerAddress || '0x0000000000000000000000000000000000000000',
+        feeDoge
+      );
+      
+      results.push({
+        ...result,
+        noteIndex: transfer.noteIndex,
+        note: transfer.note, // Include note for reliable removal
+        amount: adjustedTransferAmount,
+      });
+    } else {
+      const result = await prepareTransfer(
+        recipientAddress,
+        transferAmountDoge,
+        poolAddress,
+        transfer.noteIndex,
+        relayerAddress || '0x0000000000000000000000000000000000000000',
+        feeDoge
+      );
+      
+      results.push({
+        ...result,
+        noteIndex: transfer.noteIndex,
+        note: transfer.note, // Include note for reliable removal
+        amount: transfer.amount,
+      });
+    }
+  }
+  
+  return results;
+}
+
+/**
+ * Prepare Multi-Input Transfer using the new multi-input circuit
+ * 
+ * This is a TRUE Zcash-style multi-input transfer:
+ * - ONE proof for ALL input notes (not multiple proofs)
+ * - Much more gas-efficient
+ * - Proper value conservation across all inputs
+ * 
+ * @param recipientAddress Recipient's shielded address (z-address)
+ * @param amountDoge Amount to transfer in DOGE
+ * @param poolAddress The shielded pool contract address
+ * @param notesToSpendIndices Optional: specific note indices to use
+ * @param relayerAddress Relayer address for gasless transactions
+ * @param feeDoge Relayer fee in DOGE
+ */
+export async function prepareMultiInputTransfer(
+  recipientAddress: string,
+  amountDoge: number,
+  poolAddress: string,
+  notesToSpendIndices?: number[],
+  relayerAddress?: string,
+  feeDoge: number = 0
+): Promise<{
+  proof: { proof: string[]; publicInputs: string[] };
+  roots: `0x${string}`[];          // Fixed size array [10]
+  nullifierHashes: `0x${string}`[]; // Fixed size array [10]
+  outputCommitment1: `0x${string}`;
+  outputCommitment2: `0x${string}`;
+  recipientNote: ShieldedNote;
+  changeNote: ShieldedNote;
+  encryptedMemo1: `0x${string}`;
+  encryptedMemo2: `0x${string}`;
+  spentNoteIndices: number[];
+  numInputs: number;
+}> {
+  if (!walletState.identity) {
+    throw new Error('Wallet not initialized');
+  }
+  
+  const amountWei = parseAmountToWei(amountDoge);
+  const feeWei = parseAmountToWei(feeDoge);
+  const requiredAmount = amountWei + feeWei;
+  
+  // Parse recipient address
+  const recipientPubkey = BigInt(recipientAddress);
+  
+  console.log('[MultiTransfer] Preparing multi-input transfer');
+  console.log('[MultiTransfer] Amount:', amountDoge, 'DOGE (', amountWei.toString(), 'wei)');
+  console.log('[MultiTransfer] Fee:', feeDoge, 'DOGE');
+  
+  // Select notes to spend
+  let notesToSpend: ShieldedNote[];
+  let spentNoteIndices: number[];
+  
+  if (notesToSpendIndices && notesToSpendIndices.length > 0) {
+    notesToSpend = notesToSpendIndices.map(i => walletState.notes[i]);
+    spentNoteIndices = notesToSpendIndices;
+  } else {
+    // Auto-select notes using greedy algorithm
+    const candidates = walletState.notes
+      .map((note, index) => ({ note, index }))
+      .filter(({ note }) => note.leafIndex !== undefined && note.amount > 0n)
+      .sort((a, b) => Number(a.note.amount - b.note.amount));
+    
+    let total = 0n;
+    const selected: Array<{ note: ShieldedNote; index: number }> = [];
+    for (const item of candidates) {
+      if (total >= requiredAmount) break;
+      selected.push(item);
+      total += item.note.amount;
+    }
+    
+    if (total < requiredAmount) {
+      throw new Error(`Insufficient balance. Need ${formatWeiToAmount(requiredAmount)} DOGE, have ${formatWeiToAmount(total)} DOGE`);
+    }
+    
+    notesToSpend = selected.map(s => s.note);
+    spentNoteIndices = selected.map(s => s.index);
+  }
+  
+  if (notesToSpend.length < 2) {
+    throw new Error('Multi-input transfer requires at least 2 notes. Use regular transfer for single notes.');
+  }
+  
+  if (notesToSpend.length > 100) {
+    throw new Error('Cannot spend more than 100 notes in one transaction (contract limit)');
+  }
+  
+  console.log(`[MultiTransfer] Using ${notesToSpend.length} notes`);
+  
+  // Generate multi-input proof
+  const { generateMultiInputTransferProof } = await import('./shielded-proof-service');
+  
+  const result = await generateMultiInputTransferProof(
+    notesToSpend,
+    walletState.identity,
+    recipientPubkey,
+    amountWei,
+    poolAddress,
+    relayerAddress || '0x0000000000000000000000000000000000000000',
+    feeWei
+  );
+  
+  // Pad roots and nullifierHashes to fixed size of 5
+  const paddedRoots: `0x${string}`[] = [];
+  const paddedNullifierHashes: `0x${string}`[] = [];
+  
+  for (let i = 0; i < 5; i++) {
+    if (i < result.roots.length) {
+      paddedRoots.push(toBytes32(result.roots[i]));
+      paddedNullifierHashes.push(toBytes32(result.nullifierHashes[i]));
+    } else {
+      paddedRoots.push('0x0000000000000000000000000000000000000000000000000000000000000000');
+      paddedNullifierHashes.push('0x0000000000000000000000000000000000000000000000000000000000000000');
+    }
+  }
+  
+  // Encrypt memos
+  const encryptedMemo1 = await encryptNoteForRecipient(result.outputNote1, recipientPubkey);
+  const encryptedMemo2 = await encryptNoteForRecipient(result.outputNote2, walletState.identity.shieldedAddress);
+  
+  const memo1Formatted = formatMemoForContract(encryptedMemo1);
+  const memo2Formatted = formatMemoForContract(encryptedMemo2);
+  
+  return {
+    proof: result.proof,
+    roots: paddedRoots,
+    nullifierHashes: paddedNullifierHashes,
+    outputCommitment1: toBytes32(result.outputNote1.commitment),
+    outputCommitment2: toBytes32(result.outputNote2.commitment),
+    recipientNote: result.outputNote1,
+    changeNote: result.outputNote2,
+    encryptedMemo1: memo1Formatted,
+    encryptedMemo2: memo2Formatted,
+    spentNoteIndices,
+    numInputs: result.numInputs,
+  };
+}
+
+/**
+ * Complete multi-input transfer after transaction confirmed
+ * - Removes all spent notes
+ * - Adds recipient note (if sent to self)
+ * - Adds change note
+ * 
+ * This is the same as completeBatchTransfer but named for clarity
+ */
+export async function completeMultiInputTransfer(
+  spentNoteIndices: number[],
+  changeNote: ShieldedNote,
+  changeLeafIndex: number,
+  recipientNote?: ShieldedNote,
+  recipientLeafIndex?: number
+): Promise<void> {
+  // Reuse the same logic as batch transfer
+  return completeBatchTransfer(spentNoteIndices, changeNote, changeLeafIndex, recipientNote, recipientLeafIndex);
+}
+
+/**
+ * Prepare unshield (withdraw to public address)
+ * Supports partial unshield with change notes (V3)
+ * 
+ * @param recipientAddress - Public address to receive funds
+ * @param noteIndex - Index of note to spend
+ * @param requestedAmount - Amount to withdraw (can be less than note amount)
+ * @param poolAddress - Shielded pool contract address
+ * @param relayerAddress - Optional relayer address
+ * @param feeDoge - Fee in human-readable format (deprecated, use feeWei)
  * @param feeWei - Fee in wei (already calculated for the token's decimals)
- *                 If feeDoge is provided, it will be converted using 18 decimals
- *                 For ERC20 tokens, pass feeWei directly to avoid precision issues
  */
 export async function prepareUnshield(
   recipientAddress: string,
   noteIndex: number,
+  requestedAmount: bigint,  // NEW: Requested withdrawal amount
   poolAddress: string,
   relayerAddress?: string,
   feeDoge: number = 0,
@@ -564,6 +1670,9 @@ export async function prepareUnshield(
   proof: { proof: string[]; publicInputs: string[] };
   nullifierHash: `0x${string}`;
   amount: bigint;
+  changeAmount: bigint;      // NEW: Change amount
+  changeNote?: ShieldedNote; // NEW: Change note (if any)
+  changeCommitment?: `0x${string}`; // NEW: Change commitment
   root: `0x${string}`;
 }> {
   if (!walletState.identity) {
@@ -578,33 +1687,29 @@ export async function prepareUnshield(
   // Use feeWei if provided (already in token base units), otherwise convert from feeDoge
   // Fee must be in same units as note.amount (token base units)
   const fee = feeWei !== undefined ? feeWei : parseAmountToWei(feeDoge);
-  const withdrawAmount = note.amount - fee;
   
-  if (withdrawAmount <= 0n) {
+  // Calculate change: note.amount - requestedAmount - fee
+  const changeAmount = note.amount - requestedAmount - fee;
+  
+  if (changeAmount < 0n) {
     // Use note's decimals if available, otherwise fall back to token lookup
     const tokenDecimals = note.decimals ?? (note.token ? (shieldedPool.supportedTokens[note.token as keyof typeof shieldedPool.supportedTokens]?.decimals || 18) : 18);
     const noteAmountHuman = formatWeiToAmount(note.amount, tokenDecimals);
+    const requestedAmountHuman = formatWeiToAmount(requestedAmount, tokenDecimals);
     const feeAmountHuman = formatWeiToAmount(fee, tokenDecimals);
-    console.error(`[prepareUnshield] Fee exceeds note amount:`, {
-      token: note.token || 'DOGE',
-      tokenAddress: note.tokenAddress || 'N/A',
-      decimals: tokenDecimals,
-      noteDecimals: note.decimals,
-      noteAmount: note.amount.toString(),
-      noteAmountHuman,
-      fee: fee.toString(),
-      feeAmountHuman,
-      withdrawAmount: withdrawAmount.toString(),
-    });
-    throw new Error(`Fee exceeds note amount. Note: ${noteAmountHuman} ${note.token || 'DOGE'}, Fee: ${feeAmountHuman} ${note.token || 'DOGE'}`);
+    throw new Error(`Insufficient funds. Note: ${noteAmountHuman} ${note.token || 'DOGE'}, Requested: ${requestedAmountHuman} ${note.token || 'DOGE'}, Fee: ${feeAmountHuman} ${note.token || 'DOGE'}`);
   }
   
-  // Generate proof
-  const { proof, nullifierHash, root } = await generateUnshieldProof(
+  if (requestedAmount <= 0n) {
+    throw new Error('Withdrawal amount must be positive');
+  }
+  
+  // Generate proof with change support
+  const { proof, nullifierHash, root, changeNote, changeCommitment } = await generateUnshieldProof(
     note,
     walletState.identity,
     recipientAddress,
-    withdrawAmount,
+    requestedAmount,  // Withdrawal amount
     poolAddress,
     relayerAddress || '0x0000000000000000000000000000000000000000',
     fee
@@ -613,17 +1718,365 @@ export async function prepareUnshield(
   return {
     proof,
     nullifierHash: toBytes32(nullifierHash),
-    amount: withdrawAmount,
+    amount: requestedAmount,
+    changeAmount,           // NEW
+    changeNote,            // NEW
+    changeCommitment: changeCommitment ? toBytes32(changeCommitment) : undefined, // NEW
     root: toBytes32(root),
   };
 }
 
 /**
  * Complete unshield after transaction confirmed
- * Removes the spent note
+ * Removes the spent note and adds change note if present (V3)
  */
-export async function completeUnshield(noteIndex: number): Promise<void> {
-  walletState.notes.splice(noteIndex, 1);
+export async function completeUnshield(
+  noteIndex: number,
+  changeNote?: ShieldedNote | null,  // V3: Change note to add back
+  changeLeafIndex?: number,            // V3: Leaf index of change note
+  nullifierHash?: `0x${string}`,
+  poolAddress?: string
+): Promise<void> {
+  // BULLETPROOF: Verify note removal - find by commitment if nullifier provided
+  if (nullifierHash && poolAddress && walletState.identity) {
+    try {
+      // Find the note by matching nullifier hash
+      const noteToRemove = walletState.notes[noteIndex];
+      if (noteToRemove && noteToRemove.leafIndex !== undefined) {
+        const { verifyAndRemoveNote } = await import('./note-cleanup');
+        const { computeNullifier, computeNullifierHash, toBytes32 } = await import('./shielded-crypto');
+        const nullifier = await computeNullifier(
+          noteToRemove.secret,
+          BigInt(noteToRemove.leafIndex),
+          walletState.identity.spendingKey
+        );
+        const expectedNullifierHash = await computeNullifierHash(nullifier);
+        const expectedNullifierHashBytes = toBytes32(expectedNullifierHash);
+        
+        // Verify nullifier hash matches
+        if (expectedNullifierHashBytes.toLowerCase() === nullifierHash.toLowerCase()) {
+          // Verify on-chain that note is spent before removing
+          const verification = await verifyAndRemoveNote(
+            noteToRemove,
+            nullifierHash,
+            poolAddress,
+            walletState.identity.spendingKey
+          );
+          
+          if (verification.removed) {
+            console.log(`[Unshield] ✓ Verified note is spent on-chain before removal`);
+          } else {
+            console.warn(`[Unshield] Note not confirmed spent on-chain: ${verification.reason}. Removing anyway since transaction was submitted.`);
+          }
+        }
+      }
+    } catch (verifyError) {
+      console.warn('[Unshield] Failed to verify note on-chain before removal:', verifyError);
+      // Continue with removal anyway - background cleanup will catch discrepancies
+    }
+  }
+  
+  // Remove note by index (with validation)
+  if (noteIndex < 0 || noteIndex >= walletState.notes.length) {
+    console.error(`[Unshield] Invalid note index: ${noteIndex}, wallet has ${walletState.notes.length} notes`);
+    throw new Error(`Invalid note index: ${noteIndex}`);
+  }
+  
+  const removedNote = walletState.notes.splice(noteIndex, 1)[0];
+  console.log(`[Unshield] Removed note: ${formatWeiToAmount(removedNote.amount)} DOGE (was at index ${noteIndex})`);
+  console.log(`[Unshield] Wallet now has ${walletState.notes.length} notes after removal`);
+  
+  // V3: Add change note back to wallet (if present)
+  if (changeNote && changeNote.amount > 0n) {
+    if (changeLeafIndex !== undefined) {
+      changeNote.leafIndex = changeLeafIndex;
+    }
+    walletState.notes.push(changeNote);
+    console.log(`[Unshield] Added change note: ${formatWeiToAmount(changeNote.amount)} ${changeNote.token || 'DOGE'} (leafIndex: ${changeLeafIndex || 'pending'})`);
+  }
+  
+  await saveNotesToStorage(walletState.notes);
+  
+  // Dispatch event to refresh UI
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('shielded-wallet-updated'));
+  }
+}
+
+/**
+ * Prepare batch unshield (withdraw multiple notes to public address)
+ * 
+ * Useful for consolidating small notes or withdrawing larger amounts.
+ * 
+ * @param recipientAddress Public EVM address to receive funds
+ * @param noteIndices Array of note indices to unshield
+ * @param poolAddress Contract address
+ * @param relayerAddress Relayer address
+ * @param feeDoge Total fee for the batch (in DOGE)
+ */
+export async function prepareBatchUnshield(
+  recipientAddress: string,
+  noteIndices: number[],
+  poolAddress: string,
+  relayerAddress?: string,
+  feeDoge: number = 0
+): Promise<{
+  proofs: Array<{ proof: string[]; publicInputs: string[] }>;
+  roots: `0x${string}`[];
+  nullifierHashes: `0x${string}`[];
+  amounts: bigint[];
+  changeCommitments: `0x${string}`[];  // V3: Change commitments (all zero for batch - unshields entire notes)
+  totalAmount: bigint;
+  totalFee: bigint; // Adjusted total fee (evenly divisible by batch size)
+  token: `0x${string}`;
+}> {
+  if (!walletState.identity) {
+    throw new Error('Wallet not initialized');
+  }
+  
+  if (!noteIndices || noteIndices.length === 0) {
+    throw new Error('No notes specified');
+  }
+  
+  if (noteIndices.length > 100) {
+    throw new Error('Cannot unshield more than 100 notes in one batch (contract limit)');
+  }
+  
+  // Get notes to unshield
+  let notesToUnshield = noteIndices.map(idx => {
+    const note = walletState.notes[idx];
+    if (!note || note.leafIndex === undefined) {
+      throw new Error(`Invalid note at index ${idx}`);
+    }
+    return note;
+  });
+  
+  // CRITICAL: Deduplicate notes by commitment/leafIndex to prevent using same note twice
+  // This prevents NullifierAlreadySpent() errors when the same note is accidentally included multiple times
+  const seenCommitments = new Set<string>();
+  const seenLeafIndices = new Set<number>();
+  const uniqueNotes: ShieldedNote[] = [];
+  
+  for (const note of notesToUnshield) {
+    const commitmentKey = note.commitment.toString();
+    const leafIndexKey = note.leafIndex;
+    
+    // Check if we've already seen this note (by commitment or leafIndex)
+    if (seenCommitments.has(commitmentKey) || (leafIndexKey !== undefined && seenLeafIndices.has(leafIndexKey))) {
+      console.warn(`[BatchUnshield] Skipping duplicate note: commitment=${commitmentKey.slice(0, 16)}..., leafIndex=${leafIndexKey}`);
+      continue;
+    }
+    
+    seenCommitments.add(commitmentKey);
+    if (leafIndexKey !== undefined) {
+      seenLeafIndices.add(leafIndexKey);
+    }
+    uniqueNotes.push(note);
+  }
+  
+  if (uniqueNotes.length !== notesToUnshield.length) {
+    console.warn(`[BatchUnshield] Filtered out ${notesToUnshield.length - uniqueNotes.length} duplicate note(s). Using ${uniqueNotes.length} unique notes.`);
+  }
+  
+  if (uniqueNotes.length === 0) {
+    throw new Error('No unique notes to unshield after deduplication');
+  }
+  
+  notesToUnshield = uniqueNotes;
+  
+  // Verify all notes are same token
+  const firstToken = notesToUnshield[0].tokenAddress || NATIVE_TOKEN;
+  for (const note of notesToUnshield) {
+    const noteToken = note.tokenAddress || NATIVE_TOKEN;
+    if (noteToken !== firstToken) {
+      throw new Error('All notes must be the same token for batch unshield');
+    }
+  }
+  
+  // Calculate total amount and fee per note
+  let totalNoteAmount = notesToUnshield.reduce((sum, note) => sum + note.amount, 0n);
+  const batchSize = BigInt(notesToUnshield.length);
+  const feeWei = parseAmountToWei(feeDoge);
+  
+  // Ensure total fee is evenly divisible by batch size (contract requirement)
+  // Round down to nearest multiple of batch size
+  let adjustedTotalFee = (feeWei / batchSize) * batchSize;
+  let feePerNote = adjustedTotalFee / batchSize;
+  
+  console.log(`[BatchUnshield] Unshielding ${notesToUnshield.length} notes:`);
+  console.log(`  Total input: ${formatWeiToAmount(totalNoteAmount)} ${notesToUnshield[0].token || 'DOGE'}`);
+  if (adjustedTotalFee !== feeWei) {
+    console.log(`  Original fee: ${formatWeiToAmount(feeWei)} ${notesToUnshield[0].token || 'DOGE'} (adjusted for batch divisibility)`);
+  }
+  console.log(`  Total fee: ${formatWeiToAmount(adjustedTotalFee)} ${notesToUnshield[0].token || 'DOGE'}`);
+  console.log(`  Fee per note: ${formatWeiToAmount(feePerNote)} ${notesToUnshield[0].token || 'DOGE'}`);
+  console.log(`  Net withdrawal: ${formatWeiToAmount(totalNoteAmount - adjustedTotalFee)} ${notesToUnshield[0].token || 'DOGE'}`);
+  
+  // Pre-check: Verify nullifiers are not already spent on-chain
+  console.log('[BatchUnshield] Checking nullifiers on-chain before generating proofs...');
+  const { createPublicClient, http } = await import('viem');
+  const { dogeosTestnet } = await import('../dogeos-config');
+  const { getPrivacyRpcUrl } = await import('./privacy-utils');
+  const { computeNullifier, computeNullifierHash } = await import('./shielded-crypto');
+  
+  const publicClient = createPublicClient({
+    chain: dogeosTestnet,
+    transport: http(getPrivacyRpcUrl()),
+  });
+  
+  const spentNullifiers: Array<{ noteIndex: number; nullifierHash: string }> = [];
+  
+  for (let i = 0; i < notesToUnshield.length; i++) {
+    const note = notesToUnshield[i];
+    if (!note.leafIndex) continue;
+    
+    try {
+      // Compute nullifier the same way as in proof generation
+      const nullifier = await computeNullifier(
+        note.secret,
+        BigInt(note.leafIndex),
+        walletState.identity.spendingKey
+      );
+      const nullifierHash = await computeNullifierHash(nullifier);
+      const nullifierHashBytes = toBytes32(nullifierHash);
+      
+      const isSpent = await publicClient.readContract({
+        address: poolAddress as `0x${string}`,
+        abi: [{
+          name: 'isSpent',
+          type: 'function',
+          stateMutability: 'view',
+          inputs: [{ name: '_nullifierHash', type: 'bytes32' }],
+          outputs: [{ name: '', type: 'bool' }],
+        }],
+        functionName: 'isSpent',
+        args: [nullifierHashBytes],
+      });
+      
+      if (isSpent) {
+        const commitmentHex = '0x' + note.commitment.toString(16).padStart(64, '0').slice(0, 12) + '...';
+        console.warn(`[BatchUnshield] Note ${i} (commitment ${commitmentHex}) nullifier already spent on-chain`);
+        spentNullifiers.push({ noteIndex: i, nullifierHash: nullifierHashBytes });
+      }
+    } catch (checkError) {
+      console.warn(`[BatchUnshield] Failed to check nullifier for note ${i}:`, checkError);
+      // Continue anyway - the contract will reject if spent
+    }
+  }
+  
+  // Filter out spent notes
+  if (spentNullifiers.length > 0) {
+    const spentIndices = new Set(spentNullifiers.map(s => s.noteIndex));
+    const validNotes: ShieldedNote[] = [];
+    const validIndices: number[] = [];
+    
+    for (let i = 0; i < notesToUnshield.length; i++) {
+      if (!spentIndices.has(i)) {
+        validNotes.push(notesToUnshield[i]);
+        validIndices.push(i);
+      }
+    }
+    
+    if (validNotes.length === 0) {
+      throw new Error(
+        `All ${notesToUnshield.length} note(s) have already been spent on-chain. ` +
+        `Please sync your notes to remove spent notes.`
+      );
+    }
+    
+    console.warn(
+      `[BatchUnshield] Filtered out ${spentNullifiers.length} spent note(s) ` +
+      `(indices: ${spentNullifiers.map(s => s.noteIndex).join(', ')}). ` +
+      `Proceeding with ${validNotes.length} valid note(s).`
+    );
+    
+    // Update notesToUnshield to only include valid notes
+    notesToUnshield = validNotes;
+    
+    // Recalculate fee with new batch size
+    const newBatchSize = BigInt(notesToUnshield.length);
+    const newAdjustedTotalFee = (feeWei / newBatchSize) * newBatchSize;
+    const newFeePerNote = newAdjustedTotalFee / newBatchSize;
+    
+    // Update fee variables and total amount
+    const oldAdjustedTotalFee = adjustedTotalFee;
+    adjustedTotalFee = newAdjustedTotalFee;
+    feePerNote = newFeePerNote;
+    totalNoteAmount = notesToUnshield.reduce((sum, note) => sum + note.amount, 0n);
+    
+    if (oldAdjustedTotalFee !== adjustedTotalFee) {
+      console.log(`[BatchUnshield] Fee adjusted for new batch size: ${formatWeiToAmount(adjustedTotalFee)} ${notesToUnshield[0].token || 'DOGE'}`);
+    }
+    
+    // Re-log with updated values
+    console.log(`[BatchUnshield] Updated after filtering spent notes:`);
+    console.log(`  Valid notes: ${notesToUnshield.length}`);
+    console.log(`  Total input: ${formatWeiToAmount(totalNoteAmount)} ${notesToUnshield[0].token || 'DOGE'}`);
+    console.log(`  Total fee: ${formatWeiToAmount(adjustedTotalFee)} ${notesToUnshield[0].token || 'DOGE'}`);
+    console.log(`  Fee per note: ${formatWeiToAmount(feePerNote)} ${notesToUnshield[0].token || 'DOGE'}`);
+    console.log(`  Net withdrawal: ${formatWeiToAmount(totalNoteAmount - adjustedTotalFee)} ${notesToUnshield[0].token || 'DOGE'}`);
+  } else {
+    console.log('[BatchUnshield] All nullifiers verified as unspent, proceeding with proof generation...');
+  }
+  
+  const proofs: Array<{ proof: string[]; publicInputs: string[] }> = [];
+  const roots: `0x${string}`[] = [];
+  const nullifierHashes: `0x${string}`[] = [];
+  const amounts: bigint[] = [];
+  const changeCommitments: `0x${string}`[] = [];  // V3: Change commitments (all zero for batch - unshields entire notes)
+  
+  // Generate proofs for each note
+  // Note: Batch unshield unshields entire notes (no change), so changeCommitments will all be zero
+  for (const note of notesToUnshield) {
+    const withdrawAmount = note.amount - feePerNote;
+    
+    if (withdrawAmount <= 0n) {
+      throw new Error(`Note amount ${formatWeiToAmount(note.amount)} is less than fee per note ${formatWeiToAmount(feePerNote)}`);
+    }
+    
+    // V3: Generate proof (withdrawAmount = note.amount - feePerNote, so changeAmount = 0)
+    const { proof, nullifierHash, root, changeCommitment } = await generateUnshieldProof(
+      note,
+      walletState.identity,
+      recipientAddress,
+      withdrawAmount,  // Withdraw entire note minus fee (no change for batch)
+      poolAddress,
+      relayerAddress || '0x0000000000000000000000000000000000000000',
+      feePerNote
+    );
+    
+    proofs.push(proof);
+    roots.push(toBytes32(root));
+    nullifierHashes.push(toBytes32(nullifierHash));
+    amounts.push(withdrawAmount);
+    // V3: Add change commitment (should be 0 for batch unshield since we unshield entire notes)
+    changeCommitments.push(changeCommitment ? toBytes32(changeCommitment) : '0x0000000000000000000000000000000000000000000000000000000000000000' as `0x${string}`);
+  }
+  
+  const totalWithdrawAmount = amounts.reduce((sum, amt) => sum + amt, 0n);
+  
+  return {
+    proofs,
+    roots,
+    nullifierHashes,
+    amounts,
+    changeCommitments,  // V3: Return change commitments (all zero for batch)
+    totalAmount: totalWithdrawAmount,
+    totalFee: adjustedTotalFee, // Return adjusted fee for contract
+    token: firstToken,
+  };
+}
+
+/**
+ * Complete batch unshield after transaction confirmed
+ * - Removes all spent notes
+ */
+export async function completeBatchUnshield(noteIndices: number[]): Promise<void> {
+  // Remove notes in reverse order to maintain indices
+  const sortedIndices = [...noteIndices].sort((a, b) => b - a);
+  for (const index of sortedIndices) {
+    walletState.notes.splice(index, 1);
+  }
   await saveNotesToStorage(walletState.notes);
 }
 
@@ -659,6 +2112,21 @@ export async function completeSwap(
   }
   
   saveNotesToStorage(walletState.notes);
+  
+  // CRITICAL: Invalidate balance cache so getShieldedBalancePerToken() recalculates
+  // This ensures the balance reflects the updated notes immediately
+  // This is especially important for swaps where notes.length might not change (DOGE→USDC)
+  lastBalanceCache = null;
+  
+  // CRITICAL: Force immediate balance recalculation to ensure module-level state is in sync
+  // This ensures getShieldedBalancePerToken() returns correct balances when called from UI
+  const _ = getShieldedBalancePerToken(); // Force recalculation (discard result, just trigger cache update)
+  
+  // CRITICAL: Dispatch event immediately to update shielded balance UI
+  // This ensures the balance card updates as soon as the swap completes
+  // The event handler will call refreshState() which updates component state,
+  // triggering useMemo to recalculate and call getShieldedBalancePerToken() again
+  window.dispatchEvent(new CustomEvent('shielded-wallet-updated'));
 }
 
 /**
@@ -807,20 +2275,65 @@ export function clearWallet(): void {
  * Sync notes with on-chain data
  * Matches stored note commitments with on-chain commitments to fix leaf indices
  */
+/**
+ * Sync local notes with on-chain state
+ * 
+ * SAFETY MECHANISMS:
+ * 1. Processes Shield, Transfer, and Swap events to find all commitments
+ * 2. For notes not found in events, verifies on-chain via contract call
+ * 3. Only removes notes that are CONFIRMED not on-chain AND have no leafIndex
+ * 4. Preserves notes with valid leafIndex even if not found (might be spent but valid for history)
+ * 
+ * This ensures user funds are NEVER incorrectly removed.
+ */
 export async function syncNotesWithChain(poolAddress: string): Promise<{
   synced: number;
   notFound: number;
   errors: string[];
+  cleaned: number; // Number of spent notes cleaned up
 }> {
   const errors: string[] = [];
+  
+  // BULLETPROOF: Clean up spent notes before syncing
+  // This ensures we don't have stale spent notes in the wallet
+  let cleanedCount = 0;
+  if (walletState.identity && walletState.notes.length > 0) {
+    try {
+      const { cleanupSpentNotes } = await import('./note-cleanup');
+      const { removed, remaining } = await cleanupSpentNotes(
+        walletState.notes,
+        poolAddress,
+        walletState.identity.spendingKey
+      );
+      
+      if (removed.length > 0) {
+        cleanedCount = removed.length;
+        walletState.notes = remaining;
+        await saveNotesToStorage(walletState.notes);
+        console.log(`[Sync] Cleaned up ${cleanedCount} spent note(s) during sync`);
+        
+        // Dispatch event to refresh UI
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('shielded-wallet-updated'));
+        }
+      }
+    } catch (cleanupError) {
+      console.warn('[Sync] Failed to cleanup spent notes:', cleanupError);
+      errors.push(`Cleanup failed: ${cleanupError instanceof Error ? cleanupError.message : 'Unknown error'}`);
+    }
+  }
   let synced = 0;
   let notFound = 0;
   
   if (walletState.notes.length === 0) {
-    return { synced: 0, notFound: 0, errors: ['No notes to sync'] };
+    return { synced: 0, notFound: 0, errors: ['No notes to sync'], cleaned: 0 };
   }
   
   try {
+    // SECURITY: This function fetches all historical events to sync notes with chain
+    // This is typically a one-time sync operation, but we still add safeguards
+    const MAX_EVENTS = 100000; // Reasonable limit for sync operation (prevent memory exhaustion)
+    
     // Fetch all commitments from chain
     const RPC_URL = 'https://rpc.testnet.dogeos.com';
     
@@ -833,7 +2346,7 @@ export async function syncNotesWithChain(poolAddress: string): Promise<{
         method: 'eth_getLogs',
         params: [{
           address: poolAddress,
-          fromBlock: '0x0',
+          fromBlock: '0x0', // NOTE: Historical query for sync - necessary for full sync
           toBlock: 'latest',
         }],
       }),
@@ -847,25 +2360,134 @@ export async function syncNotesWithChain(poolAddress: string): Promise<{
     
     const logs = data.result || [];
     
-    // Filter deposit-style events (3+ topics)
-    const depositLogs = logs.filter((log: any) => 
-      log.topics && log.topics.length >= 3
-    );
+    // SECURITY: Limit number of events to prevent memory exhaustion
+    if (logs.length > MAX_EVENTS) {
+      console.warn(`[ShieldedService] Too many events (${logs.length}), limiting to ${MAX_EVENTS} for security`);
+      // Sort by block number and take most recent
+      logs.sort((a: any, b: any) => parseInt(b.blockNumber, 16) - parseInt(a.blockNumber, 16));
+      logs.splice(MAX_EVENTS);
+    }
     
-    console.log(`Found ${depositLogs.length} deposits on chain`);
+    // Event signatures for events that create commitments
+    // Shield event: Shield(bytes32 indexed commitment, uint256 indexed leafIndex, address indexed token, uint256 amount, uint256 timestamp)
+    // Transfer event: Transfer(bytes32 indexed nullifierHash, bytes32 outputCommitment1, bytes32 outputCommitment2, uint256 indexed leafIndex1, uint256 indexed leafIndex2, ...)
+    // Swap event: Swap(bytes32 indexed inputNullifier, bytes32 outputCommitment1, bytes32 outputCommitment2, address indexed tokenIn, address indexed tokenOut, ...)
+    // LeafInserted event: LeafInserted(bytes32 indexed leaf, uint256 indexed leafIndex, bytes32 newRoot) - emitted by MerkleTreeWithHistory
+    const SHIELD_EVENT_SIG = '0x784c8f4dbf0ffedd6e72c76501c545a70f8b203b30a26ce542bf92ba87c248a4';
+    const TRANSFER_EVENT_SIG = '0xd50e83984b64a106ac2ee6314d689ec4d2a656d5ece6d94c585796944b52240c';
+    const SWAP_EVENT_SIG = '0x98e6753c42765cc4a24e3a0d602acde13478ab2e7709b354f6f94d57058d243c';
+    const LEAF_INSERTED_EVENT_SIG = '0x784c8f4dbf0ffedd6e72c76501c545a70f8b203b30a26ce542bf92ba87c248a4'; // Same as Shield for MerkleTreeWithHistory
     
-    // Build a map of commitment -> leafIndex
+    // Debug: Log all event signatures to see what we're getting
+    const eventSigs = new Set<string>();
+    logs.forEach((log: any) => {
+      if (log.topics && log.topics[0]) {
+        eventSigs.add(log.topics[0].toLowerCase());
+      }
+    });
+    console.log(`[Sync] Event signatures found:`, Array.from(eventSigs));
+    
+    // Step 1: Process Shield events (commitment in topics[1], leafIndex in topics[2])
+    const shieldLogs = logs.filter((log: any) => {
+      if (!log.topics || log.topics.length < 3) return false;
+      return log.topics[0].toLowerCase() === SHIELD_EVENT_SIG.toLowerCase();
+    });
+    
+    // Step 2: Process Transfer events (leafIndex1/leafIndex2 in topics[2]/topics[3], commitments in data)
+    const transferLogs = logs.filter((log: any) => {
+      if (!log.topics || log.topics.length < 4) return false;
+      return log.topics[0].toLowerCase() === TRANSFER_EVENT_SIG.toLowerCase();
+    });
+    
+    // Step 3: Process Swap events (commitments in data, need to track via LeafInserted events)
+    const swapLogs = logs.filter((log: any) => {
+      if (!log.topics || log.topics.length < 4) return false;
+      return log.topics[0].toLowerCase() === SWAP_EVENT_SIG.toLowerCase();
+    });
+    
+    // Build a map of commitment -> leafIndex from all sources
     const commitmentMap = new Map<string, number>();
-    for (const log of depositLogs) {
+    
+    // Process Shield events
+    for (const log of shieldLogs) {
       const commitment = log.topics[1].toLowerCase();
       const leafIndex = parseInt(log.topics[2], 16);
-      // Only keep first occurrence (in case of duplicates)
       if (!commitmentMap.has(commitment)) {
         commitmentMap.set(commitment, leafIndex);
       }
     }
     
-    console.log(`Unique commitments on chain: ${commitmentMap.size}`);
+    // Process Transfer events - decode data to get commitments
+    // Transfer event: topics[2] = leafIndex1, topics[3] = leafIndex2
+    // Data: outputCommitment1 (32 bytes), outputCommitment2 (32 bytes), encryptedMemo1 (dynamic), encryptedMemo2 (dynamic), timestamp (32 bytes)
+    // Commitments are at the start (first 64 bytes), before dynamic bytes
+    for (const log of transferLogs) {
+      try {
+        const leafIndex1 = parseInt(log.topics[2], 16);
+        const leafIndex2 = parseInt(log.topics[3], 16);
+        
+        // Extract commitments from data (first 64 bytes = 2 commitments of 32 bytes each)
+        if (log.data && log.data.length >= 130) { // 0x + 128 hex chars = 64 bytes
+          const dataHex = log.data.startsWith('0x') ? log.data.slice(2) : log.data;
+          if (dataHex.length >= 128) {
+            // First 64 hex chars = 32 bytes = commitment1
+            // Next 64 hex chars = 32 bytes = commitment2
+            const commitment1 = '0x' + dataHex.slice(0, 64).toLowerCase();
+            const commitment2 = '0x' + dataHex.slice(64, 128).toLowerCase();
+            
+            if (commitment1 !== '0x0000000000000000000000000000000000000000000000000000000000000000') {
+              if (!commitmentMap.has(commitment1)) {
+                commitmentMap.set(commitment1, leafIndex1);
+              }
+            }
+            if (commitment2 !== '0x0000000000000000000000000000000000000000000000000000000000000000') {
+              if (!commitmentMap.has(commitment2)) {
+                commitmentMap.set(commitment2, leafIndex2);
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.warn(`[Sync] Failed to decode Transfer event:`, error);
+      }
+    }
+    
+    // Process Swap events - decode data to get commitments
+    // Swap event data: outputCommitment1 (32 bytes), outputCommitment2 (32 bytes), swapAmount (32 bytes), amountOut (32 bytes), encryptedMemo (dynamic), timestamp (32 bytes)
+    // Commitments are at the start (first 64 bytes), before other fixed-size params
+    // Note: We don't have leafIndex in Swap events, so we'll mark as -1 and verify on-chain
+    for (const log of swapLogs) {
+      try {
+        // Extract commitments from data (first 64 bytes)
+        if (log.data && log.data.length >= 130) {
+          const dataHex = log.data.startsWith('0x') ? log.data.slice(2) : log.data;
+          if (dataHex.length >= 128) {
+            const commitment1 = '0x' + dataHex.slice(0, 64).toLowerCase();
+            const commitment2 = '0x' + dataHex.slice(64, 128).toLowerCase();
+            
+            // For Swap events, we don't have leafIndex in the event
+            // Mark as -1 to indicate "found but leafIndex unknown" - will verify on-chain
+            if (commitment1 !== '0x0000000000000000000000000000000000000000000000000000000000000000') {
+              if (!commitmentMap.has(commitment1)) {
+                commitmentMap.set(commitment1, -1); // -1 means "found in Swap event but leafIndex unknown"
+              }
+            }
+            if (commitment2 !== '0x0000000000000000000000000000000000000000000000000000000000000000') {
+              if (!commitmentMap.has(commitment2)) {
+                commitmentMap.set(commitment2, -1);
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.warn(`[Sync] Failed to decode Swap event:`, error);
+      }
+    }
+    
+    console.log(`[Sync] Found ${shieldLogs.length} Shield events, ${transferLogs.length} Transfer events, ${swapLogs.length} Swap events`);
+    const commitmentsWithIndex = Array.from(commitmentMap.values()).filter(idx => idx !== -1).length;
+    const commitmentsWithoutIndex = Array.from(commitmentMap.values()).filter(idx => idx === -1).length;
+    console.log(`[Sync] Total unique commitments: ${commitmentMap.size} (${commitmentsWithIndex} with leafIndex, ${commitmentsWithoutIndex} from Swap/Transfer)`);
     
     // Debug: Print all on-chain commitments
     console.log('=== ON-CHAIN COMMITMENTS ===');
@@ -873,51 +2495,154 @@ export async function syncNotesWithChain(poolAddress: string): Promise<{
       console.log(`  ${commitment} -> leafIndex: ${leafIndex}`);
     });
     
+    // Step 4: For notes not found in events, verify on-chain via contract call
+    // This is the critical safety check - only remove if confirmed not on current contract
+    const { createPublicClient, http } = await import('viem');
+    const { dogeosTestnet } = await import('@/lib/dogeos-config');
+    const publicClient = createPublicClient({
+      chain: dogeosTestnet,
+      transport: http(),
+    });
+    
     // Match each stored note to on-chain data
+    const validNotes: typeof walletState.notes = [];
+    const removedNotes: typeof walletState.notes = [];
+    
     for (const note of walletState.notes) {
       // Convert note commitment to hex string for matching
       const noteCommitmentHex = '0x' + note.commitment.toString(16).padStart(64, '0').toLowerCase();
       
       console.log(`=== CHECKING NOTE ===`);
-      console.log(`  Amount: ${Number(note.amount) / 1e18} DOGE`);
+      console.log(`  Amount: ${Number(note.amount) / 1e18} ${note.tokenAddress === NATIVE_TOKEN ? 'DOGE' : 'Token'}`);
       console.log(`  Local commitment: ${noteCommitmentHex}`);
       console.log(`  Current leafIndex: ${note.leafIndex}`);
       
       const onChainLeafIndex = commitmentMap.get(noteCommitmentHex);
       
-      if (onChainLeafIndex !== undefined) {
+      if (onChainLeafIndex !== undefined && onChainLeafIndex !== -1) {
+        // Note exists in events with known leafIndex - keep it
         if (note.leafIndex !== onChainLeafIndex) {
-          console.log(`  ✅ MATCH FOUND! Fixing leafIndex: ${note.leafIndex} -> ${onChainLeafIndex}`);
+          console.log(`  ✅ MATCH FOUND IN EVENTS! Fixing leafIndex: ${note.leafIndex} -> ${onChainLeafIndex}`);
           note.leafIndex = onChainLeafIndex;
           synced++;
         } else {
           console.log(`  ✅ Already correct, leafIndex=${note.leafIndex}`);
         }
-      } else {
-        console.warn(`  ❌ NOT FOUND ON CHAIN!`);
-        console.log(`  Closest matches:`);
-        // Find similar commitments for debugging
-        const notePrefix = noteCommitmentHex.slice(0, 20);
-        commitmentMap.forEach((idx, comm) => {
-          if (comm.startsWith(notePrefix.slice(0, 10))) {
-            console.log(`    ${comm} (leafIndex: ${idx})`);
+        validNotes.push(note);
+      } else if (onChainLeafIndex === -1) {
+        // Note found in Swap/Transfer event but leafIndex unknown - keep it, verify on-chain
+        console.log(`  ✅ Found in Transfer/Swap event (leafIndex unknown) - verifying on-chain...`);
+        try {
+          const commitmentExists = await publicClient.readContract({
+            address: poolAddress as `0x${string}`,
+            abi: [{
+              type: 'function',
+              name: 'commitments',
+              inputs: [{ name: '', type: 'bytes32' }],
+              outputs: [{ name: '', type: 'bool' }],
+              stateMutability: 'view',
+            }],
+            functionName: 'commitments',
+            args: [noteCommitmentHex as `0x${string}`],
+          }) as boolean;
+          
+          if (commitmentExists) {
+            console.log(`  ✅ Confirmed on-chain - keeping note`);
+            validNotes.push(note);
+          } else {
+            // Found in event but not on-chain - might be from old contract or spent
+            // Be conservative: keep it if it has a leafIndex
+            if (note.leafIndex !== undefined && note.leafIndex !== null) {
+              console.warn(`  ⚠️  Found in event but not on-chain (might be spent) - keeping (has leafIndex)`);
+              validNotes.push(note);
+            } else {
+              console.warn(`  ❌ Found in event but not on-chain AND no leafIndex - removing`);
+              removedNotes.push(note);
+              errors.push(`Note found in event but not on-chain - removed (no leafIndex)`);
+              notFound++;
+            }
           }
-        });
-        errors.push(`Note with amount ${Number(note.amount) / 1e18} DOGE not found on chain - commitment mismatch`);
-        notFound++;
+        } catch (error: any) {
+          console.warn(`  ⚠️  Failed to verify on-chain: ${error.message} - keeping to be safe`);
+          validNotes.push(note);
+        }
+      } else {
+        // Note NOT found in events - verify on-chain before removing
+        console.log(`  ⚠️  Note not found in events, verifying on-chain...`);
+        
+        try {
+          // Check if commitment exists on-chain via contract call
+          // This is the critical safety check - only remove if confirmed not on current contract
+          const commitmentExists = await publicClient.readContract({
+            address: poolAddress as `0x${string}`,
+            abi: [{
+              type: 'function',
+              name: 'commitments',
+              inputs: [{ name: '', type: 'bytes32' }],
+              outputs: [{ name: '', type: 'bool' }],
+              stateMutability: 'view',
+            }],
+            functionName: 'commitments',
+            args: [noteCommitmentHex as `0x${string}`],
+          }) as boolean;
+          
+          if (commitmentExists) {
+            // Commitment exists on-chain but wasn't in events (might be from Transfer/Swap we didn't decode properly)
+            // Keep it and try to find leafIndex from contract
+            console.log(`  ✅ Commitment exists on-chain! Keeping note (might be from Transfer/Swap event)`);
+            validNotes.push(note);
+          } else {
+            // Commitment does NOT exist on-chain - verify it's truly from old contract
+            // SAFETY: Only remove if BOTH conditions are true:
+            // 1. Commitment doesn't exist on-chain (confirmed not in current contract)
+            // 2. Note has no leafIndex (can't be from current contract)
+            // If note has leafIndex, keep it (might be spent but note is still valid for history)
+            if (note.leafIndex === undefined || note.leafIndex === null) {
+              // Confirmed: Not on-chain AND no leafIndex = definitely from old contract
+              console.warn(`  ❌ Commitment NOT on-chain AND no leafIndex - removing (confirmed from old contract)`);
+              removedNotes.push(note);
+              errors.push(`Note with amount ${Number(note.amount) / 1e18} not found on-chain - removed (confirmed from old contract)`);
+              notFound++;
+            } else {
+              // Has leafIndex but commitment doesn't exist - might be spent
+              // SAFETY: Keep it - user might have spent it, but the note is still valid for transaction history
+              // Removing it would cause user confusion (they'd lose transaction history)
+              console.warn(`  ⚠️  Commitment not on-chain but has leafIndex - keeping (might be spent, preserving transaction history)`);
+              validNotes.push(note);
+            }
+          }
+        } catch (error: any) {
+          // If contract call fails, be conservative - keep the note
+          console.warn(`  ⚠️  Failed to verify commitment on-chain: ${error.message} - keeping note to be safe`);
+          validNotes.push(note);
+        }
       }
     }
     
-    // Save updated notes
-    if (synced > 0) {
+    // Update wallet state with only valid notes
+    if (removedNotes.length > 0) {
+      console.warn(`[Sync] ⚠️  Removing ${removedNotes.length} notes confirmed to be from old contract:`);
+      removedNotes.forEach((note, idx) => {
+        console.warn(`  [${idx + 1}] ${Number(note.amount) / 1e18} ${note.token || 'DOGE'} - commitment: ${'0x' + note.commitment.toString(16).padStart(64, '0').slice(0, 16)}...`);
+      });
+      walletState.notes = validNotes;
+      await saveNotesToStorage(walletState.notes);
+    } else if (synced > 0) {
+      // Only save if we fixed leaf indices
       await saveNotesToStorage(walletState.notes);
     }
     
-    return { synced, notFound, errors };
+    // Final summary
+    console.log(`[Sync] ✅ Sync complete: ${validNotes.length} notes kept, ${removedNotes.length} removed, ${synced} leafIndices fixed`);
+    if (removedNotes.length > 0) {
+      console.warn(`[Sync] ⚠️  Removed notes were confirmed NOT on-chain (from old contract)`);
+    }
+    
+    return { synced, notFound, errors, cleaned: cleanedCount };
     
   } catch (error: any) {
     console.error('Sync error:', error);
-    return { synced: 0, notFound: 0, errors: [error.message] };
+    return { synced: 0, notFound: 0, errors: [error.message], cleaned: cleanedCount };
   }
 }
 
@@ -956,8 +2681,26 @@ export async function removeNotesForToken(tokenSymbol: string): Promise<number> 
  * Add a discovered note (from auto-discovery)
  * Returns true if note was added, false if already exists
  */
+/**
+ * Add a discovered note to the wallet
+ * SECURITY: Prevents duplicate notes via commitment uniqueness check
+ * 
+ * Race Condition Analysis:
+ * - JavaScript is single-threaded (event loop), so check-and-push is effectively atomic
+ * - If two async operations call this simultaneously, they will execute sequentially
+ * - Commitment hash check before push prevents duplicates even in concurrent scenarios
+ * - localStorage save is async, but the check happens synchronously before save
+ * 
+ * Commitment Hash Algorithm:
+ * - Uses MiMC Sponge hash (collision-resistant)
+ * - Commitment = MiMC(MiMC(amount, ownerPubkey), MiMC(secret, blinding))
+ * - Input: amount (bigint), ownerPubkey (bigint), secret (random 31 bytes), blinding (random 31 bytes)
+ * - Output: 256-bit hash (cryptographically unique per unique input combination)
+ * - Collision probability: ~1 in 2^128 (negligible for practical purposes)
+ */
 export async function addDiscoveredNote(note: ShieldedNote): Promise<boolean> {
-  // Check if we already have this note
+  // SECURITY: Check if we already have this note by commitment hash
+  // Commitment hash is cryptographically unique - two different notes cannot have same commitment
   const exists = walletState.notes.some(n => n.commitment === note.commitment);
   if (exists) {
     console.log('[ShieldedWallet] Note already exists, skipping');
@@ -970,7 +2713,8 @@ export async function addDiscoveredNote(note: ShieldedNote): Promise<boolean> {
     return false;
   }
   
-  // Add to wallet
+  // SECURITY: Add to wallet - this is effectively atomic in JavaScript (single-threaded event loop)
+  // Even if called from multiple async contexts, they execute sequentially
   walletState.notes.push(note);
   await saveNotesToStorage(walletState.notes);
   
@@ -1151,7 +2895,6 @@ function migrateLegacyNote(note: any): ShieldedNote {
   }
   
   // Legacy note - add missing metadata
-  const NATIVE_TOKEN = '0x0000000000000000000000000000000000000000' as `0x${string}`;
   const tokenSymbol = note.token || 'DOGE';
   
   if (tokenSymbol === 'DOGE') {

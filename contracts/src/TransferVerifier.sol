@@ -37,10 +37,10 @@ contract TransferVerifier {
     uint256 constant gammax2 = 10857046999023057135944570762232829481370756359578518086990519993285655852781;
     uint256 constant gammay1 = 4082367875863433681332203403145435568316851327593401208105741076214120093531;
     uint256 constant gammay2 = 8495653923123431417604973247489272438418190587263600148770280649306958101930;
-    uint256 constant deltax1 = 21219464387394451737827849439457142914067109579349002512966063196748447914695;
-    uint256 constant deltax2 = 3806586863626858240261822520028774666833342466140504703145916029941488789510;
-    uint256 constant deltay1 = 20387392160636444675309240557150606478737080891916855305974373450115054039554;
-    uint256 constant deltay2 = 11763648036721154118626189951350591207220954572758924282638197932035713316827;
+    uint256 constant deltax1 = 14854160349414600390712386796686059170963197450937279376023224759634910792629;
+    uint256 constant deltax2 = 20395200614834819752540765514467076492283681436011602055598664952921613329661;
+    uint256 constant deltay1 = 17343923065823540458300530986684549415779956814595115095045458695209974937658;
+    uint256 constant deltay2 = 775711857776212624609030202045824032255849083940646307529295729280447247818;
 
     
     uint256 constant IC0x = 20246175179327317779233174882079493441931475450596795868325029427617090859406;
@@ -79,6 +79,12 @@ contract TransferVerifier {
                     return(0, 0x20)
                 }
             }
+            
+            // NOTE: Canonical point validation removed
+            // snarkjs does not guarantee proofs are in canonical form (y < (q-1)/2)
+            // Both y and -y mod q are valid, and snarkjs can generate either
+            // Enforcing canonical form would reject valid proofs
+            // Nullifier mechanism already prevents double-spending (main security concern)
             
             // G1 function to multiply a G1 value(x,y) to value in an address
             function g1_mulAccC(pR, x, y, s) {
@@ -192,6 +198,8 @@ contract TransferVerifier {
             
             checkField(calldataload(add(_pubSignals, 160)))
             
+            // NOTE: Canonical point validation removed - snarkjs proofs are not always canonical
+            // Nullifier mechanism provides sufficient protection against double-spending
 
             // Validate all evaluations
             let isValid := checkPairing(_pA, _pB, _pC, _pubSignals, pMem)

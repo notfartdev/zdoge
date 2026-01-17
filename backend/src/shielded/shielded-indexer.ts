@@ -35,7 +35,8 @@ function roundTimestamp(timestamp: number, bucketMinutes: number = 5): number {
 export const ShieldedPoolEvents = {
   Shield: parseAbiItem('event Shield(bytes32 indexed commitment, uint256 indexed leafIndex, address indexed token, uint256 amount, uint256 timestamp)'),
   Transfer: parseAbiItem('event Transfer(bytes32 indexed nullifierHash, bytes32 outputCommitment1, bytes32 outputCommitment2, uint256 indexed leafIndex1, uint256 indexed leafIndex2, bytes encryptedMemo1, bytes encryptedMemo2, uint256 timestamp)'),
-  Unshield: parseAbiItem('event Unshield(bytes32 indexed nullifierHash, address indexed recipient, address indexed token, uint256 amount, address relayer, uint256 fee, uint256 timestamp)'),
+  // V3: Added changeCommitment parameter
+  Unshield: parseAbiItem('event Unshield(bytes32 indexed nullifierHash, address indexed recipient, address indexed token, uint256 amount, bytes32 changeCommitment, address relayer, uint256 fee, uint256 timestamp)'),
   Swap: parseAbiItem('event Swap(bytes32 indexed inputNullifier, bytes32 outputCommitment, address indexed tokenIn, address indexed tokenOut, uint256 amountIn, uint256 amountOut, bytes encryptedMemo, uint256 timestamp)'),
 };
 
@@ -56,7 +57,7 @@ export interface CommitmentInfo {
   timestamp: number;
   blockNumber: number;
   txHash: string;
-  type: 'shield' | 'transfer' | 'swap';
+  type: 'shield' | 'transfer' | 'swap' | 'unshield-change'; // V3: Added unshield-change for partial unshield
 }
 
 export interface TransferMemoInfo {
@@ -234,17 +235,37 @@ export async function syncShieldedPool(
       });
     }
     
-    // Process Unshield events
+    // Process Unshield events (V3: handles changeCommitment)
     for (const log of unshieldLogs) {
       const nullifierHash = log.args.nullifierHash as string;
       const token = log.args.token as string;
       const amount = log.args.amount as bigint;
+      const changeCommitment = log.args.changeCommitment as string | undefined; // V3: Change commitment (may be undefined for old events)
       
       pool.nullifiers.add(nullifierHash);
       
-      // Update total shielded
+      // V3: If changeCommitment is non-zero, insert it into Merkle tree
+      if (changeCommitment && changeCommitment !== '0x0000000000000000000000000000000000000000000000000000000000000000') {
+        if (!pool.commitments.has(changeCommitment)) {
+          const leafIndex = pool.tree.getLeafCount();
+          pool.tree.insert(BigInt(changeCommitment));
+          const roundedTimestamp = roundTimestamp(Number(log.args.timestamp), 5);
+          pool.commitments.set(changeCommitment, {
+            leafIndex,
+            token,
+            amount: '', // Unknown - not stored for privacy
+            timestamp: roundedTimestamp,
+            blockNumber: Number(log.blockNumber),
+            txHash: log.transactionHash!,
+            type: 'unshield-change', // Mark as change from unshield
+          });
+        }
+      }
+      
+      // Update total shielded (amount withdrawn + fee, not including change)
+      const fee = log.args.fee as bigint | undefined || 0n;
       const currentTotal = pool.totalShielded.get(token) || 0n;
-      pool.totalShielded.set(token, currentTotal - amount);
+      pool.totalShielded.set(token, currentTotal - (amount + fee)); // Subtract withdrawn amount + fee
     }
     
     // Process Swap events
@@ -372,8 +393,28 @@ export function watchShieldedPool(
     onLogs: (logs) => {
       for (const log of logs) {
         const nullifierHash = log.args.nullifierHash as string;
+        const changeCommitment = log.args.changeCommitment as string | undefined; // V3
         pool.nullifiers.add(nullifierHash);
-        console.log(`[ShieldedIndexer] NEW unshield: ${log.args.recipient}`);
+        
+        // V3: Handle change commitment if present
+        if (changeCommitment && changeCommitment !== '0x0000000000000000000000000000000000000000000000000000000000000000') {
+          if (!pool.commitments.has(changeCommitment)) {
+            const leafIndex = pool.tree.getLeafCount();
+            pool.tree.insert(BigInt(changeCommitment));
+            const roundedTimestamp = roundTimestamp(Number(log.args.timestamp), 5);
+            pool.commitments.set(changeCommitment, {
+              leafIndex,
+              token: log.args.token as string,
+              amount: '',
+              timestamp: roundedTimestamp,
+              blockNumber: Number(log.blockNumber),
+              txHash: log.transactionHash!,
+              type: 'unshield-change',
+            });
+          }
+        }
+        
+        console.log(`[ShieldedIndexer] NEW unshield: ${log.args.recipient}${changeCommitment && changeCommitment !== '0x0000000000000000000000000000000000000000000000000000000000000000' ? ' (with change)' : ''}`);
       }
     },
   });

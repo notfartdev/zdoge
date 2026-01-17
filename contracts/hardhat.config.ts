@@ -56,6 +56,10 @@ const config: HardhatUserConfig = {
     cache: "./cache",
     artifacts: "./artifacts",
   },
+  // Exclude old contracts that use deprecated interfaces
+  mocha: {
+    timeout: 40000,
+  },
 };
 
 export default config;

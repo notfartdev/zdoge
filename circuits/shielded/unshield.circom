@@ -124,13 +124,14 @@ template MerkleTreeChecker(levels) {
 }
 
 /**
- * Unshield Circuit
+ * Unshield Circuit (supports partial unshield with change)
  * 
  * Public inputs:
  * - root: Merkle tree root
  * - nullifierHash: Hash of nullifier (prevents double-spend)
  * - recipient: Public address to receive funds
  * - amount: Amount being withdrawn
+ * - changeCommitment: Commitment of change note (0 if no change)
  * - relayer: Relayer address (or 0)
  * - fee: Relayer fee
  * 
@@ -143,6 +144,9 @@ template MerkleTreeChecker(levels) {
  * - pathElements: Merkle path siblings
  * - pathIndices: Merkle path direction bits
  * - spendingKey: Owner's spending key (proves ownership)
+ * - changeAmount: Amount returned as change (0 if no change)
+ * - changeSecret: Change note secret
+ * - changeBlinding: Change note blinding factor
  */
 template Unshield(levels) {
     // Public inputs
@@ -150,6 +154,7 @@ template Unshield(levels) {
     signal input nullifierHash;
     signal input recipient;
     signal input amount;
+    signal input changeCommitment;  // NEW: Change note commitment (can be 0)
     signal input relayer;
     signal input fee;
 
@@ -164,6 +169,11 @@ template Unshield(levels) {
 
     // Private input (spending authority)
     signal input spendingKey;
+    
+    // Private inputs (change note - NEW)
+    signal input changeAmount;
+    signal input changeSecret;
+    signal input changeBlinding;
 
     // 1. Compute note commitment
     component noteCommitment = NoteCommitment();
@@ -200,20 +210,37 @@ template Unshield(levels) {
     // 6. Verify nullifier hash matches public input
     nullifierHash === nullifierHasher.hash;
 
-    // 7. Verify value conservation
-    // amount + fee must equal note amount
+    // 7. Compute change note commitment (if changeAmount > 0)
+    component changeComm = NoteCommitment();
+    changeComm.amount <== changeAmount;
+    changeComm.ownerPubkey <== ownerPubkey;  // Change goes back to sender
+    changeComm.secret <== changeSecret;
+    changeComm.blinding <== changeBlinding;
+    
+    // 8. Verify change commitment matches public input (or is zero)
+    component changeIsZero = IsZero();
+    changeIsZero.in <== changeAmount;
+    
+    // When changeAmount > 0, enforce changeCommitment == changeComm.commitment
+    (1 - changeIsZero.out) * (changeCommitment - changeComm.commitment) === 0;
+    
+    // When changeAmount == 0, enforce changeCommitment == 0
+    changeIsZero.out * changeCommitment === 0;
+
+    // 9. Verify value conservation
+    // noteAmount = amount + changeAmount + fee
     component valueCheck = IsEqual();
     valueCheck.in[0] <== noteAmount;
-    valueCheck.in[1] <== amount + fee;
+    valueCheck.in[1] <== amount + changeAmount + fee;
     valueCheck.out === 1;
 
-    // 8. Ensure fee is less than amount (prevent stealing via fee)
+    // 10. Ensure fee is less than amount (prevent stealing via fee)
     component feeCheck = LessThan(252);
     feeCheck.in[0] <== fee;
     feeCheck.in[1] <== amount + 1;  // fee < amount + 1, i.e., fee <= amount
     feeCheck.out === 1;
 
-    // 9. Bind public inputs to prevent front-running
+    // 11. Bind public inputs to prevent front-running
     signal recipientSquare;
     recipientSquare <== recipient * recipient;
 
@@ -222,12 +249,16 @@ template Unshield(levels) {
 
     signal amountSquare;
     amountSquare <== amount * amount;
+    
+    signal changeSquare;
+    changeSquare <== changeCommitment * changeCommitment;
 
     signal feeSquare;
     feeSquare <== fee * fee;
 }
 
 // Main circuit with 20-level Merkle tree (~1M deposits)
-component main {public [root, nullifierHash, recipient, amount, relayer, fee]} = Unshield(20);
+// Public inputs: [root, nullifierHash, recipient, amount, changeCommitment, relayer, fee] (7 inputs)
+component main {public [root, nullifierHash, recipient, amount, changeCommitment, relayer, fee]} = Unshield(20);
 
 

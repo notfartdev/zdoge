@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Progress } from "@/components/ui/progress"
+import { Card } from "@/components/ui/card"
 import { 
   Loader2, 
   AlertCircle, 
@@ -19,7 +20,9 @@ import {
 } from "lucide-react"
 import { SuccessDialog } from "@/components/shielded/success-dialog"
 import { ConfirmationDialog } from "@/components/shielded/confirmation-dialog"
+import { TransactionProgress, type TransactionStatus } from "@/components/shielded/transaction-progress"
 import { useToast } from "@/hooks/use-toast"
+import { cn } from "@/lib/utils"
 import { useWallet } from "@/lib/wallet-context"
 import { formatErrorWithSuggestion } from "@/lib/shielded/error-suggestions"
 import { prepareShield, completeShield } from "@/lib/shielded/shielded-service"
@@ -92,7 +95,7 @@ export function ShieldInterface({ onSuccess, onReset, selectedToken: externalTok
     onTokenChange?.(token)
   }
   const [amount, setAmount] = useState("")
-  const [status, setStatus] = useState<"idle" | "approving" | "preparing" | "confirming" | "success" | "error">("idle")
+  const [status, setStatus] = useState<"idle" | "approving" | "preparing" | "confirming" | "completing" | "confirmed" | "error">("idle")
   const [noteBackup, setNoteBackup] = useState<string | null>(null)
   const [txHash, setTxHash] = useState<string | null>(null)
   const [leafIndex, setLeafIndex] = useState<number | null>(null)
@@ -306,14 +309,43 @@ export function ShieldInterface({ onSuccess, onReset, selectedToken: externalTok
             args: [SHIELDED_POOL_ADDRESS as Address, amountWei],
           })
           
-          const approveTx = await provider.request({
-            method: "eth_sendTransaction",
-            params: [{
-              from: wallet.address,
-              to: selectedTokenInfo.address,
-              data: approveData,
-            }],
-          })
+          let approveTx: string
+          try {
+            approveTx = await provider.request({
+              method: "eth_sendTransaction",
+              params: [{
+                from: wallet.address,
+                to: selectedTokenInfo.address,
+                data: approveData,
+              }],
+            }) as string
+          } catch (approveError: any) {
+            // Check if user rejected/canceled the approval
+            const errorMessage = approveError?.message?.toLowerCase() || ''
+            const errorCode = approveError?.code
+            
+            if (
+              errorCode === 4001 ||
+              errorCode === '4001' ||
+              errorMessage.includes('user rejected') ||
+              errorMessage.includes('user denied') ||
+              errorMessage.includes('rejected') ||
+              errorMessage.includes('cancelled') ||
+              errorMessage.includes('canceled')
+            ) {
+              // User canceled approval - reset gracefully
+              console.log("[Shield] Approval canceled by user")
+              setStatus("idle")
+              toast({
+                title: "Approval Canceled",
+                description: "The token approval was canceled. No changes were made.",
+                variant: "default",
+              })
+              return
+            }
+            // Re-throw other errors
+            throw approveError
+          }
           
           console.log("[Shield] Approval tx:", approveTx)
           
@@ -363,10 +395,39 @@ export function ShieldInterface({ onSuccess, onReset, selectedToken: externalTok
       
       console.log("[Shield] TX Request:", JSON.stringify(txRequest, null, 2))
       
-      const hash = await provider.request({
-        method: "eth_sendTransaction",
-        params: [txRequest],
-      })
+      let hash: string
+      try {
+        hash = await provider.request({
+          method: "eth_sendTransaction",
+          params: [txRequest],
+        }) as string
+      } catch (txError: any) {
+        // Check if user rejected/canceled the transaction
+        const errorMessage = txError?.message?.toLowerCase() || ''
+        const errorCode = txError?.code
+        
+        if (
+          errorCode === 4001 || // User rejected request
+          errorCode === '4001' ||
+          errorMessage.includes('user rejected') ||
+          errorMessage.includes('user denied') ||
+          errorMessage.includes('rejected') ||
+          errorMessage.includes('cancelled') ||
+          errorMessage.includes('canceled')
+        ) {
+          // User canceled - reset gracefully
+          console.log("[Shield] Transaction canceled by user")
+          setStatus("idle")
+          toast({
+            title: "Transaction Canceled",
+            description: "The shield transaction was canceled. No changes were made.",
+            variant: "default",
+          })
+          return
+        }
+        // Re-throw other errors to be handled by outer catch
+        throw txError
+      }
       
       console.log("[Shield] Transaction submitted! Hash:", hash)
       
@@ -436,15 +497,54 @@ export function ShieldInterface({ onSuccess, onReset, selectedToken: externalTok
       const backup = noteToShareableString(note)
       setNoteBackup(backup)
       
-      setStatus("success")
-      // Add a small delay before showing success dialog for better UX
+      // IMMEDIATELY refresh balances - don't wait for dialog
+      window.dispatchEvent(new CustomEvent('shielded-wallet-updated'))
+      
+      // Refresh public balance immediately (shield decreases public balance)
+      if (wallet?.refreshBalance) {
+        wallet.refreshBalance().catch(err => console.warn('[Shield] Failed to refresh public balance:', err))
+      }
+      
+      onSuccess?.() // Trigger parent component refresh
+      
+      // Phase 2: Micro-finalizing state (~500ms)
+      // Show "Transaction confirmed" with "Finalizing shielded assets…" message
+      setStatus("completing")
+      
+      // Smooth balance increment during finalizing (optimistic update already done)
+      // The balance will update smoothly as the shielded balance refreshes
+      
+      // Phase 3: Show success dialog after finalizing acknowledgment
+      // Keep micro-state ~500ms, then fade → animation → open Shield Success Modal
       setTimeout(() => {
-        setShowSuccessDialog(true)
-        onSuccess?.()
-      }, 750)
+        setStatus("confirmed")
+        // Fade-out progress indicator (150ms) + small delay (50ms) = 200ms total before showing modal
+        setTimeout(() => {
+          setShowSuccessDialog(true)
+        }, 200) // Fade-in delay after micro-state completes (200ms)
+      }, 500) // Micro-finalizing phase duration (~500ms)
       
     } catch (error: any) {
       console.error("Shield error:", error)
+      
+      // Check if this is a user cancellation (should have been caught earlier, but double-check)
+      const errorMessage = error?.message?.toLowerCase() || ''
+      const errorCode = error?.code
+      
+      if (
+        errorCode === 4001 ||
+        errorCode === '4001' ||
+        errorMessage.includes('user rejected') ||
+        errorMessage.includes('user denied') ||
+        errorMessage.includes('rejected') ||
+        errorMessage.includes('cancelled') ||
+        errorMessage.includes('canceled')
+      ) {
+        // User canceled - already handled, just reset
+        setStatus("idle")
+        return
+      }
+      
       setStatus("error")
       
       // Smart error suggestions
@@ -475,6 +575,14 @@ export function ShieldInterface({ onSuccess, onReset, selectedToken: externalTok
     setShowConfirmDialog(false)
     setShowSuccessDialog(false)
     isSubmittingRef.current = false
+    // Ensure balances are refreshed when dialog closes
+    window.dispatchEvent(new CustomEvent('shielded-wallet-updated'))
+    
+    // Refresh public balance when dialog closes
+    if (wallet?.refreshBalance) {
+      wallet.refreshBalance().catch(err => console.warn('[Shield] Failed to refresh public balance:', err))
+    }
+    
     // Trigger component reset in AppCard
     onReset?.()
   }
@@ -510,7 +618,7 @@ export function ShieldInterface({ onSuccess, onReset, selectedToken: externalTok
                   placeholder="0.0"
                   value={amount}
                   onChange={(e) => handleAmountChange(e.target.value)}
-                  className={amountError ? "border-orange-500/60 dark:border-orange-500/70 focus-visible:ring-orange-500/30 focus-visible:border-orange-500/80" : ""}
+                  className={`[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${amountError ? "border-orange-500/60 dark:border-orange-500/70 focus-visible:ring-orange-500/30 focus-visible:border-orange-500/80" : ""}`}
                 />
                 {amountError && (
                   <div className="p-2.5 rounded-md bg-orange-500/10 border border-orange-500/20">
@@ -552,14 +660,32 @@ export function ShieldInterface({ onSuccess, onReset, selectedToken: externalTok
               </div>
               
               <Button 
-                className="w-full min-h-[44px] sm:min-h-0 relative overflow-hidden bg-white/10 border border-white/20 hover:border-[#B89A2E]/50 transition-all duration-500 group py-3 sm:py-2"
+                className="w-full min-h-[44px] sm:min-h-0 relative overflow-hidden bg-zinc-900/70 border border-zinc-700/80 hover:border-[#C2A633]/50 transition-all duration-300 group py-3 sm:py-2 backdrop-blur-sm"
                 onClick={handleShield}
                 disabled={!wallet?.isConnected || status !== "idle" || !amount || parseFloat(amount) <= 0 || !!amountError}
+                style={{
+                  boxShadow: '0 0 0 1px rgba(194, 166, 51, 0.08)',
+                  transition: 'all 0.3s ease-out',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.boxShadow = '0 0 0 1px rgba(194, 166, 51, 0.25), 0 0 12px rgba(194, 166, 51, 0.1)'
+                  e.currentTarget.style.background = 'rgba(39, 39, 42, 0.85)'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.boxShadow = '0 0 0 1px rgba(194, 166, 51, 0.08)'
+                  e.currentTarget.style.background = 'rgba(24, 24, 27, 0.7)'
+                }}
               >
-                {/* Fill animation from left to right - slower and more natural */}
-                <span className="absolute inset-0 bg-[#B89A2E] transform -translate-x-full group-hover:translate-x-0 transition-transform duration-[1300ms] ease-in-out" />
-                <span className="relative z-10 flex items-center justify-center text-sm sm:text-base text-white group-hover:text-black transition-colors duration-[1300ms] ease-in-out">
-                  <Shield className="h-4 w-4 mr-2 flex-shrink-0" />
+                {/* Subtle shimmer effect on hover */}
+                <span 
+                  className="absolute inset-0 transform -translate-x-full group-hover:translate-x-0 transition-transform duration-[1500ms] ease-out opacity-0 group-hover:opacity-100"
+                  style={{
+                    background: 'linear-gradient(90deg, transparent, rgba(194, 166, 51, 0.05), transparent)',
+                    width: '100%',
+                  }}
+                />
+                <span className="relative z-10 flex items-center justify-center text-sm sm:text-base text-[#C2A633]/90 group-hover:text-[#C2A633] transition-colors duration-300 font-medium">
+                  <Shield className="h-4 w-4 mr-2 flex-shrink-0 transition-transform duration-300 group-hover:scale-[1.05]" />
                   Shield {selectedToken}
                 </span>
               </Button>
@@ -568,10 +694,10 @@ export function ShieldInterface({ onSuccess, onReset, selectedToken: externalTok
               <ConfirmationDialog
                 open={showConfirmDialog}
                 onOpenChange={setShowConfirmDialog}
-                title="Confirm Shield"
-                description={`You are about to shield ${amount} ${selectedToken}. Your tokens will be privately stored in the shielded pool.`}
+                title="Shield Assets"
+                description={`${amount} ${selectedToken} will be stored in the shielded balance.`}
                 confirmText="Confirm Shield"
-                cancelText="Cancel"
+                cancelText="Back"
                 onConfirm={async () => {
                   setShowConfirmDialog(false)
                   await executeShield()
@@ -581,12 +707,12 @@ export function ShieldInterface({ onSuccess, onReset, selectedToken: externalTok
                   amount && parseFloat(amount) > 0 ? (
                     <div className="space-y-1.5 sm:space-y-2 text-xs sm:text-sm">
                       <div className="flex justify-between items-center gap-2">
-                        <span className="text-gray-400">Amount to Shield</span>
+                        <span className="text-gray-400">Amount</span>
                         <span className="text-white text-right break-all">{amount} {selectedToken}</span>
                       </div>
                       {selectedTokenInfo.isNative && tokenBalanceNum > 0.001 && (
                         <div className="flex justify-between items-center gap-2">
-                          <span className="text-gray-400">Gas Reserve</span>
+                          <span className="text-gray-400">Estimated Gas:</span>
                           <span className="text-yellow-400 text-right break-all">0.001 {selectedToken}</span>
                         </div>
                       )}
@@ -600,87 +726,90 @@ export function ShieldInterface({ onSuccess, onReset, selectedToken: externalTok
       )}
       
       {status === "approving" && (
-        <div className="space-y-4">
-          <div className="flex flex-col items-center py-8 space-y-4">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            <div className="w-full max-w-xs space-y-2">
-              <Progress value={25} className="h-2" />
-              <p className="text-sm font-body font-medium text-foreground text-center">
-                Step 1 of 2: Approving {selectedToken}
-              </p>
-              <p className="text-xs font-body text-white/60 text-center">
-                Please confirm the approval transaction in your wallet
-              </p>
+        <div className="space-y-3 sm:space-y-4">
+          <Card className="p-3 sm:p-4 bg-zinc-900/50 border-[#C2A633]/20">
+            <div className="space-y-2 sm:space-y-3">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <Loader2 
+                  className="h-5 w-5 animate-spin text-[#C2A633]" 
+                  style={{
+                    filter: 'drop-shadow(0 0 2px rgba(194, 166, 51, 0.3))'
+                  }}
+                />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs sm:text-sm font-medium text-white">
+                    Step 1 of 2: Approving {selectedToken}
+                  </p>
+                  <p className="text-[10px] sm:text-xs text-gray-400 mt-0.5 sm:mt-1 break-words">
+                    Please confirm the approval transaction in your wallet
+                  </p>
+                </div>
+              </div>
+
+              {/* Indeterminate looping shimmer bar - matching TransactionProgress pending style */}
+              <div className="space-y-1.5 sm:space-y-2">
+                <div className="relative h-1.5 sm:h-2 bg-zinc-800 rounded-full overflow-hidden">
+                  {/* Subtle pulsing base color - grey → gold → grey */}
+                  <div 
+                    className="absolute inset-0 bg-gradient-to-r from-zinc-700 via-[#C2A633]/20 to-zinc-700"
+                    style={{
+                      animation: 'colorPulse 3s ease-in-out infinite',
+                      opacity: 0.3
+                    }}
+                  />
+                  {/* Flowing shimmer effect - continuous loop */}
+                  <div 
+                    className="absolute inset-0 bg-gradient-to-r from-transparent via-[#C2A633]/40 to-transparent animate-shimmer"
+                    style={{
+                      backgroundSize: '200% 100%',
+                      animation: 'shimmer 2s ease-in-out infinite'
+                    }}
+                  />
+                </div>
+              </div>
             </div>
-          </div>
-          <div className="p-3 rounded-lg bg-primary/10 border border-primary/20">
-            <p className="text-xs font-body text-white/60 flex items-start gap-2">
-              <Info className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
-              <span><strong>Two-step process:</strong> {selectedToken} requires an approval first, then the shield transaction. This allows the contract to access your tokens.</span>
+          </Card>
+
+          <div className="p-3 rounded-lg bg-[#C2A633]/10 border border-[#C2A633]/20">
+            <p className="text-xs text-gray-400 flex items-start gap-2">
+              <Info className="h-4 w-4 text-[#C2A633] mt-0.5 flex-shrink-0" />
+              <span><strong className="text-gray-300">Two-step process:</strong> {selectedToken} requires an approval first, then the shield transaction. This allows the contract to access your tokens.</span>
             </p>
           </div>
         </div>
       )}
       
-      {status === "preparing" && (
-        <div className="flex flex-col items-center py-8 space-y-4">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          <div className="w-full max-w-xs space-y-2">
-            <Progress value={selectedTokenInfo.isNative ? 50 : 60} className="h-2" />
-            <p className="text-sm font-body font-medium text-foreground text-center">
-              {selectedTokenInfo.isNative ? "Preparing shield transaction" : "Step 2 of 2: Preparing shield"}
-            </p>
-            <p className="text-xs font-body text-white/60 text-center">
-              Generating your private note and preparing the transaction...
-            </p>
-          </div>
+      {/* Progress Indicator - Show during processing and completion phase */}
+      {(status === "preparing" || status === "confirming" || status === "completing") && (
+        <div className={cn(
+          "transition-opacity duration-150",
+          status === "confirmed" ? "opacity-0 pointer-events-none" : "opacity-100"
+        )}>
+          <TransactionProgress
+            status={
+              status === "preparing" ? "proving" :
+              status === "confirming" ? "pending" :
+              status === "completing" ? "completing" :
+              "idle"
+            }
+            message={
+              status === "confirming" ? "Please confirm the transaction in your wallet to complete the shield"
+              : undefined // Use default messages for proving (shows "This typically takes a few seconds.")
+            }
+            txHash={status === "completing" ? null : txHash} // Hide txHash during completing phase
+            blockExplorerUrl={dogeosTestnet.blockExplorers.default.url}
+          />
         </div>
       )}
       
       {status === "confirming" && (
-        <div className="space-y-4">
-          <div className="p-6 rounded-lg bg-white/5 border border-white/10">
-            <div className="flex flex-col items-center space-y-4">
-              {/* Animated Wallet Icon */}
-              <div className="relative">
-                <div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center">
-                  <Wallet className="h-8 w-8 text-white/80 animate-pulse" strokeWidth={1.5} />
-                </div>
-                <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-[#C2A633] flex items-center justify-center">
-                  <Loader2 className="h-3 w-3 text-black animate-spin" />
-                </div>
-              </div>
-              
-              {/* Progress Bar */}
-              <div className="w-full max-w-xs space-y-3">
-                <div className="relative w-full h-2 bg-white/5 rounded-full overflow-hidden">
-                  <div 
-                    className="absolute top-0 left-0 h-full w-full bg-white rounded-full origin-left"
-                    style={{ 
-                      animation: `progressFill${selectedTokenInfo.isNative ? '75' : '85'} 2.5s ease-out infinite`
-                    }}
-                  />
-                </div>
-                <div className="space-y-2 text-center">
-                  <h4 className="text-base font-display font-semibold text-white">
-                    {selectedTokenInfo.isNative ? "Waiting for Confirmation" : "Step 2 of 2: Shielding Tokens"}
-                  </h4>
-                  <p className="text-sm font-body text-white/60 leading-relaxed">
-                    Please confirm the transaction in your wallet to complete the shield
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          <Button 
-            variant="outline" 
-            className="w-full border-white/20 hover:bg-white/5" 
-            onClick={reset}
-          >
-            Cancel Transaction
-          </Button>
-        </div>
+        <Button 
+          variant="outline" 
+          className="w-full border-white/20 hover:bg-white/5" 
+          onClick={reset}
+        >
+          Cancel Transaction
+        </Button>
       )}
       
       {/* Success Dialog */}
@@ -688,24 +817,28 @@ export function ShieldInterface({ onSuccess, onReset, selectedToken: externalTok
         open={showSuccessDialog}
         onOpenChange={(open) => {
           // Only allow closing via buttons, not by clicking outside or scrolling
-          if (!open && status === "success") {
+          if (!open && status === "confirmed") {
             reset()
           } else {
             setShowSuccessDialog(true)
           }
         }}
-        title="Shield Successful!"
-        message={`Successfully shielded ${amount ? Number(amount).toFixed(4) : '0'} ${selectedToken}. Your funds are now private and protected.`}
+        title="Shield Complete"
+        message="Assets have been privately stored in the shielded balance."
         txHash={txHash}
         blockExplorerUrl={dogeosTestnet.blockExplorers.default.url}
         actionText="Shield More Tokens"
         onAction={reset}
         onClose={reset}
         details={
-          <div className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-gray-400">Shielded Amount</span>
-              <span className="text-green-400 font-semibold">{amount ? Number(amount).toFixed(4) : '0'} {selectedToken}</span>
+          <div className="space-y-2.5 text-sm">
+            <div className="p-2.5 sm:p-3 rounded-xl bg-zinc-800/40 backdrop-blur-sm border border-[#C2A633]/20 flex justify-between items-center">
+              <span className="text-gray-400">Amount</span>
+              <span className="text-white font-semibold">{amount ? Number(amount).toFixed(4) : '0'} {selectedToken}</span>
+            </div>
+            <div className="p-2.5 sm:p-3 rounded-xl bg-zinc-800/40 backdrop-blur-sm border border-[#C2A633]/20 flex justify-between items-center">
+              <span className="text-gray-400">Destination</span>
+              <span className="text-white font-mono text-xs">Shielded Balance</span>
             </div>
           </div>
         }

@@ -1,0 +1,28 @@
+{
+  "buildId": "oCbem71PfWHoxNUiE6yZW",
+  "generated": "2026-01-17T15:19:45.714Z",
+  "rootHash": "f4e00ee6409277ce7126aa2ecb66a67aa26bf0f809177fc72d9e0b4a1d1c2d6f83e821a04ea61bf256341e274f9031c8",
+  "circuitHashes": {
+    "shield.wasm": "sha384-fDmgo3KBrX6lG52ANtOZxXH62apviNBZpoE+/3Fng9PvySf9dLsmgMWRzzIIseUt",
+    "shield_20260115.wasm": "sha384-fDmgo3KBrX6lG52ANtOZxXH62apviNBZpoE+/3Fng9PvySf9dLsmgMWRzzIIseUt",
+    "shield_final.zkey": "sha384-YBtE1lWAaGJfmU21KB4ckX0dMCeg/1AL7kdsXvdO+bReuqjDZAzaXAUaVFVPpRkl",
+    "shield_final_20260115.zkey": "sha384-YBtE1lWAaGJfmU21KB4ckX0dMCeg/1AL7kdsXvdO+bReuqjDZAzaXAUaVFVPpRkl",
+    "shield_verification_key.json": "sha384-oXOieVtrto2JOzOHiCGwXsctPH620jXpACYH/zJ9DZpO4JY87FDvSBxZSVJgBOxH",
+    "swap.wasm": "sha384-rP6uVkVPmlP6sdr1Hwx/AAfvZwBihfkvRaZtCHMfZHBVEfsO7R7DGBCRwILpZuTW",
+    "swap_20260115.wasm": "sha384-rP6uVkVPmlP6sdr1Hwx/AAfvZwBihfkvRaZtCHMfZHBVEfsO7R7DGBCRwILpZuTW",
+    "swap_final.zkey": "sha384-oVn4zcO3q++IrXDigMLTysUfTasDqkEtavjqpBvjbmNEVGpvHAn1GvfOcwZWX+1M",
+    "swap_final_20260115.zkey": "sha384-oVn4zcO3q++IrXDigMLTysUfTasDqkEtavjqpBvjbmNEVGpvHAn1GvfOcwZWX+1M",
+    "swap_final_github.zkey": "sha384-LwyQHalcy1RdiUMmtOFqgdew9PVgjDuw4ozeJvMvdFgRoPUUqVfqpvUoJn+7MA4L",
+    "swap_verification_key.json": "sha384-12/KTXL8KD0/q8554Ts5qLwEq33NLa1HXqd0Zj3n4mmOwTTsq1w8HvDLUMwr/Iub",
+    "transfer.wasm": "sha384-gfEeHjd9FGFFPl29g3kjoyh5YoYCk1ypoJeFg7Voxe0PP6XTlfTxxrF/PqpPTbL9",
+    "transfer_20260115.wasm": "sha384-gfEeHjd9FGFFPl29g3kjoyh5YoYCk1ypoJeFg7Voxe0PP6XTlfTxxrF/PqpPTbL9",
+    "transfer_final.zkey": "sha384-Wg4P5l7kX9ujyvQ4onZw9zpFQzJK03jN3jqUusZ3LSFIG6/Czn8uXJ14wxQHm668",
+    "transfer_final_20260115.zkey": "sha384-Wg4P5l7kX9ujyvQ4onZw9zpFQzJK03jN3jqUusZ3LSFIG6/Czn8uXJ14wxQHm668",
+    "transfer_verification_key.json": "sha384-zguxil8dBWEfTyUubvpUgKsUPUTeIfRsq4C7MJCLuWQCIHVZn5qYN+X5lbEaOiem",
+    "unshield.wasm": "sha384-hUt2G7/UBwPuiYMJPxxK68FWdrt+fJtAG7QswMcQuiNZ397WyeI4pCLD+urDipYh",
+    "unshield_20260115.wasm": "sha384-hUt2G7/UBwPuiYMJPxxK68FWdrt+fJtAG7QswMcQuiNZ397WyeI4pCLD+urDipYh",
+    "unshield_final.zkey": "sha384-QdBLtniz6XDg5S0QUrIq0ECS/PjmqWSZmCiPl9L+Pr2uooUaAsiWVp6bzdgoAyAP",
+    "unshield_final_20260115.zkey": "sha384-QdBLtniz6XDg5S0QUrIq0ECS/PjmqWSZmCiPl9L+Pr2uooUaAsiWVp6bzdgoAyAP",
+    "unshield_verification_key.json": "sha384-ClJ68yPHtz8uZedn9lbtMsBt85TzXfYQDJGbuZzUfzmvBwKlaxAiFI7jbA9QJhQ6"
+  }
+}

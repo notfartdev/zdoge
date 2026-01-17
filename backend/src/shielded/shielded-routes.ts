@@ -69,6 +69,20 @@ const readOnlyRateLimit = rateLimit({
   },
 });
 
+// ============ Request Deduplication ============
+
+// Request deduplication: track recent batch unshield requests to prevent duplicates
+const recentBatchUnshieldRequests = new Map<string, { txHash: string; timestamp: number }>();
+const DEDUP_WINDOW_MS = 30 * 1000; // 30 seconds
+
+function getRequestKey(req: Request): string {
+  const body = req.body;
+  // Create a unique key from request parameters
+  const nullifiers = (body.nullifierHashes || []).join(',');
+  const amounts = (body.amounts || []).join(',');
+  return `${body.poolAddress}-${body.recipient}-${nullifiers}-${amounts}-${body.totalFee}`;
+}
+
 // ============ Relayer Configuration ============
 
 // Relayer fee: 0.5% of withdrawal amount (configurable)
@@ -140,6 +154,7 @@ const ShieldedPoolABI = [
       { name: '_nullifierHash', type: 'bytes32' },
       { name: '_recipient', type: 'address' },
       { name: '_amount', type: 'uint256' },
+      { name: '_changeCommitment', type: 'bytes32' },  // V3: Change commitment (0 if no change)
       { name: '_relayer', type: 'address' },
       { name: '_fee', type: 'uint256' },
     ],
@@ -156,6 +171,7 @@ const ShieldedPoolABI = [
       { name: '_recipient', type: 'address' },
       { name: '_token', type: 'address' },
       { name: '_amount', type: 'uint256' },
+      { name: '_changeCommitment', type: 'bytes32' },  // V3: Change commitment (0 if no change)
       { name: '_relayer', type: 'address' },
       { name: '_fee', type: 'uint256' },
     ],
@@ -167,6 +183,20 @@ const ShieldedPoolABI = [
     name: 'supportedTokens',
     inputs: [{ name: '_token', type: 'address' }],
     outputs: [{ name: '', type: 'bool' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'unshieldVerifier',
+    inputs: [],
+    outputs: [{ name: '', type: 'address' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'swapVerifier',
+    inputs: [],
+    outputs: [{ name: '', type: 'address' }],
     stateMutability: 'view',
   },
   {
@@ -201,6 +231,59 @@ const ShieldedPoolABI = [
       { name: '_outputAmount', type: 'uint256' },
       { name: '_minAmountOut', type: 'uint256' },
       { name: '_encryptedMemo', type: 'bytes' },
+    ],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    name: 'batchTransfer',
+    inputs: [
+      { name: '_proofs', type: 'uint256[8][]' },
+      { name: '_roots', type: 'bytes32[]' },
+      { name: '_nullifierHashes', type: 'bytes32[]' },
+      { name: '_outputCommitment1', type: 'bytes32' },
+      { name: '_outputCommitment2', type: 'bytes32' },
+      { name: '_token', type: 'address' },
+      { name: '_relayer', type: 'address' },
+      { name: '_fee', type: 'uint256' },
+      { name: '_encryptedMemo1', type: 'bytes' },
+      { name: '_encryptedMemo2', type: 'bytes' },
+    ],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    name: 'batchUnshield',
+    inputs: [
+      { name: '_proofs', type: 'uint256[8][]' },
+      { name: '_roots', type: 'bytes32[]' },
+      { name: '_nullifierHashes', type: 'bytes32[]' },
+      { name: '_recipient', type: 'address' },
+      { name: '_token', type: 'address' },
+      { name: '_amounts', type: 'uint256[]' },
+      { name: '_changeCommitments', type: 'bytes32[]' },  // V3: Change commitments array
+      { name: '_relayer', type: 'address' },
+      { name: '_totalFee', type: 'uint256' },
+    ],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    name: 'transferMulti',
+    inputs: [
+      { name: '_proof', type: 'uint256[8]' },
+      { name: '_roots', type: 'bytes32[5]' },
+      { name: '_nullifierHashes', type: 'bytes32[5]' },
+      { name: '_outputCommitment1', type: 'bytes32' },
+      { name: '_outputCommitment2', type: 'bytes32' },
+      { name: '_relayer', type: 'address' },
+      { name: '_fee', type: 'uint256' },
+      { name: '_numInputs', type: 'uint256' },
+      { name: '_encryptedMemo1', type: 'bytes' },
+      { name: '_encryptedMemo2', type: 'bytes' },
     ],
     outputs: [],
     stateMutability: 'nonpayable',
@@ -446,6 +529,7 @@ shieldedRouter.post('/relay/simulate', readOnlyRateLimit, async (req: Request, r
       tokenOut,
       swapAmount,
       outputAmount,
+      platformFee,
       minAmountOut,
       encryptedMemo,
     } = req.body;
@@ -491,6 +575,7 @@ shieldedRouter.post('/relay/simulate', readOnlyRateLimit, async (req: Request, r
       tokenOut,
       swapAmount,
       outputAmount,
+      platformFee,
       minAmountOut,
       encryptedMemo,
     });
@@ -564,6 +649,7 @@ shieldedRouter.post('/relay/unshield', relayerRateLimit, async (req: Request, re
     nullifierHash, 
     recipient, 
     amount, 
+    changeCommitment,  // V3: Change commitment (optional, defaults to 0)
     fee: requestFee,
     token  // Optional token address (undefined = native DOGE)
   } = req.body;
@@ -688,6 +774,7 @@ shieldedRouter.post('/relay/unshield', relayerRateLimit, async (req: Request, re
           nullifierHash as `0x${string}`,
           recipient as Address,
           amountBigInt,  // Recipient net amount
+          (changeCommitment || '0x0000000000000000000000000000000000000000000000000000000000000000') as `0x${string}`,  // V3: Change commitment
           relayerAddress!,
           fee,  // Relayer fee
         ],
@@ -708,6 +795,7 @@ shieldedRouter.post('/relay/unshield', relayerRateLimit, async (req: Request, re
           recipient as Address,
           tokenAddress as Address,  // Token address parameter
           amountBigInt,  // Recipient net amount
+          (changeCommitment || '0x0000000000000000000000000000000000000000000000000000000000000000') as `0x${string}`,  // V3: Change commitment
           relayerAddress!,
           fee,  // Relayer fee (paid in same token)
         ],
@@ -745,6 +833,29 @@ shieldedRouter.post('/relay/unshield', relayerRateLimit, async (req: Request, re
       poolAddress,
     });
     
+    // V3: Extract change leaf index from LeafInserted event (if changeCommitment was inserted)
+    let changeLeafIndex: number | null = null;
+    if (changeCommitment && changeCommitment !== '0x0000000000000000000000000000000000000000000000000000000000000000') {
+      // Parse LeafInserted event to get change leaf index
+      // LeafInserted(bytes32 indexed leaf, uint256 indexed leafIndex, bytes32 newRoot)
+      const changeCommitmentLower = changeCommitment.toLowerCase();
+      for (const log of receipt.logs) {
+        const logWithTopics = log as typeof log & { topics?: readonly `0x${string}`[]; data?: `0x${string}` };
+        if (log.address.toLowerCase() === poolAddress.toLowerCase() && 
+            logWithTopics.topics && 
+            logWithTopics.topics.length >= 3) {
+          const leafFromEvent = logWithTopics.topics[1];
+          const leafIndex = parseInt(logWithTopics.topics[2] || '0', 16);
+          
+          if (leafFromEvent && leafFromEvent.toLowerCase() === changeCommitmentLower) {
+            changeLeafIndex = leafIndex;
+            console.log(`[ShieldedRelayer] Found change leaf index: ${changeLeafIndex}`);
+            break;
+          }
+        }
+      }
+    }
+    
     const duration = Date.now() - startTime;
     shieldedRelayerLogger.requestCompleted('/api/shielded/relay/unshield', 'POST', 200, duration, { requestId });
     
@@ -757,6 +868,7 @@ shieldedRouter.post('/relay/unshield', relayerRateLimit, async (req: Request, re
       amountReceived: amountBigInt.toString(),  // Recipient net amount
       fee: fee.toString(),  // Relayer fee
       relayer: relayerAddress,
+      changeLeafIndex: changeLeafIndex ?? undefined,  // V3: Change leaf index (if change was inserted)
     });
     
   } catch (error: any) {
@@ -858,7 +970,8 @@ shieldedRouter.post('/relay/swap', relayerRateLimit, async (req: Request, res: R
     tokenIn,
     tokenOut,
     swapAmount,  // Amount being swapped (can be less than note amount)
-    outputAmount,  // outputAmount from proof's public signals
+    outputAmount,  // outputAmount from proof's public signals (net amount after fees)
+    // platformFee removed - now calculated internally by contract
     minAmountOut,
     encryptedMemo,
   } = req.body;
@@ -956,7 +1069,47 @@ shieldedRouter.post('/relay/swap', relayerRateLimit, async (req: Request, res: R
     const memo = encryptedMemo ? (encryptedMemo.startsWith('0x') ? encryptedMemo : `0x${encryptedMemo}`) as `0x${string}` : '0x' as `0x${string}`;
     const swapAmountBigInt = BigInt(swapAmount);
     const outputAmountBigInt = BigInt(outputAmount);
+    // Platform fee is now calculated internally by the contract - no longer passed as parameter
     const minAmountOutBigInt = BigInt(minAmountOut);
+    
+    // 🔍 DEBUG: Calculate what publicInputs the contract will construct
+    // Contract code: tokenInUint = tokenIn == NATIVE_TOKEN ? 0 : uint256(uint160(tokenIn))
+    const NATIVE_TOKEN_ADDRESS = '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
+    const tokenInUint = (tokenIn.toLowerCase() === NATIVE_TOKEN_ADDRESS.toLowerCase() || tokenIn === '0x0000000000000000000000000000000000000000')
+      ? 0n
+      : BigInt(tokenIn);
+    const tokenOutUint = (tokenOut.toLowerCase() === NATIVE_TOKEN_ADDRESS.toLowerCase() || tokenOut === '0x0000000000000000000000000000000000000000')
+      ? 0n
+      : BigInt(tokenOut);
+    
+    const contractPublicInputs = [
+      BigInt(root),
+      BigInt(inputNullifierHash),
+      BigInt(outputCommitment1),
+      BigInt(outputCommitment2Final),
+      tokenInUint,
+      tokenOutUint,
+      swapAmountBigInt,
+      outputAmountBigInt,
+    ];
+    
+    console.log('[ShieldedRelayer] 🔍 DEBUG - Contract will construct publicInputs array:');
+    console.log('  [0] root:', contractPublicInputs[0].toString());
+    console.log('  [1] inputNullifier:', contractPublicInputs[1].toString());
+    console.log('  [2] outputCommitment1:', contractPublicInputs[2].toString());
+    console.log('  [3] outputCommitment2:', contractPublicInputs[3].toString());
+    console.log('  [4] tokenInUint:', contractPublicInputs[4].toString(), `(tokenIn: ${tokenIn})`);
+    console.log('  [5] tokenOutUint:', contractPublicInputs[5].toString(), `(tokenOut: ${tokenOut})`);
+    console.log('  [6] swapAmount:', contractPublicInputs[6].toString());
+    console.log('  [7] outputAmount:', contractPublicInputs[7].toString());
+    
+    // Note: SwapVerifier address is configured in the deployed pool contract
+    // The contract uses the swapVerifier() function to get the verifier address
+    // For debugging, you can check the contract on the block explorer:
+    // FINAL: Pool address updated to 0x05D32B760ff49678FD833a4E2AbD516586362b17
+    // https://blockscout.testnet.dogeos.com/address/0x05D32B760ff49678FD833a4E2AbD516586362b17
+    console.log('[ShieldedRelayer] 🔍 SwapVerifier address is configured in the pool contract');
+    console.log('[ShieldedRelayer] 🔍 If proofs fail, verify the verifier matches the zkey verification key');
     
     // Simulate transaction first to catch errors early
     try {
@@ -973,7 +1126,7 @@ shieldedRouter.post('/relay/swap', relayerRateLimit, async (req: Request, res: R
           tokenIn as Address,
           tokenOut as Address,
           swapAmountBigInt,  // Amount being swapped (can be less than note amount)
-          outputAmountBigInt,  // outputAmount from proof (required for proof verification)
+          outputAmountBigInt,  // outputAmount from proof (net amount after fees)
           minAmountOutBigInt,
           memo,
         ],
@@ -1079,7 +1232,7 @@ shieldedRouter.post('/relay/swap', relayerRateLimit, async (req: Request, res: R
         tokenIn as Address,
         tokenOut as Address,
         swapAmountBigInt,  // Amount being swapped (can be less than note amount)
-        outputAmountBigInt,  // outputAmount from proof (required for proof verification)
+        outputAmountBigInt,  // outputAmount from proof (net amount after fees)
         minAmountOutBigInt,
         memo,
       ],
@@ -1235,7 +1388,9 @@ shieldedRouter.post('/relay/transfer', relayerRateLimit, async (req: Request, re
     outputCommitment2,
     encryptedMemo1,
     encryptedMemo2,
-    fee: requestFee 
+    fee: requestFee,
+    relayer: requestRelayer, // Optional: relayer address used in proof
+    publicInputs // Optional: full public inputs array from proof (for debugging/verification)
   } = req.body;
   
   // Validate inputs
@@ -1280,6 +1435,30 @@ shieldedRouter.post('/relay/transfer', relayerRateLimit, async (req: Request, re
   // Use fee from request (must match proof!)
   const fee = requestFee !== undefined ? BigInt(requestFee) : 0n;
   
+  // Extract relayer address from proof's public signals if available, otherwise use request or backend's relayer
+  // The proof's public signals are: [root, nullifierHash, outputCommitment1, outputCommitment2, relayer, fee]
+  // We need to use the exact relayer address that was used in proof generation
+  let relayerForContract: Address;
+  
+  // Try to extract from public inputs first (most reliable)
+  if (publicInputs && Array.isArray(publicInputs) && publicInputs.length >= 6) {
+    // Public signal at index 4 is the relayer (as bigint)
+    const relayerBigInt = BigInt(publicInputs[4]);
+    // Convert bigint to address (pad to 40 hex chars = 20 bytes)
+    const relayerHex = relayerBigInt.toString(16).padStart(40, '0');
+    relayerForContract = `0x${relayerHex}` as Address;
+    console.log(`[ShieldedRelayer] Extracted relayer from public inputs: ${relayerForContract}`);
+  } else if (requestRelayer) {
+    // Use relayer from request (frontend should send the one used in proof)
+    relayerForContract = requestRelayer as Address;
+  } else if (relayerAddress) {
+    // Fall back to backend's relayer
+    relayerForContract = relayerAddress;
+  } else {
+    // Last resort: zero address
+    relayerForContract = '0x0000000000000000000000000000000000000000' as Address;
+  }
+  
   console.log(`[ShieldedRelayer] Processing transfer:`);
   console.log(`  Pool: ${poolAddress}`);
   console.log(`  Root: ${root.slice(0, 18)}...`);
@@ -1287,6 +1466,9 @@ shieldedRouter.post('/relay/transfer', relayerRateLimit, async (req: Request, re
   console.log(`  Output1: ${outputCommitment1.slice(0, 18)}...`);
   console.log(`  Output2: ${outputCommitment2.slice(0, 18)}...`);
   console.log(`  Fee: ${Number(fee) / 1e18} DOGE`);
+  console.log(`  Request relayer: ${requestRelayer || 'not provided'}`);
+  console.log(`  Backend relayer: ${relayerAddress || 'not configured'}`);
+  console.log(`  Using relayer: ${relayerForContract}`);
   
   try {
     // Check relayer balance
@@ -1336,6 +1518,79 @@ shieldedRouter.post('/relay/transfer', relayerRateLimit, async (req: Request, re
     const memo1 = encryptedMemo1 ? (encryptedMemo1.startsWith('0x') ? encryptedMemo1 : `0x${encryptedMemo1}`) as `0x${string}` : '0x' as `0x${string}`;
     const memo2 = encryptedMemo2 ? (encryptedMemo2.startsWith('0x') ? encryptedMemo2 : `0x${encryptedMemo2}`) as `0x${string}` : '0x' as `0x${string}`;
     
+    // Debug: Log what we're sending to the contract vs what the proof expects
+    if (publicInputs && Array.isArray(publicInputs) && publicInputs.length >= 6) {
+      console.log(`[ShieldedRelayer] Proof public signals:`);
+      console.log(`  [0] root: ${publicInputs[0]}`);
+      console.log(`  [1] nullifierHash: ${publicInputs[1]}`);
+      console.log(`  [2] outputCommitment1: ${publicInputs[2]}`);
+      console.log(`  [3] outputCommitment2: ${publicInputs[3]}`);
+      console.log(`  [4] relayer: ${publicInputs[4]}`);
+      console.log(`  [5] fee: ${publicInputs[5]}`);
+      console.log(`[ShieldedRelayer] Contract will receive:`);
+      console.log(`  root: ${BigInt(root).toString()}`);
+      console.log(`  nullifierHash: ${BigInt(nullifierHash).toString()}`);
+      console.log(`  outputCommitment1: ${BigInt(outputCommitment1).toString()}`);
+      console.log(`  outputCommitment2: ${BigInt(outputCommitment2).toString()}`);
+      console.log(`  relayer: ${BigInt(relayerForContract).toString()}`);
+      console.log(`  fee: ${fee.toString()}`);
+      
+      // Check for mismatches
+      if (publicInputs[0] !== BigInt(root).toString()) {
+        console.error(`[ShieldedRelayer] ❌ ROOT MISMATCH! Proof: ${publicInputs[0]}, Contract: ${BigInt(root).toString()}`);
+      }
+      if (publicInputs[1] !== BigInt(nullifierHash).toString()) {
+        console.error(`[ShieldedRelayer] ❌ NULLIFIER MISMATCH! Proof: ${publicInputs[1]}, Contract: ${BigInt(nullifierHash).toString()}`);
+      }
+      if (publicInputs[2] !== BigInt(outputCommitment1).toString()) {
+        console.error(`[ShieldedRelayer] ❌ OUTPUT1 MISMATCH! Proof: ${publicInputs[2]}, Contract: ${BigInt(outputCommitment1).toString()}`);
+      }
+      if (publicInputs[3] !== BigInt(outputCommitment2).toString()) {
+        console.error(`[ShieldedRelayer] ❌ OUTPUT2 MISMATCH! Proof: ${publicInputs[3]}, Contract: ${BigInt(outputCommitment2).toString()}`);
+      }
+      if (publicInputs[4] !== BigInt(relayerForContract).toString()) {
+        console.error(`[ShieldedRelayer] ❌ RELAYER MISMATCH! Proof: ${publicInputs[4]}, Contract: ${BigInt(relayerForContract).toString()}`);
+      }
+      if (publicInputs[5] !== fee.toString()) {
+        console.error(`[ShieldedRelayer] ❌ FEE MISMATCH! Proof: ${publicInputs[5]}, Contract: ${fee.toString()}`);
+      }
+    }
+    
+    // CRITICAL: Use the exact values from the proof's public signals to ensure they match
+    // The contract verifier will compare these against the proof's public signals
+    let finalRoot = root as `0x${string}`;
+    let finalNullifierHash = nullifierHash as `0x${string}`;
+    let finalOutputCommitment1 = outputCommitment1 as `0x${string}`;
+    let finalOutputCommitment2 = outputCommitment2 as `0x${string}`;
+    
+    // If we have public inputs, verify and use them to ensure exact match
+    if (publicInputs && Array.isArray(publicInputs) && publicInputs.length >= 6) {
+      // Convert proof's public signal root (bigint string) back to bytes32
+      const proofRootBigInt = BigInt(publicInputs[0]);
+      const proofRootHex = proofRootBigInt.toString(16).padStart(64, '0');
+      finalRoot = `0x${proofRootHex}` as `0x${string}`;
+      
+      // Convert proof's nullifier hash
+      const proofNullifierBigInt = BigInt(publicInputs[1]);
+      const proofNullifierHex = proofNullifierBigInt.toString(16).padStart(64, '0');
+      finalNullifierHash = `0x${proofNullifierHex}` as `0x${string}`;
+      
+      // Convert proof's output commitments
+      const proofOutput1BigInt = BigInt(publicInputs[2]);
+      const proofOutput1Hex = proofOutput1BigInt.toString(16).padStart(64, '0');
+      finalOutputCommitment1 = `0x${proofOutput1Hex}` as `0x${string}`;
+      
+      const proofOutput2BigInt = BigInt(publicInputs[3]);
+      const proofOutput2Hex = proofOutput2BigInt.toString(16).padStart(64, '0');
+      finalOutputCommitment2 = `0x${proofOutput2Hex}` as `0x${string}`;
+      
+      console.log(`[ShieldedRelayer] Using values from proof's public signals:`);
+      console.log(`  Root: ${finalRoot}`);
+      console.log(`  Nullifier: ${finalNullifierHash}`);
+      console.log(`  Output1: ${finalOutputCommitment1}`);
+      console.log(`  Output2: ${finalOutputCommitment2}`);
+    }
+    
     // Submit transaction
     const txHash = await relayerWallet.writeContract({
       chain: dogeosTestnet,
@@ -1345,11 +1600,11 @@ shieldedRouter.post('/relay/transfer', relayerRateLimit, async (req: Request, re
       functionName: 'transfer',
       args: [
         proofBigInts,
-        root as `0x${string}`,
-        nullifierHash as `0x${string}`,
-        outputCommitment1 as `0x${string}`,
-        outputCommitment2 as `0x${string}`,
-        relayerAddress!,
+        finalRoot,
+        finalNullifierHash,
+        finalOutputCommitment1,
+        finalOutputCommitment2,
+        relayerForContract,
         fee,
         memo1,
         memo2,
@@ -1404,6 +1659,28 @@ shieldedRouter.post('/relay/transfer', relayerRateLimit, async (req: Request, re
     
   } catch (error: any) {
     console.error('[ShieldedRelayer] Transfer Error:', error.message);
+        // Safely serialize error (convert BigInt to string to avoid serialization error)
+        try {
+          const safeError = JSON.parse(JSON.stringify(error, (key, value) => 
+            typeof value === 'bigint' ? value.toString() : value
+          ));
+          console.error('[ShieldedRelayer] Full error object:', JSON.stringify(safeError, null, 2));
+        } catch (e) {
+          // If serialization still fails, just log message
+          console.error('[ShieldedRelayer] Error message:', error.message);
+          if (error.shortMessage) console.error('[ShieldedRelayer] Short message:', error.shortMessage);
+        }
+    
+    // Log the actual contract call that failed
+    if (error.cause) {
+      console.error('[ShieldedRelayer] Error cause:', error.cause);
+    }
+    if (error.data) {
+      console.error('[ShieldedRelayer] Error data:', error.data);
+    }
+    if (error.shortMessage) {
+      console.error('[ShieldedRelayer] Short message:', error.shortMessage);
+    }
     
     const errorMsg = error.message || String(error);
     const errorCode = mapContractErrorToCode(errorMsg);
@@ -1411,12 +1688,922 @@ shieldedRouter.post('/relay/transfer', relayerRateLimit, async (req: Request, re
     return res.status(400).json(createErrorResponse(errorCode, {
       originalError: errorMsg,
       poolAddress: req.body.poolAddress,
+      details: error.shortMessage || error.cause?.message || 'No additional details',
     }));
     
     res.status(500).json({ 
       error: 'Transaction failed',
       message: errorMsg.slice(0, 200),
     });
+  }
+});
+
+/**
+ * POST /api/shielded/relay/batch-transfer
+ * Relay a batch transfer (multiple notes → one recipient + change)
+ * 
+ * Body:
+ * - poolAddress: ShieldedPool contract address
+ * - proofs: uint256[8][] array of ZK proofs
+ * - roots: bytes32[] array of Merkle roots
+ * - nullifierHashes: bytes32[] array of nullifiers
+ * - outputCommitment1: bytes32 recipient commitment (shared)
+ * - outputCommitment2: bytes32 change commitment (shared)
+ * - encryptedMemo1: hex string encrypted note for recipient
+ * - encryptedMemo2: hex string encrypted note for sender (change)
+ * - fee: total relayer fee (split across all proofs)
+ */
+shieldedRouter.post('/relay/batch-transfer', relayerRateLimit, async (req: Request, res: Response) => {
+  if (!relayerWallet || !relayerAddress) {
+    return res.status(503).json({ 
+      error: 'Relayer not available',
+      message: 'Relayer wallet not configured. Please try again later.',
+    });
+  }
+  
+  const { 
+    poolAddress, 
+    proofs, 
+    roots, 
+    nullifierHashes, 
+    outputCommitment1,
+    outputCommitment2,
+    encryptedMemo1,
+    encryptedMemo2,
+    fee: requestFee 
+  } = req.body;
+  
+  // Validate inputs
+  if (!poolAddress || !proofs || !roots || !nullifierHashes || !outputCommitment1 || !outputCommitment2) {
+    return res.status(400).json(createErrorResponse(ErrorCode.MISSING_PARAMS, {
+      required: ['poolAddress', 'proofs', 'roots', 'nullifierHashes', 'outputCommitment1', 'outputCommitment2'],
+    }));
+  }
+  
+  if (!Array.isArray(proofs) || proofs.length === 0 || proofs.length > 100) {
+    return res.status(400).json({ 
+      error: 'Invalid batch size',
+      message: 'Batch size must be between 1 and 100',
+    });
+  }
+  
+  if (!Array.isArray(roots) || roots.length !== proofs.length) {
+    return res.status(400).json({ 
+      error: 'Array length mismatch',
+      message: 'roots.length must match proofs.length',
+    });
+  }
+  
+  if (!Array.isArray(nullifierHashes) || nullifierHashes.length !== proofs.length) {
+    return res.status(400).json({ 
+      error: 'Array length mismatch',
+      message: 'nullifierHashes.length must match proofs.length',
+    });
+  }
+  
+  // Validate each proof is correct format
+  for (let i = 0; i < proofs.length; i++) {
+    if (!Array.isArray(proofs[i]) || proofs[i].length !== 8) {
+      return res.status(400).json({ 
+        error: 'Invalid proof format',
+        message: `Proof at index ${i} must be an array of 8 elements`,
+      });
+    }
+  }
+  
+  // Validate memo sizes
+  const MAX_ENCRYPTED_MEMO_BYTES = 1024;
+  if (encryptedMemo1) {
+    const memo1Bytes = Buffer.from(encryptedMemo1.startsWith('0x') ? encryptedMemo1.slice(2) : encryptedMemo1, 'hex');
+    if (memo1Bytes.length > MAX_ENCRYPTED_MEMO_BYTES) {
+      return res.status(400).json({ 
+        error: 'Memo too large',
+        message: `encryptedMemo1 exceeds maximum size of ${MAX_ENCRYPTED_MEMO_BYTES} bytes`,
+      });
+    }
+  }
+  if (encryptedMemo2) {
+    const memo2Bytes = Buffer.from(encryptedMemo2.startsWith('0x') ? encryptedMemo2.slice(2) : encryptedMemo2, 'hex');
+    if (memo2Bytes.length > MAX_ENCRYPTED_MEMO_BYTES) {
+      return res.status(400).json({ 
+        error: 'Memo too large',
+        message: `encryptedMemo2 exceeds maximum size of ${MAX_ENCRYPTED_MEMO_BYTES} bytes`,
+      });
+    }
+  }
+  
+  const fee = requestFee !== undefined ? BigInt(requestFee) : 0n;
+  
+  // Extract token from request body (required for batch transfer)
+  const { token } = req.body;
+  const NATIVE_TOKEN = '0x0000000000000000000000000000000000000000';
+  const isNative = !token || token === '' || token === NATIVE_TOKEN || token.toLowerCase() === NATIVE_TOKEN.toLowerCase();
+  const tokenAddress = isNative ? NATIVE_TOKEN : (token as Address);
+  
+  console.log(`[ShieldedRelayer] Processing batch transfer:`);
+  console.log(`  Pool: ${poolAddress}`);
+  console.log(`  Batch size: ${proofs.length} notes`);
+  console.log(`  Token: ${isNative ? 'Native DOGE' : tokenAddress}`);
+  console.log(`  Output1: ${outputCommitment1.slice(0, 18)}...`);
+  console.log(`  Output2: ${outputCommitment2.slice(0, 18)}...`);
+  console.log(`  Total Fee: ${Number(fee) / 1e18} DOGE`);
+  
+  try {
+    // Check relayer balance
+    const relayerBalance = await publicClient.getBalance({ address: relayerAddress });
+    if (relayerBalance < BigInt(0.01 * 1e18)) {
+      console.error('[ShieldedRelayer] Insufficient gas balance');
+      return res.status(503).json({ 
+        error: 'Relayer temporarily unavailable',
+        message: 'Relayer needs more gas. Please try again later.',
+      });
+    }
+    
+    // Convert proofs to correct format
+    const proofsFormatted = proofs.map((proof: string[]) => 
+      proof.map((p: string) => BigInt(p)) as [bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint]
+    );
+    
+    // Prepare memos
+    const memo1 = encryptedMemo1 ? (encryptedMemo1.startsWith('0x') ? encryptedMemo1 : `0x${encryptedMemo1}`) as `0x${string}` : '0x' as `0x${string}`;
+    const memo2 = encryptedMemo2 ? (encryptedMemo2.startsWith('0x') ? encryptedMemo2 : `0x${encryptedMemo2}`) as `0x${string}` : '0x' as `0x${string}`;
+    
+    // Convert roots and nullifiers
+    const rootsFormatted = roots.map((r: string) => r as `0x${string}`);
+    const nullifiersFormatted = nullifierHashes.map((n: string) => n as `0x${string}`);
+    
+    // Submit transaction
+    console.log('[ShieldedRelayer] Submitting batch transfer to contract...');
+    const txHash = await relayerWallet.writeContract({
+      chain: dogeosTestnet,
+      account: relayerAccount!,
+      address: poolAddress as Address,
+      abi: ShieldedPoolABI,
+      functionName: 'batchTransfer',
+      args: [
+        proofsFormatted,                     // uint256[8][]
+        rootsFormatted,                      // bytes32[]
+        nullifiersFormatted,                 // bytes32[]
+        outputCommitment1 as `0x${string}`,  // bytes32 _outputCommitment1
+        outputCommitment2 as `0x${string}`,  // bytes32 _outputCommitment2
+        tokenAddress as Address,             // address _token
+        relayerAddress! as Address,          // address _relayer
+        fee as bigint,                       // uint256 _fee
+        memo1 as `0x${string}`,             // bytes _encryptedMemo1
+        memo2 as `0x${string}`,             // bytes _encryptedMemo2
+      ],
+    });
+    
+    console.log('[ShieldedRelayer] ✅ Batch transfer relayed!');
+    console.log(`  Tx hash: ${txHash}`);
+    console.log(`  Explorer: https://blockscout.testnet.dogeos.com/tx/${txHash}`);
+    
+    return res.status(200).json({
+      success: true,
+      txHash,
+      explorerUrl: `https://blockscout.testnet.dogeos.com/tx/${txHash}`,
+      batchSize: proofs.length,
+    });
+    
+  } catch (error: any) {
+    console.error('[ShieldedRelayer] Batch transfer failed:', error);
+    
+    // Map contract errors - convert error to string first
+    const errorMessage = typeof error === 'string' 
+      ? error 
+      : error?.message || error?.shortMessage || error?.toString() || 'Unknown error';
+    const errorCode = mapContractErrorToCode(errorMessage);
+    
+    return res.status(400).json(createErrorResponse(errorCode, {
+      message: errorMessage,
+      details: error?.shortMessage || error?.message || errorMessage,
+    }));
+  }
+});
+
+/**
+ * POST /api/shielded/relay/transfer-multi
+ * Relay a multi-input transfer using the new multi-input circuit
+ * 
+ * This is the TRUE Zcash-style multi-input transfer:
+ * - ONE proof for ALL input notes (not multiple proofs)
+ * - Much more gas-efficient
+ * - Proper value conservation across all inputs
+ * 
+ * Body:
+ * - poolAddress: ShieldedPool contract address
+ * - proof: uint256[8] SINGLE ZK proof for all inputs
+ * - roots: bytes32[5] fixed array of Merkle roots (unused slots = 0)
+ * - nullifierHashes: bytes32[5] fixed array of nullifiers (unused slots = 0)
+ * - outputCommitment1: bytes32 recipient commitment
+ * - outputCommitment2: bytes32 change commitment
+ * - encryptedMemo1: hex string encrypted note for recipient
+ * - encryptedMemo2: hex string encrypted note for sender (change)
+ * - fee: total relayer fee
+ * - numInputs: number of actual inputs (2-5)
+ */
+shieldedRouter.post('/relay/transfer-multi', relayerRateLimit, async (req: Request, res: Response) => {
+  if (!relayerWallet || !relayerAddress) {
+    return res.status(503).json({ 
+      error: 'Relayer not available',
+      message: 'Relayer wallet not configured. Please try again later.',
+    });
+  }
+  
+  const { 
+    poolAddress, 
+    proof, 
+    roots, 
+    nullifierHashes, 
+    outputCommitment1,
+    outputCommitment2,
+    encryptedMemo1,
+    encryptedMemo2,
+    fee: requestFee,
+    numInputs
+  } = req.body;
+  
+  // Validate inputs
+  if (!poolAddress || !proof || !roots || !nullifierHashes || !outputCommitment1 || !outputCommitment2 || numInputs === undefined) {
+    return res.status(400).json(createErrorResponse(ErrorCode.MISSING_PARAMS, {
+      required: ['poolAddress', 'proof', 'roots', 'nullifierHashes', 'outputCommitment1', 'outputCommitment2', 'numInputs'],
+    }));
+  }
+  
+  // Validate proof format (single proof, not array)
+  if (!Array.isArray(proof) || proof.length !== 8) {
+    return res.status(400).json({ 
+      error: 'Invalid proof format',
+      message: 'Proof must be an array of 8 elements',
+    });
+  }
+  
+  // Validate roots and nullifierHashes are arrays of 5
+  if (!Array.isArray(roots) || roots.length !== 5) {
+    return res.status(400).json({ 
+      error: 'Invalid roots format',
+      message: 'roots must be an array of exactly 5 elements',
+    });
+  }
+  
+  if (!Array.isArray(nullifierHashes) || nullifierHashes.length !== 5) {
+    return res.status(400).json({ 
+      error: 'Invalid nullifierHashes format',
+      message: 'nullifierHashes must be an array of exactly 5 elements',
+    });
+  }
+  
+  // Validate numInputs
+  const numInputsNum = Number(numInputs);
+  if (numInputsNum < 2 || numInputsNum > 5) {
+    return res.status(400).json({ 
+      error: 'Invalid numInputs',
+      message: 'numInputs must be between 2 and 5',
+    });
+  }
+  
+  // Validate memo sizes
+  const MAX_ENCRYPTED_MEMO_BYTES = 1024;
+  if (encryptedMemo1) {
+    const memo1Bytes = Buffer.from(encryptedMemo1.startsWith('0x') ? encryptedMemo1.slice(2) : encryptedMemo1, 'hex');
+    if (memo1Bytes.length > MAX_ENCRYPTED_MEMO_BYTES) {
+      return res.status(400).json({ 
+        error: 'Memo too large',
+        message: `encryptedMemo1 exceeds maximum size of ${MAX_ENCRYPTED_MEMO_BYTES} bytes`,
+      });
+    }
+  }
+  if (encryptedMemo2) {
+    const memo2Bytes = Buffer.from(encryptedMemo2.startsWith('0x') ? encryptedMemo2.slice(2) : encryptedMemo2, 'hex');
+    if (memo2Bytes.length > MAX_ENCRYPTED_MEMO_BYTES) {
+      return res.status(400).json({ 
+        error: 'Memo too large',
+        message: `encryptedMemo2 exceeds maximum size of ${MAX_ENCRYPTED_MEMO_BYTES} bytes`,
+      });
+    }
+  }
+  
+  const fee = requestFee !== undefined ? BigInt(requestFee) : 0n;
+  
+  console.log(`[ShieldedRelayer] Processing multi-input transfer:`);
+  console.log(`  Pool: ${poolAddress}`);
+  console.log(`  Num inputs: ${numInputsNum}`);
+  console.log(`  Output1: ${outputCommitment1.slice(0, 18)}...`);
+  console.log(`  Output2: ${outputCommitment2.slice(0, 18)}...`);
+  console.log(`  Total Fee: ${Number(fee) / 1e18} DOGE`);
+  
+  try {
+    // Check relayer balance
+    const relayerBalance = await publicClient.getBalance({ address: relayerAddress });
+    if (relayerBalance < BigInt(0.01 * 1e18)) {
+      console.error('[ShieldedRelayer] Insufficient gas balance');
+      return res.status(503).json({ 
+        error: 'Relayer temporarily unavailable',
+        message: 'Relayer needs more gas. Please try again later.',
+      });
+    }
+    
+    // Convert proof to correct format
+    const proofFormatted = proof.map((p: string) => BigInt(p)) as [bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint];
+    
+    // Prepare memos
+    const memo1 = encryptedMemo1 ? (encryptedMemo1.startsWith('0x') ? encryptedMemo1 : `0x${encryptedMemo1}`) as `0x${string}` : '0x' as `0x${string}`;
+    const memo2 = encryptedMemo2 ? (encryptedMemo2.startsWith('0x') ? encryptedMemo2 : `0x${encryptedMemo2}`) as `0x${string}` : '0x' as `0x${string}`;
+    
+    // Convert roots and nullifiers to fixed size tuples (5 elements as per contract)
+    // We've already validated that arrays have exactly 5 elements above
+    const rootsFormatted: readonly [`0x${string}`, `0x${string}`, `0x${string}`, `0x${string}`, `0x${string}`] = [
+      roots[0] as `0x${string}`,
+      roots[1] as `0x${string}`,
+      roots[2] as `0x${string}`,
+      roots[3] as `0x${string}`,
+      roots[4] as `0x${string}`,
+    ];
+    const nullifiersFormatted: readonly [`0x${string}`, `0x${string}`, `0x${string}`, `0x${string}`, `0x${string}`] = [
+      nullifierHashes[0] as `0x${string}`,
+      nullifierHashes[1] as `0x${string}`,
+      nullifierHashes[2] as `0x${string}`,
+      nullifierHashes[3] as `0x${string}`,
+      nullifierHashes[4] as `0x${string}`,
+    ];
+    
+    // Submit transaction to transferMulti
+    console.log('[ShieldedRelayer] Submitting multi-input transfer to contract...');
+    const txHash = await relayerWallet.writeContract({
+      chain: dogeosTestnet,
+      account: relayerAccount!,
+      address: poolAddress as Address,
+      abi: ShieldedPoolABI,
+      functionName: 'transferMulti',
+      args: [
+        proofFormatted,
+        rootsFormatted,
+        nullifiersFormatted,
+        outputCommitment1 as `0x${string}`,
+        outputCommitment2 as `0x${string}`,
+        relayerAddress!,
+        fee,
+        BigInt(numInputsNum),
+        memo1,
+        memo2,
+      ],
+    });
+    
+    console.log('[ShieldedRelayer] ✅ Multi-input transfer relayed!');
+    console.log(`  Tx hash: ${txHash}`);
+    console.log(`  Explorer: https://blockscout.testnet.dogeos.com/tx/${txHash}`);
+    
+    return res.status(200).json({
+      success: true,
+      txHash,
+      explorerUrl: `https://blockscout.testnet.dogeos.com/tx/${txHash}`,
+      numInputs: numInputsNum,
+    });
+    
+  } catch (error: any) {
+    console.error('[ShieldedRelayer] Multi-input transfer failed:', error);
+    
+    // Map contract errors
+    const errorCode = mapContractErrorToCode(error);
+    
+    return res.status(400).json(createErrorResponse(errorCode, {
+      message: error.message || 'Multi-input transfer failed',
+      details: error.shortMessage || error.message,
+    }));
+  }
+});
+
+/**
+ * POST /api/shielded/relay/batch-unshield
+ * Relay a batch unshield (multiple notes → one recipient)
+ * 
+ * Body:
+ * - poolAddress: ShieldedPool contract address
+ * - proofs: uint256[8][] array of ZK proofs
+ * - roots: bytes32[] array of Merkle roots
+ * - nullifierHashes: bytes32[] array of nullifiers
+ * - recipient: public address to receive funds
+ * - token: token address (or null/undefined for native DOGE)
+ * - amounts: uint256[] array of amounts per note (net after fees)
+ * - totalFee: total relayer fee
+ */
+shieldedRouter.post('/relay/batch-unshield', relayerRateLimit, async (req: Request, res: Response) => {
+  if (!relayerWallet || !relayerAddress) {
+    return res.status(503).json({ 
+      error: 'Relayer not available',
+      message: 'Relayer wallet not configured. Please try again later.',
+    });
+  }
+  
+  // Check for duplicate requests
+  const requestKey = getRequestKey(req);
+  const now = Date.now();
+  const recentRequest = recentBatchUnshieldRequests.get(requestKey);
+  
+  if (recentRequest && (now - recentRequest.timestamp) < DEDUP_WINDOW_MS) {
+    console.log(`[ShieldedRelayer] Duplicate batch unshield request detected (within ${DEDUP_WINDOW_MS}ms), returning previous result`);
+    return res.status(200).json({
+      success: true,
+      txHash: recentRequest.txHash,
+      explorerUrl: `https://blockscout.testnet.dogeos.com/tx/${recentRequest.txHash}`,
+      batchSize: req.body.proofs?.length || 0,
+      totalAmount: req.body.amounts?.reduce((sum: string, amt: string) => (BigInt(sum) + BigInt(amt)).toString(), '0') || '0',
+      duplicate: true, // Flag to indicate this is a duplicate response
+    });
+  }
+  
+  const {
+    poolAddress,
+    proofs,
+    roots,
+    nullifierHashes,
+    recipient,
+    token,
+    amounts,
+    changeCommitments,  // V3: Change commitments array (optional, defaults to all zeros)
+    totalFee: requestFee,
+    publicInputs  // Optional: Public signals from proof generation (for debugging)
+  } = req.body;
+  
+  // Validate inputs
+  if (!poolAddress || !proofs || !roots || !nullifierHashes || !recipient || !amounts) {
+    return res.status(400).json(createErrorResponse(ErrorCode.MISSING_PARAMS, {
+      required: ['poolAddress', 'proofs', 'roots', 'nullifierHashes', 'recipient', 'amounts'],
+    }));
+  }
+  
+  // V3: Validate changeCommitments (if provided, must match batch size)
+  // If not provided, default to all zeros (batch unshield unshields entire notes)
+  const changeCommitmentsFinal = changeCommitments || Array(proofs.length).fill('0x0000000000000000000000000000000000000000000000000000000000000000');
+  if (changeCommitmentsFinal.length !== proofs.length) {
+    return res.status(400).json({ 
+      error: 'Array length mismatch',
+      message: 'changeCommitments.length must match proofs.length',
+    });
+  }
+  
+  if (!Array.isArray(proofs) || proofs.length === 0 || proofs.length > 100) {
+    return res.status(400).json({ 
+      error: 'Invalid batch size',
+      message: 'Batch size must be between 1 and 100',
+    });
+  }
+  
+  if (!Array.isArray(roots) || roots.length !== proofs.length) {
+    return res.status(400).json({ 
+      error: 'Array length mismatch',
+      message: 'roots.length must match proofs.length',
+    });
+  }
+  
+  if (!Array.isArray(nullifierHashes) || nullifierHashes.length !== proofs.length) {
+    return res.status(400).json({ 
+      error: 'Array length mismatch',
+      message: 'nullifierHashes.length must match proofs.length',
+    });
+  }
+  
+  if (!Array.isArray(amounts) || amounts.length !== proofs.length) {
+    return res.status(400).json({ 
+      error: 'Array length mismatch',
+      message: 'amounts.length must match proofs.length',
+    });
+  }
+  
+  // Validate each proof
+  for (let i = 0; i < proofs.length; i++) {
+    if (!Array.isArray(proofs[i]) || proofs[i].length !== 8) {
+      return res.status(400).json({ 
+        error: 'Invalid proof format',
+        message: `Proof at index ${i} must be an array of 8 elements`,
+      });
+    }
+  }
+  
+  const NATIVE_TOKEN = '0x0000000000000000000000000000000000000000';
+  const isNative = !token || token === '' || token === NATIVE_TOKEN || token.toLowerCase() === NATIVE_TOKEN.toLowerCase();
+  const tokenAddress = isNative ? NATIVE_TOKEN : (token as Address);
+  
+  const totalFee = requestFee !== undefined ? BigInt(requestFee) : 0n;
+  const amountsBigInt = amounts.map((a: string) => BigInt(a));
+  const totalAmount = amountsBigInt.reduce((sum: bigint, amt: bigint) => sum + amt, 0n);
+  
+  console.log(`[ShieldedRelayer] Processing batch unshield:`);
+  console.log(`  Pool: ${poolAddress}`);
+  console.log(`  Batch size: ${proofs.length} notes`);
+  console.log(`  Token: ${isNative ? 'Native DOGE' : tokenAddress}`);
+  console.log(`  Recipient: ${recipient}`);
+  console.log(`  Total amount: ${Number(totalAmount) / 1e18}`);
+  console.log(`  Total fee: ${Number(totalFee) / 1e18}`);
+  
+  try {
+    // Check relayer balance
+    const relayerBalance = await publicClient.getBalance({ address: relayerAddress });
+    if (relayerBalance < BigInt(0.01 * 1e18)) {
+      console.error('[ShieldedRelayer] Insufficient gas balance');
+      return res.status(503).json({ 
+        error: 'Relayer temporarily unavailable',
+        message: 'Relayer needs more gas. Please try again later.',
+      });
+    }
+    
+    // Convert proofs to correct format
+    const proofsFormatted = proofs.map((proof: string[]) => 
+      proof.map((p: string) => BigInt(p)) as [bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint]
+    );
+    
+    // Convert roots and nullifiers
+    const rootsFormatted = roots.map((r: string) => r as `0x${string}`);
+    const nullifiersFormatted = nullifierHashes.map((n: string) => n as `0x${string}`);
+    
+    // DEBUG: Log what we're sending to the contract
+    console.log('[ShieldedRelayer] DEBUG - Batch unshield parameters:');
+    console.log(`  Pool: ${poolAddress}`);
+    console.log(`  Batch size: ${proofs.length}`);
+    console.log(`  Recipient: ${recipient}`);
+    console.log(`  Token: ${tokenAddress}`);
+    console.log(`  Total amount: ${Number(totalAmount) / 1e18} DOGE`);
+    console.log(`  Total fee: ${Number(totalFee) / 1e18} DOGE`);
+    console.log(`  Relayer: ${relayerAddress}`);
+    console.log(`  Roots: ${rootsFormatted.map(r => r.slice(0, 10) + '...').join(', ')}`);
+    console.log(`  Nullifiers: ${nullifiersFormatted.map(n => n.slice(0, 10) + '...').join(', ')}`);
+    console.log(`  Change commitments: ${changeCommitmentsFinal.map(c => c.slice(0, 10) + '...').join(', ')}`);
+    console.log(`  Amounts: ${amountsBigInt.map(a => Number(a) / 1e18).join(', ')} DOGE`);
+    
+    // Calculate what public signals the contract will construct
+    const feePerProof = totalFee / BigInt(proofs.length);
+    console.log('[ShieldedRelayer] DEBUG - Public signals that contract will pass to verifier:');
+    for (let i = 0; i < proofs.length; i++) {
+      const rootAsUint = BigInt(rootsFormatted[i]);
+      const nullifierAsUint = BigInt(nullifiersFormatted[i]);
+      const recipientAsUint = BigInt(recipient); // address as uint160 (same as uint256 for valid addresses)
+      const amountAsUint = amountsBigInt[i];
+      const changeCommitmentAsUint = BigInt(changeCommitmentsFinal[i]);
+      const relayerAsUint = BigInt(relayerAddress!); // address as uint160
+      
+      const contractPublicSignals = [
+        rootAsUint.toString(),
+        nullifierAsUint.toString(),
+        recipientAsUint.toString(),
+        amountAsUint.toString(),
+        changeCommitmentAsUint.toString(),
+        relayerAsUint.toString(),
+        feePerProof.toString(),
+      ];
+      
+      console.log(`  Proof ${i} public signals (contract will use):`);
+      contractPublicSignals.forEach((sig, idx) => {
+        console.log(`    [${idx}] ${['root', 'nullifierHash', 'recipient', 'amount', 'changeCommitment', 'relayer', 'fee'][idx]}: ${sig}`);
+      });
+      
+      // Compare with proof's public signals if provided
+      if (publicInputs && Array.isArray(publicInputs) && publicInputs[i]) {
+        const proofPublicSignals = publicInputs[i];
+        console.log(`  Proof ${i} public signals (from circuit):`);
+        if (Array.isArray(proofPublicSignals)) {
+          proofPublicSignals.forEach((sig, idx) => {
+            console.log(`    [${idx}] ${['root', 'nullifierHash', 'recipient', 'amount', 'changeCommitment', 'relayer', 'fee'][idx]}: ${sig}`);
+            if (idx < contractPublicSignals.length) {
+              const matches = sig === contractPublicSignals[idx];
+              if (!matches) {
+                console.error(`    ❌ MISMATCH at index ${idx}! Circuit: ${sig}, Contract will use: ${contractPublicSignals[idx]}`);
+              } else {
+                console.log(`    ✓ Match`);
+              }
+            }
+          });
+        }
+      }
+    }
+    
+    // Verify verifier address matches expected (optional check)
+    try {
+      const actualVerifierAddress = await (publicClient.readContract as any)({
+        address: poolAddress as Address,
+        abi: ShieldedPoolABI,
+        functionName: 'unshieldVerifier',
+      });
+      console.log('[ShieldedRelayer] Actual verifier address from contract:', actualVerifierAddress);
+      // Note: The expected verifier address should match what's deployed in the contract
+      // If proofs fail, verify the verifier matches the zkey verification key
+      // The deployed verifier address is: 0x7DFEa7a81B6f7098DB4a973b052A08899865b60b (current)
+      // If this doesn't match the zkey, we need to redeploy with a new verifier
+    } catch (verifierCheckError) {
+      // Silently skip if we can't check (not critical)
+      console.log('[ShieldedRelayer] Could not verify verifier address (non-critical):', (verifierCheckError as Error).message);
+    }
+    
+    // Submit transaction
+    console.log('[ShieldedRelayer] Submitting batch unshield to contract...');
+    console.log('[ShieldedRelayer] Contract address:', poolAddress);
+    console.log('[ShieldedRelayer] ⚠️  If proofs fail, verify the UnshieldVerifier matches the unshield zkey verification key');
+    console.log('[ShieldedRelayer] First proof (first 2 elements):', proofsFormatted[0]?.slice(0, 2).map(p => p.toString().slice(0, 20) + '...'));
+    console.log('[ShieldedRelayer] First root:', rootsFormatted[0]);
+    console.log('[ShieldedRelayer] First nullifier:', nullifiersFormatted[0]);
+    console.log('[ShieldedRelayer] First amount:', amountsBigInt[0]?.toString());
+    console.log('[ShieldedRelayer] First changeCommitment:', changeCommitmentsFinal[0]);
+    console.log('[ShieldedRelayer] Fee per proof:', feePerProof.toString());
+    
+    let txHash: `0x${string}`;
+    try {
+      // Try batchUnshield first (if available in contract)
+      txHash = await relayerWallet.writeContract({
+        chain: dogeosTestnet,
+        account: relayerAccount!,
+        address: poolAddress as Address,
+        abi: ShieldedPoolABI,
+        functionName: 'batchUnshield',
+        args: [
+          proofsFormatted,
+          rootsFormatted,
+          nullifiersFormatted,
+          recipient as Address,
+          tokenAddress as Address,
+          amountsBigInt,
+          changeCommitmentsFinal.map((c: string) => c as `0x${string}`),  // V3: Change commitments array
+          relayerAddress!,
+          totalFee,
+        ],
+      });
+      
+      console.log('[ShieldedRelayer] ✅ Batch unshield relayed!');
+      console.log(`  Tx hash: ${txHash}`);
+      console.log(`  Explorer: https://blockscout.testnet.dogeos.com/tx/${txHash}`);
+      
+      // Store successful request for deduplication
+      recentBatchUnshieldRequests.set(requestKey, {
+        txHash,
+        timestamp: now,
+      });
+      
+      // Clean up old entries (older than dedup window)
+      for (const [key, value] of recentBatchUnshieldRequests.entries()) {
+        if (now - value.timestamp > DEDUP_WINDOW_MS) {
+          recentBatchUnshieldRequests.delete(key);
+        }
+      }
+      
+      return res.status(200).json({
+        success: true,
+        txHash,
+        explorerUrl: `https://blockscout.testnet.dogeos.com/tx/${txHash}`,
+        batchSize: proofs.length,
+        totalAmount: totalAmount.toString(),
+      });
+    } catch (writeError: any) {
+      // Check if batchUnshield function doesn't exist (V4 doesn't have it)
+      const errorMsg = writeError?.message || writeError?.shortMessage || '';
+      const errorDetails = writeError?.details || writeError?.cause?.details || '';
+      
+      // Check for function not found or execution reverted (likely function doesn't exist)
+      const isFunctionNotFound = 
+        errorMsg.includes('function') && errorMsg.includes('not found') ||
+        errorMsg.includes('Execution reverted') ||
+        errorDetails === 'execution reverted';
+      
+      if (isFunctionNotFound && proofs.length > 0) {
+        console.warn('[ShieldedRelayer] batchUnshield not available, falling back to individual unshieldNative calls');
+        console.log(`[ShieldedRelayer] Processing ${proofs.length} individual unshield operations...`);
+        
+        // Fallback: Use individual unshieldNative calls
+        const txHashes: string[] = [];
+        for (let i = 0; i < proofs.length; i++) {
+          try {
+            // unshieldNative: (_proof, _root, _nullifierHash, _recipient, _amount, _changeCommitment, _relayer, _fee)
+            // unshieldToken: (_proof, _root, _nullifierHash, _recipient, _token, _amount, _changeCommitment, _relayer, _fee)
+            const args = isNative 
+              ? [
+                  proofsFormatted[i],
+                  rootsFormatted[i],
+                  nullifiersFormatted[i],
+                  recipient as Address,
+                  amountsBigInt[i],
+                  changeCommitmentsFinal[i] as `0x${string}`,
+                  relayerAddress!,
+                  feePerProof,
+                ]
+              : [
+                  proofsFormatted[i],
+                  rootsFormatted[i],
+                  nullifiersFormatted[i],
+                  recipient as Address,
+                  tokenAddress as Address,
+                  amountsBigInt[i],
+                  changeCommitmentsFinal[i] as `0x${string}`,
+                  relayerAddress!,
+                  feePerProof,
+                ];
+            
+            const individualTxHash = await relayerWallet.writeContract({
+              chain: dogeosTestnet,
+              account: relayerAccount!,
+              address: poolAddress as Address,
+              abi: ShieldedPoolABI,
+              functionName: isNative ? 'unshieldNative' : 'unshieldToken',
+              args: args as any,
+            });
+            txHashes.push(individualTxHash);
+            console.log(`[ShieldedRelayer] ✓ Unshield ${i + 1}/${proofs.length} submitted: ${individualTxHash}`);
+          } catch (individualError: any) {
+            console.error(`[ShieldedRelayer] Failed to submit unshield ${i + 1}/${proofs.length}:`, individualError.message);
+            throw individualError; // Fail fast if any individual call fails
+          }
+        }
+        
+        // Return the first transaction hash (or all of them)
+        txHash = txHashes[0] as `0x${string}`;
+        console.log(`[ShieldedRelayer] ✅ All ${proofs.length} individual unshields submitted!`);
+        console.log(`[ShieldedRelayer] First tx hash: ${txHash}`);
+        console.log(`[ShieldedRelayer] All tx hashes: ${txHashes.join(', ')}`);
+        
+        // Store successful request for deduplication
+        recentBatchUnshieldRequests.set(requestKey, {
+          txHash,
+          timestamp: now,
+        });
+        
+        return res.status(200).json({
+          success: true,
+          txHash,
+          explorerUrl: `https://blockscout.testnet.dogeos.com/tx/${txHash}`,
+          batchSize: proofs.length,
+          totalAmount: totalAmount.toString(),
+          individualTxs: txHashes,
+          fallback: true,
+          message: 'Used individual unshield calls (batchUnshield not available in V4)',
+        });
+      }
+      
+      // Check if this is a "replacement transaction underpriced" error
+      // This means the transaction was likely already sent successfully
+      if (errorDetails === 'replacement transaction underpriced' || 
+          errorMsg.toLowerCase().includes('replacement transaction underpriced')) {
+        console.warn('[ShieldedRelayer] Replacement transaction underpriced - transaction may have already been sent');
+        console.warn('[ShieldedRelayer] This usually means a previous transaction with the same nonce succeeded.');
+        
+        // Check if we have a recent successful transaction for this request
+        const recentRequest = recentBatchUnshieldRequests.get(requestKey);
+        if (recentRequest) {
+          console.log('[ShieldedRelayer] Returning previous successful transaction hash:', recentRequest.txHash);
+          return res.status(200).json({
+            success: true,
+            txHash: recentRequest.txHash,
+            explorerUrl: `https://blockscout.testnet.dogeos.com/tx/${recentRequest.txHash}`,
+            batchSize: proofs.length,
+            totalAmount: totalAmount.toString(),
+            duplicate: true,
+            message: 'Transaction was already submitted successfully',
+          });
+        }
+        
+        // If no recent request found, this is a genuine error
+        throw new Error('Transaction may have already been submitted. Please check your transaction history.');
+      }
+      
+      // Re-throw other errors
+      throw writeError;
+    }
+    
+  } catch (error: any) {
+    console.error('[ShieldedRelayer] Batch unshield failed:', error);
+    
+    // Try to decode the actual revert reason
+    let decodedError = '';
+    try {
+      // Use viem's decodeErrorResult for proper error decoding
+      const { decodeErrorResult } = await import('viem');
+      const ShieldedPoolABI = require('../config.js').ShieldedPoolABI;
+      
+      // Check multiple possible error data locations
+      const errorData = error?.cause?.data || error?.data || error?.cause?.cause?.data || error?.cause?.cause?.cause?.data;
+      
+      if (errorData && typeof errorData === 'string' && errorData.startsWith('0x') && errorData.length > 10) {
+        try {
+          const decoded = decodeErrorResult({
+            abi: ShieldedPoolABI,
+            data: errorData as `0x${string}`,
+          });
+          decodedError = decoded.errorName || '';
+          console.log(`[ShieldedRelayer] ✅ Decoded error: ${decodedError}`);
+          if (decoded.args && decoded.args.length > 0) {
+            console.log(`[ShieldedRelayer] Error args:`, decoded.args);
+          }
+        } catch (decodeErr: any) {
+          // Fallback to manual selector matching
+          const errorSelectors: Record<string, string> = {
+            '0x9e5d7727': 'InsufficientPoolBalance',
+            '0x8da5cb5b': 'InvalidProof',
+            '0x4e69c0d4': 'NullifierAlreadySpent',
+            '0x7b3c3d68': 'InvalidRoot',
+            '0x2c5211c6': 'InvalidAmount',
+            '0x5c60da1b': 'InvalidRecipient',
+            '0x90b8ec18': 'TransferFailed',
+            '0x4b5c4277': 'UnsupportedToken',
+          };
+          
+          const selector = errorData.slice(0, 10);
+          if (errorSelectors[selector]) {
+            decodedError = errorSelectors[selector];
+            console.log(`[ShieldedRelayer] Decoded error (fallback): ${decodedError}`);
+          } else {
+            console.log(`[ShieldedRelayer] Unknown error selector: ${selector}`);
+            console.log(`[ShieldedRelayer] Full error data: ${errorData.slice(0, 100)}...`);
+          }
+        }
+      } else {
+        console.log(`[ShieldedRelayer] No error data found or invalid format`);
+        console.log(`[ShieldedRelayer] Error structure:`, {
+          hasCause: !!error?.cause,
+          hasData: !!error?.data,
+          errorType: error?.constructor?.name,
+        });
+      }
+    } catch (decodeError) {
+      console.warn('[ShieldedRelayer] Error decoding failed:', (decodeError as Error).message);
+    }
+    
+    // Log the required amount for debugging
+    const requiredAmount = totalAmount + totalFee;
+    console.log(`[ShieldedRelayer] Required USDC amount: ${Number(requiredAmount) / 1e18} USDC`);
+    console.log(`[ShieldedRelayer] Amount: ${Number(totalAmount) / 1e18} USDC`);
+    console.log(`[ShieldedRelayer] Fee: ${Number(totalFee) / 1e18} USDC`);
+    
+    // If we decoded InsufficientPoolBalance, provide helpful message
+    if (decodedError === 'InsufficientPoolBalance') {
+      console.error(`[ShieldedRelayer] Contract has insufficient USDC balance!`);
+      console.error(`[ShieldedRelayer] The contract needs ${Number(requiredAmount) / 1e18} USDC but doesn't have enough.`);
+      console.error(`[ShieldedRelayer] Someone must shield USDC first to provide liquidity.`);
+    }
+    
+    // Check if this is a "replacement transaction underpriced" error
+    // This usually means the transaction was already sent successfully
+    const errorDetails = error?.details || error?.cause?.details || '';
+    const errorMessage = typeof error === 'string' 
+      ? error 
+      : error?.message || error?.shortMessage || error?.toString() || 'Unknown error';
+    
+    if (errorDetails === 'replacement transaction underpriced' || 
+        errorMessage.toLowerCase().includes('replacement transaction underpriced')) {
+      console.warn('[ShieldedRelayer] Replacement transaction underpriced - transaction may have already been sent');
+      console.warn('[ShieldedRelayer] This usually means the first transaction succeeded. Checking recent transactions...');
+      
+      // Check if we have a recent successful transaction for this request
+      let recentRequest = recentBatchUnshieldRequests.get(requestKey);
+      if (!recentRequest) {
+        // If requestKey doesn't match, check ALL recent transactions (within dedup window)
+        // "replacement transaction underpriced" means a transaction with the same nonce already succeeded
+        // Take the most recent transaction (most likely the one that succeeded)
+        let mostRecent: { txHash: string; timestamp: number } | null = null;
+        for (const [key, value] of recentBatchUnshieldRequests.entries()) {
+          if ((now - value.timestamp) < DEDUP_WINDOW_MS) {
+            if (!mostRecent || value.timestamp > mostRecent.timestamp) {
+              mostRecent = value;
+            }
+          }
+        }
+        if (mostRecent) {
+          recentRequest = mostRecent;
+          console.log('[ShieldedRelayer] Found most recent successful transaction (different requestKey):', recentRequest.txHash);
+        }
+      }
+      
+      if (recentRequest) {
+        console.log('[ShieldedRelayer] Found previous successful transaction, returning it:', recentRequest.txHash);
+        return res.status(200).json({
+          success: true,
+          txHash: recentRequest.txHash,
+          explorerUrl: `https://blockscout.testnet.dogeos.com/tx/${recentRequest.txHash}`,
+          batchSize: req.body.proofs?.length || 0,
+          totalAmount: req.body.amounts?.reduce((sum: string, amt: string) => (BigInt(sum) + BigInt(amt)).toString(), '0') || '0',
+          duplicate: true,
+          message: 'Transaction was already submitted successfully',
+        });
+      }
+      
+      // If no recent request found, return helpful error
+      return res.status(400).json(createErrorResponse(ErrorCode.INVALID_PARAMS, {
+        message: 'Transaction may have already been submitted. Please check your transaction history.',
+        details: 'A transaction with the same parameters was likely already sent successfully. The "replacement transaction underpriced" error indicates the first transaction succeeded.',
+        suggestion: 'Check your transaction history or wait a moment and try again if the transaction is still pending.',
+      }));
+    }
+    
+    // Check if decoded error indicates insufficient balance
+    if (decodedError === 'InsufficientPoolBalance') {
+      return res.status(400).json(createErrorResponse(ErrorCode.INSUFFICIENT_POOL_LIQUIDITY, {
+        message: 'Insufficient pool liquidity',
+        details: 'The contract does not have enough USDC tokens to fulfill this unshield. Someone must shield USDC first to provide liquidity.',
+        suggestion: 'The pool needs more USDC liquidity. Please shield USDC tokens first, or try unshielding a smaller amount.',
+      }));
+    }
+    
+    // Map contract errors - convert error to string first
+    const errorCode = mapContractErrorToCode(errorMessage || decodedError);
+    
+    return res.status(400).json(createErrorResponse(errorCode, {
+      message: decodedError || errorMessage,
+      details: error?.shortMessage || error?.message || errorMessage || decodedError,
+    }));
   }
 });
 

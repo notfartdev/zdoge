@@ -33,7 +33,7 @@ export default function UnshieldPage() {
           </p>
         </div>
         
-        <ShieldedHeader onStateChange={refresh} selectedToken={selectedToken} onTokenChange={setSelectedToken} compact />
+        <ShieldedHeader onStateChange={refresh} selectedToken={selectedToken} onTokenChange={setSelectedToken} />
         
         <Card className="p-6">
           <UnshieldInterface 

@@ -80,8 +80,8 @@
       ]
     },
     "C:\\Users\\Ivan\\Desktop\\dogenado\\contracts\\src\\ShieldedPoolMultiToken.sol": {
-      "lastModificationDate": 1767894068430,
-      "contentHash": "fe86d9d40804e8070e38b69bae962766",
+      "lastModificationDate": 1768642038530,
+      "contentHash": "c0e30131065e404409a883a25bc91b82",
       "sourceName": "src/ShieldedPoolMultiToken.sol",
       "solcConfig": {
         "version": "0.8.30",
@@ -123,8 +123,8 @@
       ]
     },
     "C:\\Users\\Ivan\\Desktop\\dogenado\\contracts\\src\\interfaces\\IShieldedVerifiers.sol": {
-      "lastModificationDate": 1767894091542,
-      "contentHash": "ba2ce99b717597efe3ffc6d948a8a612",
+      "lastModificationDate": 1768452520379,
+      "contentHash": "82232260b3519c94c23c9d86b00d61e3",
       "sourceName": "src/interfaces/IShieldedVerifiers.sol",
       "solcConfig": {
         "version": "0.8.30",
@@ -158,13 +158,14 @@
       "artifacts": [
         "IShieldVerifier",
         "ISwapVerifier",
+        "ITransferMultiVerifier",
         "ITransferVerifier",
         "IUnshieldVerifier"
       ]
     },
     "C:\\Users\\Ivan\\Desktop\\dogenado\\contracts\\src\\MerkleTreeWithHistory.sol": {
-      "lastModificationDate": 1766147289575,
-      "contentHash": "93a3a6a71fea23855d8e796620f62bfe",
+      "lastModificationDate": 1768641718146,
+      "contentHash": "29749ed4d765d033def11ae014f0eb9a",
       "sourceName": "src/MerkleTreeWithHistory.sol",
       "solcConfig": {
         "version": "0.8.30",
@@ -985,8 +986,8 @@
       ]
     },
     "C:\\Users\\Ivan\\Desktop\\dogenado\\contracts\\src\\HasherAdapter.sol": {
-      "lastModificationDate": 1766161295715,
-      "contentHash": "b4c4d30aa60bf4cc708d19ca93514798",
+      "lastModificationDate": 1768642965032,
+      "contentHash": "8d58753ce308755e5cc2246bf1a38b22",
       "sourceName": "src/HasherAdapter.sol",
       "solcConfig": {
         "version": "0.8.30",
@@ -1060,8 +1061,8 @@
       ]
     },
     "C:\\Users\\Ivan\\Desktop\\dogenado\\contracts\\src\\ShieldVerifier.sol": {
-      "lastModificationDate": 1767361340023,
-      "contentHash": "c7a72561fbce4969f392c13bd703ec54",
+      "lastModificationDate": 1768645535362,
+      "contentHash": "1f08478775e017db6379bd98f3fade8f",
       "sourceName": "src/ShieldVerifier.sol",
       "solcConfig": {
         "version": "0.8.30",
@@ -1097,8 +1098,8 @@
       ]
     },
     "C:\\Users\\Ivan\\Desktop\\dogenado\\contracts\\src\\SwapVerifier.sol": {
-      "lastModificationDate": 1767897456958,
-      "contentHash": "24efed4c3025a7662d0297ca2d47dcb8",
+      "lastModificationDate": 1768645543479,
+      "contentHash": "c2e01c2d00fe641d1bfe47441b8d9aa8",
       "sourceName": "src/SwapVerifier.sol",
       "solcConfig": {
         "version": "0.8.30",
@@ -1133,46 +1134,9 @@
         "SwapVerifier"
       ]
     },
-    "C:\\Users\\Ivan\\Desktop\\dogenado\\contracts\\src\\TransferVerifier.sol": {
-      "lastModificationDate": 1767361340026,
-      "contentHash": "764cc4d5a8f77217fe185d543990f689",
-      "sourceName": "src/TransferVerifier.sol",
-      "solcConfig": {
-        "version": "0.8.30",
-        "settings": {
-          "optimizer": {
-            "enabled": true,
-            "runs": 200
-          },
-          "evmVersion": "prague",
-          "viaIR": true,
-          "outputSelection": {
-            "*": {
-              "*": [
-                "abi",
-                "evm.bytecode",
-                "evm.deployedBytecode",
-                "evm.methodIdentifiers",
-                "metadata"
-              ],
-              "": [
-                "ast"
-              ]
-            }
-          }
-        }
-      },
-      "imports": [],
-      "versionPragmas": [
-        ">=0.7.0 <0.9.0"
-      ],
-      "artifacts": [
-        "TransferVerifier"
-      ]
-    },
     "C:\\Users\\Ivan\\Desktop\\dogenado\\contracts\\src\\UnshieldVerifier.sol": {
-      "lastModificationDate": 1767361340029,
-      "contentHash": "19f2e4579333a3238ae4fd2dc0b56810",
+      "lastModificationDate": 1768645540663,
+      "contentHash": "f971f8e760bad805f24d3b40cbb67cda",
       "sourceName": "src/UnshieldVerifier.sol",
       "solcConfig": {
         "version": "0.8.30",
@@ -1242,6 +1206,274 @@
       ],
       "artifacts": [
         "Groth16Verifier"
+      ]
+    },
+    "C:\\Users\\Ivan\\Desktop\\dogenado\\contracts\\src\\ShieldedPoolMultiTokenV2.sol": {
+      "lastModificationDate": 1768558714364,
+      "contentHash": "6a4fee7ca74421b4f60c0b80be0be94c",
+      "sourceName": "src/ShieldedPoolMultiTokenV2.sol",
+      "solcConfig": {
+        "version": "0.8.30",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "evmVersion": "prague",
+          "viaIR": true,
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "@openzeppelin/contracts/utils/ReentrancyGuard.sol",
+        "@openzeppelin/contracts/utils/Pausable.sol",
+        "@openzeppelin/contracts/token/ERC20/IERC20.sol",
+        "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol",
+        "./MerkleTreeWithHistory.sol",
+        "./interfaces/IShieldedVerifiers.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.20"
+      ],
+      "artifacts": [
+        "ShieldedPoolMultiTokenV3"
+      ]
+    },
+    "C:\\Users\\Ivan\\Desktop\\dogenado\\contracts\\node_modules\\@openzeppelin\\contracts\\utils\\Pausable.sol": {
+      "lastModificationDate": 1766148602434,
+      "contentHash": "0d47b53e10b1985efbb396f937626279",
+      "sourceName": "@openzeppelin/contracts/utils/Pausable.sol",
+      "solcConfig": {
+        "version": "0.8.30",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "evmVersion": "prague",
+          "viaIR": true,
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "../utils/Context.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.20"
+      ],
+      "artifacts": [
+        "Pausable"
+      ]
+    },
+    "C:\\Users\\Ivan\\Desktop\\dogenado\\contracts\\src\\verifiers\\ShieldVerifier.sol": {
+      "lastModificationDate": 1768453598615,
+      "contentHash": "53a50690dc8e37fd15c0fb1b5bdde001",
+      "sourceName": "src/verifiers/ShieldVerifier.sol",
+      "solcConfig": {
+        "version": "0.8.30",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "evmVersion": "prague",
+          "viaIR": true,
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        ">=0.7.0 <0.9.0"
+      ],
+      "artifacts": [
+        "Groth16Verifier"
+      ]
+    },
+    "C:\\Users\\Ivan\\Desktop\\dogenado\\contracts\\src\\verifiers\\SwapVerifier.sol": {
+      "lastModificationDate": 1768453651484,
+      "contentHash": "750497cb5d09b377c4626f8e88a66f4f",
+      "sourceName": "src/verifiers/SwapVerifier.sol",
+      "solcConfig": {
+        "version": "0.8.30",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "evmVersion": "prague",
+          "viaIR": true,
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        ">=0.7.0 <0.9.0"
+      ],
+      "artifacts": [
+        "Groth16Verifier"
+      ]
+    },
+    "C:\\Users\\Ivan\\Desktop\\dogenado\\contracts\\src\\verifiers\\TransferVerifier.sol": {
+      "lastModificationDate": 1768490077728,
+      "contentHash": "a7e828800b6db608da3fccd6335c1e0f",
+      "sourceName": "src/verifiers/TransferVerifier.sol",
+      "solcConfig": {
+        "version": "0.8.30",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "evmVersion": "prague",
+          "viaIR": true,
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        ">=0.7.0 <0.9.0"
+      ],
+      "artifacts": [
+        "TransferVerifier"
+      ]
+    },
+    "C:\\Users\\Ivan\\Desktop\\dogenado\\contracts\\src\\verifiers\\UnshieldVerifier.sol": {
+      "lastModificationDate": 1768490077744,
+      "contentHash": "a78662f0765a88e02d4b26693946ebad",
+      "sourceName": "src/verifiers/UnshieldVerifier.sol",
+      "solcConfig": {
+        "version": "0.8.30",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "evmVersion": "prague",
+          "viaIR": true,
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        ">=0.7.0 <0.9.0"
+      ],
+      "artifacts": [
+        "UnshieldVerifierV3"
+      ]
+    },
+    "C:\\Users\\Ivan\\Desktop\\dogenado\\contracts\\src\\TransferVerifier.sol": {
+      "lastModificationDate": 1768645510863,
+      "contentHash": "84eb4af93101b5fe23edbcee11b355cb",
+      "sourceName": "src/TransferVerifier.sol",
+      "solcConfig": {
+        "version": "0.8.30",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "evmVersion": "prague",
+          "viaIR": true,
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        ">=0.7.0 <0.9.0"
+      ],
+      "artifacts": [
+        "TransferVerifier"
       ]
     }
   }

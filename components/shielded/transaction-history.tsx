@@ -77,10 +77,22 @@ export function TransactionHistory({ walletAddress, className }: TransactionHist
       case 'transfer':
         return `Sent ${formatAmount(tx.amount, 4)} ${tx.token}`
       case 'swap':
-        return `Swapped ${formatAmount(tx.amount, 4)} ${tx.inputToken || tx.token} → ${formatAmount(tx.outputAmount || '0', 4)} ${tx.outputToken}`
+        // For swap, return just the token pair - amounts will be shown separately
+        const inputToken = tx.inputToken || tx.token || 'Unknown'
+        const outputToken = tx.outputToken || 'Unknown'
+        return `${inputToken} → ${outputToken}`
       default:
         return 'Transaction'
     }
+  }
+
+  const getSwapAmountLabel = (tx: Transaction) => {
+    if (tx.type !== 'swap') return null
+    const inputAmount = formatAmount(tx.amount, 4)
+    const outputAmount = formatAmount(tx.outputAmount || '0', 4)
+    const inputToken = tx.inputToken || tx.token || 'Unknown'
+    const outputToken = tx.outputToken || 'Unknown'
+    return `${inputAmount} ${inputToken} → ${outputAmount} ${outputToken}`
   }
 
   const getStatusBadge = (status: Transaction['status']) => {
@@ -140,9 +152,24 @@ export function TransactionHistory({ walletAddress, className }: TransactionHist
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 mb-1">
-                        <p className="text-xs sm:text-sm font-medium text-white truncate">
-                          {getTransactionLabel(tx)}
-                        </p>
+                        <div className="flex flex-col gap-0.5 min-w-0 flex-shrink">
+                          {tx.type === 'swap' ? (
+                            <>
+                              <p className="text-xs sm:text-sm font-medium text-white whitespace-nowrap overflow-hidden text-ellipsis">
+                                Swap {getTransactionLabel(tx)}
+                              </p>
+                              {getSwapAmountLabel(tx) && (
+                                <p className="text-xs text-gray-400 whitespace-nowrap overflow-hidden text-ellipsis">
+                                  {getSwapAmountLabel(tx)}
+                                </p>
+                              )}
+                            </>
+                          ) : (
+                            <p className="text-xs sm:text-sm font-medium text-white truncate">
+                              {getTransactionLabel(tx)}
+                            </p>
+                          )}
+                        </div>
                         <div className="flex-shrink-0">
                           {getStatusBadge(tx.status)}
                         </div>

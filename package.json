@@ -4,9 +4,14 @@
   "private": true,
   "scripts": {
     "build": "next build --webpack",
+    "build:verify": "next build --webpack && node scripts/generate-build-hashes.js",
+    "build:static": "next build --webpack && next export",
     "dev": "next dev",
     "lint": "eslint .",
-    "start": "next start"
+    "start": "next start",
+    "verify": "node scripts/verify-frontend.js",
+    "hash": "node scripts/generate-build-hashes.js",
+    "ipfs": "node scripts/deploy-ipfs.js"
   },
   "dependencies": {
     "@emotion/is-prop-valid": "latest",

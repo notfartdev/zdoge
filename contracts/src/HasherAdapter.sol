@@ -41,9 +41,18 @@ contract HasherAdapter {
     
     /**
      * @notice Hash a single value (for nullifier hash)
+     * @dev Optimized to avoid external call overhead by directly calling mimcSponge
      */
     function hash(uint256 input) external view returns (uint256) {
-        return this.MiMCSponge(input, input);
+        uint256 k = 0;
+        
+        // Absorb first element
+        (uint256 xL, uint256 xR) = mimcSponge.MiMCSponge(input, 0, k);
+        
+        // Absorb second element (add to state with modular arithmetic)
+        (xL, ) = mimcSponge.MiMCSponge(addmod(input, xL, FIELD_SIZE), xR, k);
+        
+        return xL;
     }
 }
 

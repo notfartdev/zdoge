@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useMemo } from "react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -29,6 +29,11 @@ import {
   stopAutoDiscovery,
   isAutoDiscoveryRunning,
 } from "@/lib/shielded/auto-discovery"
+import {
+  startUnshieldMonitoring,
+  stopUnshieldMonitoring,
+  type UnshieldEvent,
+} from "@/lib/shielded/unshield-monitoring"
 import { shieldedPool, tokens, ERC20ABI } from "@/lib/dogeos-config"
 import { shortenAddress } from "@/lib/shielded/shielded-address"
 import { formatWeiToAmount } from "@/lib/shielded/shielded-note"
@@ -69,6 +74,8 @@ export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", onTokenC
   const [allPublicBalances, setAllPublicBalances] = useState<Record<string, string>>({})
   const [isLoadingBalances, setIsLoadingBalances] = useState(false)
   const [isLoadingShielded, setIsLoadingShielded] = useState(false)
+  // CRITICAL: Counter to force balance recalculation even if notes.length doesn't change (e.g., swap DOGE→USDC)
+  const [balanceUpdateCounter, setBalanceUpdateCounter] = useState(0)
   const { setLoadingProgress, setIsLoading: setAppLoading, resetLoading, hasCompletedInitialLoad } = useAppLoading()
   
   const tokenConfig = TOKEN_CONFIG[selectedToken] || TOKEN_CONFIG.DOGE
@@ -233,15 +240,21 @@ export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", onTokenC
     }
     
     const handleShieldedWalletUpdate = () => {
+      console.log('[ShieldedHeader] shielded-wallet-updated event received')
       // Refresh shielded wallet state from storage
+      // This will trigger a re-render and recalculate shieldedBalance
       refreshState()
+      // CRITICAL: Force balance recalculation by incrementing counter
+      // This ensures balance updates even if notes.length doesn't change (e.g., swap DOGE→USDC)
+      // The counter forces useMemo to recalculate, which calls getShieldedBalancePerToken()
+      setBalanceUpdateCounter(prev => prev + 1)
     }
     
     const handleRefreshBalance = async () => {
       console.log('[ShieldedHeader] Refresh balance event received')
       setIsLoadingBalances(true)
-      // Wait 3 seconds for transaction confirmation
-      await new Promise(resolve => setTimeout(resolve, 3000))
+      // No delay - fetch immediately for real-time updates
+      // Transaction is already confirmed when this event is dispatched
       
       const balances: Record<string, string> = {}
       for (const [symbol, config] of Object.entries(TOKEN_CONFIG)) {
@@ -284,6 +297,107 @@ export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", onTokenC
     }
   }, [mounted, wallet?.isConnected, wallet?.address])
   
+  // Batching for sequential transfer notifications
+  const notificationBatchRef = useRef<Array<{ note: ShieldedNote; txHash?: string; token: string }>>([])
+  const batchTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const BATCH_WINDOW_MS = 3000 // 3 second window to collect sequential transfers (increased from 2s for better reliability)
+  
+  // Batching for unshield notifications
+  const unshieldBatchRef = useRef<Array<{ amount: bigint; token: string; txHash: string; fee: bigint }>>([])
+  const unshieldBatchTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  
+  const flushNotificationBatch = () => {
+    try {
+      if (notificationBatchRef.current.length === 0) return
+      
+      // Calculate total amount per token
+      const totalsByToken = new Map<string, bigint>()
+      
+      notificationBatchRef.current.forEach(({ note, token }) => {
+        try {
+          const currentTotal = totalsByToken.get(token) || BigInt(0)
+          totalsByToken.set(token, currentTotal + note.amount)
+        } catch (error) {
+          console.error('[ShieldedHeader] Error calculating batch total for token:', token, error)
+        }
+      })
+      
+      // Show one notification per token with total amount
+      totalsByToken.forEach((totalAmount, token) => {
+        try {
+          toast({
+            title: "Incoming Transfer!",
+            description: `Received ${formatWeiToAmount(totalAmount).toFixed(4)} ${token}`,
+          })
+        } catch (error) {
+          console.error('[ShieldedHeader] Error showing notification for token:', token, error)
+        }
+      })
+    } catch (error) {
+      console.error('[ShieldedHeader] Error flushing notification batch:', error)
+      // Fallback: show individual notifications if batch fails
+      notificationBatchRef.current.forEach(({ note, token }) => {
+        try {
+          toast({
+            title: "Incoming Transfer!",
+            description: `Received ${formatWeiToAmount(note.amount).toFixed(4)} ${token}`,
+          })
+        } catch (fallbackError) {
+          console.error('[ShieldedHeader] Error showing fallback notification:', fallbackError)
+        }
+      })
+    } finally {
+      notificationBatchRef.current = []
+      batchTimeoutRef.current = null
+    }
+  }
+  
+  const flushUnshieldBatch = () => {
+    try {
+      if (unshieldBatchRef.current.length === 0) return
+      
+      // Calculate total amount per token
+      const totalsByToken = new Map<string, bigint>()
+      
+      unshieldBatchRef.current.forEach(({ amount, token }) => {
+        try {
+          const currentTotal = totalsByToken.get(token) || BigInt(0)
+          totalsByToken.set(token, currentTotal + amount)
+        } catch (error) {
+          console.error('[ShieldedHeader] Error calculating unshield batch total for token:', token, error)
+        }
+      })
+      
+      // Show one notification per token with total amount
+      totalsByToken.forEach((totalAmount, token) => {
+        try {
+          toast({
+            title: "Incoming Unshield Transfer!",
+            description: `Received ${formatWeiToAmount(totalAmount).toFixed(4)} ${token}`,
+          })
+        } catch (error) {
+          console.error('[ShieldedHeader] Error showing unshield notification for token:', token, error)
+        }
+      })
+    } catch (error) {
+      console.error('[ShieldedHeader] Error flushing unshield batch:', error)
+      // Fallback: show individual notifications if batch fails
+      unshieldBatchRef.current.forEach(({ amount, token }) => {
+        try {
+          toast({
+            title: "Incoming Unshield Transfer!",
+            description: `Received ${formatWeiToAmount(amount).toFixed(4)} ${token}`,
+          })
+        } catch (fallbackError) {
+          console.error('[ShieldedHeader] Error showing fallback unshield notification:', fallbackError)
+        }
+      })
+    } finally {
+      unshieldBatchRef.current = []
+      unshieldBatchTimeoutRef.current = null
+    }
+  }
+  
   // Initialize shielded wallet when wallet is connected
   useEffect(() => {
     if (!mounted || !wallet?.isConnected || !wallet?.address) {
@@ -312,6 +426,36 @@ export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", onTokenC
           setIsLoadingShielded(false)
           
           // Start auto-discovery for incoming transfers
+          // Track shown notifications to prevent duplicate alerts on refresh
+          const shownNotificationsKey = `shielded_notifications_${wallet?.address || ''}`
+          const getShownNotifications = (): Set<string> => {
+            if (typeof window === 'undefined') return new Set()
+            try {
+              const stored = localStorage.getItem(shownNotificationsKey)
+              return stored ? new Set(JSON.parse(stored)) : new Set()
+            } catch {
+              return new Set()
+            }
+          }
+          const markNotificationShown = (commitment: string, txHash?: string) => {
+            if (typeof window === 'undefined') return
+            try {
+              const shown = getShownNotifications()
+              const key = txHash ? `${commitment}:${txHash}` : commitment
+              shown.add(key)
+              // Keep only last 100 notifications to avoid localStorage bloat
+              if (shown.size > 100) {
+                const arr = Array.from(shown)
+                arr.shift()
+                localStorage.setItem(shownNotificationsKey, JSON.stringify(Array.from(arr)))
+              } else {
+                localStorage.setItem(shownNotificationsKey, JSON.stringify(Array.from(shown)))
+              }
+            } catch {
+              // Ignore localStorage errors
+            }
+          }
+          
           startAutoDiscovery(
             shieldedPool.address,
             identity,
@@ -320,42 +464,141 @@ export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", onTokenC
               // New note discovered! Add it and refresh UI
               const added = addDiscoveredNote(discoveredNote)
               if (added) {
-                // Add to transaction history
-                if (txHash && wallet?.address) {
-                  addTransaction({
-                    type: 'transfer',
-                    txHash: txHash,
-                    timestamp: Math.floor(Date.now() / 1000),
-                    token: discoveredNote.token || 'DOGE',
-                    amount: formatWeiToAmount(discoveredNote.amount).toFixed(4),
-                    amountWei: discoveredNote.amount.toString(),
-                    status: 'confirmed', // Received transfers are already confirmed on-chain
-                    isIncoming: true, // Mark as incoming transfer
-                  }).catch(err => {
-                    console.warn('[ShieldedHeader] Failed to add transaction to history:', err)
-                  })
+                // Check if we've already shown this notification
+                const notificationKey = txHash ? `${discoveredNote.commitment}:${txHash}` : discoveredNote.commitment.toString()
+                const shownNotifications = getShownNotifications()
+                
+                if (!shownNotifications.has(notificationKey)) {
+                  // Mark as shown BEFORE showing (prevents race conditions)
+                  markNotificationShown(discoveredNote.commitment.toString(), txHash)
+                  
+                  // Add to transaction history (always add individual transactions)
+                  if (txHash && wallet?.address) {
+                    addTransaction({
+                      type: 'transfer',
+                      txHash: txHash,
+                      timestamp: Math.floor(Date.now() / 1000),
+                      token: discoveredNote.token || 'DOGE',
+                      amount: formatWeiToAmount(discoveredNote.amount).toFixed(4),
+                      amountWei: discoveredNote.amount.toString(),
+                      status: 'confirmed', // Received transfers are already confirmed on-chain
+                      isIncoming: true, // Mark as incoming transfer
+                    }).catch(err => {
+                      console.warn('[ShieldedHeader] Failed to add transaction to history:', err)
+                    })
+                  }
+                  refreshState()
+                  
+                  // Add to batch for notification
+                  const token = discoveredNote.token || 'DOGE'
+                  notificationBatchRef.current.push({ note: discoveredNote, txHash, token })
+                  
+                  // Clear existing timeout and set new one
+                  if (batchTimeoutRef.current) {
+                    clearTimeout(batchTimeoutRef.current)
+                  }
+                  batchTimeoutRef.current = setTimeout(flushNotificationBatch, BATCH_WINDOW_MS)
+                } else {
+                  console.log(`[ShieldedHeader] Notification already shown for commitment ${discoveredNote.commitment.toString(16).slice(0, 16)}..., skipping`)
                 }
-                refreshState()
-                const explorerUrl = txHash ? `https://blockscout.testnet.dogeos.com/tx/${txHash}` : null
-                toast({
-                  title: "💰 Incoming Transfer!",
-                  description: explorerUrl ? (
-                    <div className="space-y-2">
-                      <p>Received {formatWeiToAmount(discoveredNote.amount).toFixed(4)} {discoveredNote.token || 'DOGE'}</p>
-                      <a 
-                        href={explorerUrl} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="text-[#C2A633] hover:underline text-sm font-medium"
-                      >
-                        View transaction on Blockscout →
-                      </a>
-                    </div>
-                  ) : `Received ${formatWeiToAmount(discoveredNote.amount).toFixed(4)} ${discoveredNote.token || 'DOGE'}`,
-                })
               }
             }
           )
+          
+          // Start unshield monitoring for incoming unshield transactions
+          if (wallet?.address) {
+            // Track shown unshield notifications to prevent duplicates
+            const shownUnshieldNotificationsKey = `shielded_unshield_notifications_${wallet.address}`
+            const getShownUnshieldNotifications = (): Set<string> => {
+              if (typeof window === 'undefined') return new Set()
+              try {
+                const stored = localStorage.getItem(shownUnshieldNotificationsKey)
+                return stored ? new Set(JSON.parse(stored)) : new Set()
+              } catch {
+                return new Set()
+              }
+            }
+            const markUnshieldNotificationShown = (nullifierHash: string, txHash: string) => {
+              if (typeof window === 'undefined') return
+              try {
+                const shown = getShownUnshieldNotifications()
+                const key = `${txHash}:${nullifierHash}`
+                shown.add(key)
+                // Keep only last 100 notifications to avoid localStorage bloat
+                if (shown.size > 100) {
+                  const arr = Array.from(shown)
+                  arr.shift()
+                  localStorage.setItem(shownUnshieldNotificationsKey, JSON.stringify(Array.from(arr)))
+                } else {
+                  localStorage.setItem(shownUnshieldNotificationsKey, JSON.stringify(Array.from(shown)))
+                }
+              } catch {
+                // Ignore localStorage errors
+              }
+            }
+            
+            startUnshieldMonitoring(
+              shieldedPool.address,
+              wallet.address,
+              (unshieldEvent) => {
+                // Check if we've already shown this notification
+                const notificationKey = `${unshieldEvent.txHash}:${unshieldEvent.nullifierHash}`
+                const shownNotifications = getShownUnshieldNotifications()
+                
+                if (!shownNotifications.has(notificationKey)) {
+                  // Mark as shown BEFORE showing (prevents race conditions)
+                  markUnshieldNotificationShown(unshieldEvent.nullifierHash, unshieldEvent.txHash)
+                  
+                  // Get token symbol and decimals
+                  const tokenSymbol = unshieldEvent.tokenSymbol
+                  const tokenConfig = shieldedPool.supportedTokens[tokenSymbol as keyof typeof shieldedPool.supportedTokens]
+                  const decimals = tokenConfig?.decimals || 18
+                  
+                  // Calculate amount received (amount - fee)
+                  const amountReceived = unshieldEvent.amount - unshieldEvent.fee
+                  
+                  // Add to transaction history (always add individual transactions)
+                  if (wallet?.address) {
+                    addTransaction({
+                      type: 'unshield',
+                      txHash: unshieldEvent.txHash,
+                      timestamp: unshieldEvent.timestamp,
+                      token: tokenSymbol,
+                      amount: formatWeiToAmount(amountReceived, decimals).toFixed(4),
+                      amountWei: amountReceived.toString(),
+                      recipientPublicAddress: unshieldEvent.recipient,
+                      relayerFee: formatWeiToAmount(unshieldEvent.fee, decimals).toFixed(4),
+                      status: 'confirmed', // Unshield events are already confirmed on-chain
+                    }).catch(err => {
+                      console.warn('[ShieldedHeader] Failed to add unshield transaction to history:', err)
+                    })
+                  }
+                  
+                  // Refresh public balance (unshield adds to public wallet)
+                  refreshState()
+                  if (wallet?.refreshBalance) {
+                    wallet.refreshBalance().catch(err => console.warn('[ShieldedHeader] Failed to refresh public balance:', err))
+                  }
+                  
+                  // Add to batch for notification
+                  unshieldBatchRef.current.push({
+                    amount: amountReceived,
+                    token: tokenSymbol,
+                    txHash: unshieldEvent.txHash,
+                    fee: unshieldEvent.fee,
+                  })
+                  
+                  // Clear existing timeout and set new one
+                  if (unshieldBatchTimeoutRef.current) {
+                    clearTimeout(unshieldBatchTimeoutRef.current)
+                  }
+                  unshieldBatchTimeoutRef.current = setTimeout(flushUnshieldBatch, BATCH_WINDOW_MS)
+                } else {
+                  console.log(`[ShieldedHeader] Unshield notification already shown for ${unshieldEvent.txHash.slice(0, 10)}..., skipping`)
+                }
+              }
+            )
+          }
         }
       } catch (error) {
         console.error("Failed to initialize shielded wallet:", error)
@@ -367,22 +610,73 @@ export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", onTokenC
     
     return () => {
       stopAutoDiscovery()
+      stopUnshieldMonitoring()
+      // Clean up batch timeouts if component unmounts
+      if (batchTimeoutRef.current) {
+        clearTimeout(batchTimeoutRef.current)
+        batchTimeoutRef.current = null
+      }
+      if (unshieldBatchTimeoutRef.current) {
+        clearTimeout(unshieldBatchTimeoutRef.current)
+        unshieldBatchTimeoutRef.current = null
+      }
+      // Flush any pending notifications before unmounting
+      // This ensures user doesn't miss notifications if component unmounts during batching
+      if (notificationBatchRef.current.length > 0) {
+        try {
+          flushNotificationBatch()
+        } catch (error) {
+          console.error('[ShieldedHeader] Error flushing batch on unmount:', error)
+        }
+      }
+      if (unshieldBatchRef.current.length > 0) {
+        try {
+          flushUnshieldBatch()
+        } catch (error) {
+          console.error('[ShieldedHeader] Error flushing unshield batch on unmount:', error)
+        }
+      }
     }
   }, [mounted, wallet?.isConnected, wallet?.address])
   
   const refreshState = () => {
     // Reload state from storage to ensure we have the latest notes
     if (wallet?.address) {
+      // CRITICAL: getWalletState() syncs module-level walletState with storage
+      // This ensures getShieldedBalancePerToken() reads the latest notes
       const state = getWalletState()
       setWalletState(state)
       // Once state is refreshed, we're done loading
       if (state) {
         setIsLoadingShielded(false)
       }
+      // Force a re-render to recalculate shieldedBalance via useMemo
+      // The useMemo will recalculate because walletState reference changes
     }
     onStateChange?.()
   }
   
+  // CRITICAL: Use useMemo BEFORE any conditional returns to follow Rules of Hooks
+  // This ensures balance updates immediately after swap/transfer
+  // The balanceUpdateCounter ensures we recalculate even when notes.length stays the same (swap scenarios)
+  const shieldedBalance = useMemo(() => {
+    if (!walletState) return {}
+    // Force recalculation by calling getShieldedBalancePerToken() which reads from module-level walletState
+    // This will be in sync after refreshState() updates the module-level state via getWalletState()
+    // The balanceUpdateCounter ensures we recalculate even when notes.length stays the same (swap scenarios)
+    return getShieldedBalancePerToken()
+  }, [walletState, walletState?.notes?.length, balanceUpdateCounter]) // Recalculate when walletState, notes count, or counter changes
+  
+  const allNotes = useMemo(() => {
+    if (!walletState) return []
+    return getNotes()
+  }, [walletState, walletState?.notes?.length]) // Recalculate when walletState or notes count changes
+  
+  const tokenNotes = useMemo(() => {
+    return allNotes.filter(note => (note.token || 'DOGE') === selectedToken)
+  }, [allNotes, selectedToken])
+  
+  const isAutoDiscovery = isAutoDiscoveryRunning()
   
   const copyAddress = async () => {
     if (!walletState?.shieldedAddress) return
@@ -409,11 +703,6 @@ export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", onTokenC
       </Card>
     )
   }
-  
-  const shieldedBalance = walletState ? getShieldedBalancePerToken() : {}
-  const allNotes = walletState ? getNotes() : []
-  const tokenNotes = allNotes.filter(note => (note.token || 'DOGE') === selectedToken)
-  const isAutoDiscovery = isAutoDiscoveryRunning()
   
   return (
     <Card className={`${compact ? 'p-4' : 'p-6'} mb-6 bg-card/50 backdrop-blur border-primary/20`}>
@@ -464,7 +753,6 @@ export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", onTokenC
                 <span className="break-words">{publicBalance}</span> <span className="flex-shrink-0">{selectedToken}</span>
               </div>
             )}
-            {!compact && <div className="text-xs font-body text-white/60">Available to shield</div>}
         </div>
         
         <div className={`${compact ? 'p-3 sm:p-4' : 'p-4 sm:p-5'} rounded-lg bg-primary/5 border border-primary/20`}>
@@ -481,7 +769,6 @@ export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", onTokenC
             <span className="font-body text-sm sm:text-base text-white/70 flex-shrink-0">{selectedToken}</span>
             <span className={`ml-auto ${compact ? 'text-lg sm:text-xl' : 'text-xl sm:text-2xl'} font-mono font-bold tracking-[-0.01em] break-words`}>{formatWeiToAmount(shieldedBalance[selectedToken] || 0n).toFixed(4)}</span>
           </div>
-          {!compact && <div className="text-xs font-body text-white/60 mt-1">Private balance</div>}
         </div>
       </div>
       
@@ -527,6 +814,32 @@ export function useShieldedState() {
     setNotes(getNotes())
     setBalance(getShieldedBalancePerToken())
   }
+  
+  // Listen for shielded-wallet-updated events to auto-refresh
+  useEffect(() => {
+    let debounceTimer: NodeJS.Timeout | null = null
+    
+    const handleUpdate = () => {
+      // Debounce rapid-fire events (multiple dispatches in quick succession)
+      if (debounceTimer) {
+        clearTimeout(debounceTimer)
+      }
+      
+      debounceTimer = setTimeout(() => {
+        console.log('[useShieldedState] Refreshing notes and balance from shielded-wallet-updated event')
+        refresh()
+        debounceTimer = null
+      }, 150) // Wait 150ms for any additional events before refreshing
+    }
+    
+    window.addEventListener('shielded-wallet-updated', handleUpdate)
+    return () => {
+      if (debounceTimer) {
+        clearTimeout(debounceTimer)
+      }
+      window.removeEventListener('shielded-wallet-updated', handleUpdate)
+    }
+  }, []) // Empty deps - only set up listener once
   
   return { notes, balance, refresh }
 }

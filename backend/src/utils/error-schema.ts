@@ -147,6 +147,15 @@ export function mapContractErrorToCode(errorMessage: string): ErrorCode {
   if (lowerError.includes('fee') && lowerError.includes('low')) {
     return ErrorCode.FEE_TOO_LOW;
   }
+  if (lowerError.includes('batchsizemismatch') || lowerError.includes('batch size mismatch')) {
+    return ErrorCode.INVALID_PARAMS;
+  }
+  if (lowerError.includes('batchsizetoolarge') || lowerError.includes('batch size too large')) {
+    return ErrorCode.INVALID_PARAMS;
+  }
+  if (lowerError.includes('unsupportedtoken') || lowerError.includes('unsupported token')) {
+    return ErrorCode.INVALID_PARAMS;
+  }
   
   return ErrorCode.INVALID_PARAMS;
 }

@@ -31,17 +31,24 @@ import {
   mimcHash2,
 } from './shielded-crypto';
 import { fetchMerklePath, generateSwapProof, fetchCommitmentsFromChain } from './shielded-proof-service';
+import { getNotes } from './shielded-service';
 
 // Cache for valid leaf indices per contract (avoids repeated fetches)
 let validLeafIndicesCache: { poolAddress: string; leafIndices: Set<number>; timestamp: number } | null = null;
 const CACHE_TTL = 60000; // 1 minute cache
 
 // Supported tokens for shielded swaps
-export const SWAP_TOKENS = {
+// This can be dynamically updated via addSwapToken/removeSwapToken functions
+export let SWAP_TOKENS: Record<string, {
+  symbol: string;
+  decimals: number;
+  address: string;
+  isNative?: boolean;
+}> = {
   DOGE: {
     symbol: 'DOGE',
     decimals: 18,
-    address: '0x0000000000000000000000000000000000000000', // Native
+    address: '0x0000000000000000000000000000000000000000', // Native - V4 contract uses address(0) for NATIVE_TOKEN
     isNative: true,
   },
   USDC: {
@@ -59,9 +66,95 @@ export const SWAP_TOKENS = {
     decimals: 18,
     address: '0x1a6094Ac3ca3Fc9F1B4777941a5f4AAc16A72000',
   },
-} as const;
+};
 
-export type SwapToken = keyof typeof SWAP_TOKENS;
+export type SwapToken = string; // Now dynamic, can be any token symbol
+
+/**
+ * Add a token to the swap token list
+ * @param symbol Token symbol (e.g., 'USD1', 'LBTC')
+ * @param config Token configuration
+ */
+export function addSwapToken(
+  symbol: string,
+  config: {
+    decimals: number;
+    address: string;
+    isNative?: boolean;
+  }
+): void {
+  SWAP_TOKENS[symbol] = {
+    symbol,
+    ...config,
+  };
+  
+  // Persist to localStorage for persistence across page reloads
+  try {
+    const stored = localStorage.getItem('swap_tokens_config');
+    const tokens = stored ? JSON.parse(stored) : {};
+    tokens[symbol] = config;
+    localStorage.setItem('swap_tokens_config', JSON.stringify(tokens));
+    
+    // Dispatch event to notify UI components
+    window.dispatchEvent(new CustomEvent('swap-tokens-updated'));
+  } catch (error) {
+    console.warn('[Swap] Failed to persist swap token config:', error);
+  }
+}
+
+/**
+ * Remove a token from the swap token list
+ * @param symbol Token symbol to remove
+ */
+export function removeSwapToken(symbol: string): void {
+  if (symbol === 'DOGE') {
+    console.warn('[Swap] Cannot remove DOGE token (required)');
+    return;
+  }
+  
+  delete SWAP_TOKENS[symbol];
+  
+  // Update localStorage
+  try {
+    const stored = localStorage.getItem('swap_tokens_config');
+    const tokens = stored ? JSON.parse(stored) : {};
+    delete tokens[symbol];
+    localStorage.setItem('swap_tokens_config', JSON.stringify(tokens));
+    
+    // Dispatch event to notify UI components
+    window.dispatchEvent(new CustomEvent('swap-tokens-updated'));
+  } catch (error) {
+    console.warn('[Swap] Failed to update swap token config:', error);
+  }
+}
+
+/**
+ * Load swap tokens from localStorage on initialization
+ */
+export function loadSwapTokensFromStorage(): void {
+  try {
+    const stored = localStorage.getItem('swap_tokens_config');
+    if (stored) {
+      const tokens = JSON.parse(stored);
+      // Merge with default tokens (don't overwrite defaults, only add new ones)
+      for (const [symbol, config] of Object.entries(tokens)) {
+        if (!SWAP_TOKENS[symbol]) {
+          SWAP_TOKENS[symbol] = {
+            symbol,
+            ...(config as any),
+          };
+        }
+      }
+    }
+  } catch (error) {
+    console.warn('[Swap] Failed to load swap tokens from storage:', error);
+  }
+}
+
+// Load tokens from storage on module initialization
+if (typeof window !== 'undefined') {
+  loadSwapTokensFromStorage();
+}
 
 export interface SwapQuote {
   inputToken: SwapToken;
@@ -70,8 +163,12 @@ export interface SwapQuote {
   outputAmount: bigint;
   exchangeRate: number;
   priceImpact: number;
-  fee: bigint;
+  fee: bigint; // Total fee (swap fee + platform fee)
+  swapFee: bigint; // 0.3% swap fee
+  platformFee: bigint; // 5 DOGE platform fee (in output token)
   expiresAt: number;
+  error?: string; // Optional error message for graceful handling
+  minimumRequired?: string; // Minimum amount required after fees
 }
 
 export interface SwapProofInput {
@@ -179,6 +276,13 @@ function calculateExchangeRate(
 }
 
 /**
+ * Get token price key for CoinGecko lookup
+ */
+function getTokenPriceKey(token: SwapToken): string {
+  return token; // Token symbol maps directly to price key
+}
+
+/**
  * Get a swap quote with real-time prices
  * 
  * Fetches current market rates from CoinGecko and calculates the swap.
@@ -203,10 +307,47 @@ export async function getSwapQuote(
   
   // 0.3% swap fee
   const feePercent = 0.003;
-  const outputAfterFee = outputAmountNum * (1 - feePercent);
+  const swapFeeAmount = outputAmountNum * feePercent;
+  const outputAfterSwapFee = outputAmountNum - swapFeeAmount;
   
-  const outputAmount = BigInt(Math.floor(outputAfterFee * (10 ** outputDecimals)));
-  const fee = BigInt(Math.floor(outputAmountNum * feePercent * (10 ** outputDecimals)));
+  // Platform fee: 5 DOGE (or equivalent in output token)
+  // Convert 5 DOGE to output token value using current exchange rate
+  const DOGE_PRICE = prices['dogecoin'] || 0.08; // Fallback to ~$0.08 if price unavailable
+  const OUTPUT_TOKEN_PRICE = prices[getTokenPriceKey(outputToken)] || DOGE_PRICE;
+  const PLATFORM_FEE_DOGE = 5; // Fixed 5 DOGE platform fee
+  const platformFeeInOutputToken = (PLATFORM_FEE_DOGE * DOGE_PRICE) / OUTPUT_TOKEN_PRICE;
+  
+  // Deduct platform fee from output
+  const outputAfterAllFees = outputAfterSwapFee - platformFeeInOutputToken;
+  
+  // Ensure output is not negative
+  // Return null instead of throwing to allow graceful handling in UI
+  if (outputAfterAllFees < 0) {
+    const minimumRequired = (platformFeeInOutputToken + swapFeeAmount).toFixed(6);
+    const errorMessage = `Swap amount too small. Minimum required after fees: ${minimumRequired} ${outputToken}`;
+    // Return a special quote object that indicates the error
+    // This allows the UI to display a friendly message instead of crashing
+    return {
+      inputToken,
+      outputToken,
+      inputAmount,
+      outputAmount: 0n,
+      exchangeRate: rate,
+      priceImpact: 0,
+      fee: 0n,
+      swapFee: 0n,
+      platformFee: BigInt(Math.floor(platformFeeInOutputToken * (10 ** outputDecimals))),
+      expiresAt: Date.now() + 30000,
+      // Add error flag for UI handling
+      error: errorMessage,
+      minimumRequired: minimumRequired,
+    } as SwapQuote & { error?: string; minimumRequired?: string };
+  }
+  
+  const outputAmount = BigInt(Math.floor(outputAfterAllFees * (10 ** outputDecimals)));
+  const swapFee = BigInt(Math.floor(swapFeeAmount * (10 ** outputDecimals)));
+  const platformFee = BigInt(Math.floor(platformFeeInOutputToken * (10 ** outputDecimals)));
+  const totalFee = swapFee + platformFee;
   
   // Estimate price impact (simplified - in production use liquidity depth)
   const priceImpact = inputAmountNum > 10000 ? 0.5 : 0.1; // Higher for large trades
@@ -218,7 +359,9 @@ export async function getSwapQuote(
     outputAmount,
     exchangeRate: rate,
     priceImpact,
-    fee,
+    fee: totalFee, // Total fee (swap + platform)
+    swapFee, // 0.3% swap fee
+    platformFee, // 5 DOGE platform fee
     expiresAt: Date.now() + 30000, // Quote valid for 30 seconds
   };
 }
@@ -548,5 +691,260 @@ export function formatSwapDetails(quote: SwapQuote): {
     rate: `1 ${quote.inputToken} = ${quote.exchangeRate.toFixed(6)} ${quote.outputToken}`,
     fee: `${feeAmount.toFixed(6)} ${quote.outputToken} (0.3%)`,
   };
+}
+
+/**
+ * Prepare sequential swaps (auto-split large swaps across multiple notes)
+ * 
+ * When swap amount exceeds single note capacity, automatically splits into multiple
+ * sequential swaps. Each swap uses a single note and creates separate output notes.
+ * 
+ * @param inputToken Input token symbol
+ * @param outputToken Output token symbol
+ * @param totalInputAmount Total amount to swap (will be split across multiple swaps)
+ * @param poolAddress Contract address
+ * @param identity User's shielded identity
+ * @param availableNotes Available notes for the input token
+ * @param onProgress Callback for progress updates (swapIndex, totalSwaps, amount)
+ * @returns Array of swap results
+ */
+export async function prepareSequentialSwaps(
+  inputToken: SwapToken,
+  outputToken: SwapToken,
+  totalInputAmount: bigint,
+  poolAddress: string,
+  identity: { spendingKey: bigint; shieldedAddress: bigint },
+  availableNotes: ShieldedNote[],
+  onProgress?: (swapIndex: number, totalSwaps: number, amount: number) => void
+): Promise<Array<{
+  proof: { proof: string[]; publicInputs: string[] };
+  root: `0x${string}`;
+  inputNullifierHash: `0x${string}`;
+  outputCommitment1: `0x${string}`;
+  outputCommitment2: `0x${string}`;
+  outputNote: ShieldedNote;
+  changeNote: ShieldedNote | null;
+  noteIndex: number;
+  note: ShieldedNote;
+  inputAmount: bigint;
+  outputAmount: bigint;
+}>> {
+  if (availableNotes.length === 0) {
+    throw new Error('No available notes for swap');
+  }
+
+  const inputDecimals = SWAP_TOKENS[inputToken].decimals;
+  const MIN_CHANGE = 1000n; // Minimum 1000 wei for change note
+
+  // Get all notes to find original indices
+  const allNotes = getNotes();
+
+  /**
+   * Find optimal subset of notes to minimize swaps
+   * Uses greedy algorithm to select notes
+   * Validates that each swap will be viable after fees
+   */
+  async function findOptimalNoteSubset(
+    notes: ShieldedNote[],
+    targetAmount: bigint
+  ): Promise<Array<{ note: ShieldedNote; originalIndex: number; swapAmount: bigint }>> {
+    // Sort notes by amount (largest first)
+    // Find original indices in allNotes by commitment
+    const sortedNotes = notes
+      .map((note) => {
+        // Find original index in allNotes by commitment
+        const originalIndex = allNotes.findIndex(n => n.commitment === note.commitment);
+        return { note, originalIndex: originalIndex >= 0 ? originalIndex : 0 };
+      })
+      .sort((a, b) => Number(b.note.amount - a.note.amount));
+
+    const swaps: Array<{ note: ShieldedNote; originalIndex: number; swapAmount: bigint }> = [];
+    let remainingAmount = targetAmount;
+
+    // Helper function to check if a swap amount is viable (not too small after fees)
+    const isSwapViable = async (swapAmount: bigint): Promise<boolean> => {
+      try {
+        const quote = await getSwapQuote(inputToken, outputToken, swapAmount);
+        // If quote has an error, the swap is not viable
+        return !quote.error;
+      } catch (error) {
+        // If quote generation fails, assume not viable
+        return false;
+      }
+    };
+
+    for (const { note, originalIndex } of sortedNotes) {
+      if (remainingAmount <= 0n) break;
+
+      // Calculate how much we can swap from this note
+      // For swaps, we can swap up to the note amount (change note will be created if needed)
+      const maxSwapable = note.amount;
+
+      if (remainingAmount >= maxSwapable) {
+        // Use entire note - check if it's viable
+        const viable = await isSwapViable(maxSwapable);
+        if (viable) {
+          swaps.push({
+            note,
+            originalIndex,
+            swapAmount: maxSwapable,
+          });
+          remainingAmount -= maxSwapable;
+        } else {
+          // Note too small even when fully swapped - skip it
+          console.warn(
+            `[SequentialSwap] Skipping note (${formatWeiToAmount(note.amount, inputDecimals)} ${inputToken}) - too small after fees`
+          );
+          continue;
+        }
+      } else {
+        // Partial swap (will create change note)
+        // Ensure we leave minimum change if doing partial swap
+        const potentialChange = note.amount - remainingAmount;
+        
+        if (potentialChange >= MIN_CHANGE || potentialChange === 0n) {
+          // Check if the partial swap amount is viable
+          const viable = await isSwapViable(remainingAmount);
+          if (viable) {
+            swaps.push({
+              note,
+              originalIndex,
+              swapAmount: remainingAmount,
+            });
+            remainingAmount = 0n;
+          } else {
+            // Partial swap too small - try using entire note instead
+            const fullSwapViable = await isSwapViable(maxSwapable);
+            if (fullSwapViable) {
+              swaps.push({
+                note,
+                originalIndex,
+                swapAmount: maxSwapable,
+              });
+              remainingAmount -= maxSwapable;
+            } else {
+              // Even full note swap is too small - skip it
+              console.warn(
+                `[SequentialSwap] Skipping note (${formatWeiToAmount(note.amount, inputDecimals)} ${inputToken}) - too small after fees`
+              );
+              continue;
+            }
+          }
+        } else {
+          // Change would be too small, use entire note - check if viable
+          const viable = await isSwapViable(maxSwapable);
+          if (viable) {
+            swaps.push({
+              note,
+              originalIndex,
+              swapAmount: maxSwapable,
+            });
+            remainingAmount -= maxSwapable;
+          } else {
+            // Note too small - skip it
+            console.warn(
+              `[SequentialSwap] Skipping note (${formatWeiToAmount(note.amount, inputDecimals)} ${inputToken}) - too small after fees`
+            );
+            continue;
+          }
+        }
+      }
+    }
+
+    if (remainingAmount > 0n) {
+      const totalSelected = swaps.reduce((sum, s) => sum + s.swapAmount, 0n);
+      const remainingAmountDoge = formatWeiToAmount(remainingAmount, inputDecimals);
+      const totalSelectedDoge = formatWeiToAmount(totalSelected, inputDecimals);
+      const targetAmountDoge = formatWeiToAmount(targetAmount, inputDecimals);
+      
+      // Allow small remainder tolerance (e.g., < 0.01 DOGE or < 1% of target)
+      const toleranceDoge = Math.max(0.01, targetAmountDoge * 0.01); // 1% or 0.01 DOGE, whichever is larger
+      
+      if (remainingAmountDoge <= toleranceDoge) {
+        // Remainder is small enough to ignore - proceed with reduced amount
+        console.warn(
+          `[SequentialSwap] Small remainder (${remainingAmountDoge.toFixed(4)} ${inputToken}) cannot be swapped due to fees. ` +
+          `Proceeding with ${totalSelectedDoge.toFixed(4)} ${inputToken} from ${swaps.length} note(s).`
+        );
+        // Continue with the swaps we have - the caller will use the actual swapped amount
+      } else {
+        // Remainder is significant - throw error
+        throw new Error(
+          `Cannot complete swap: ${remainingAmountDoge.toFixed(4)} ${inputToken} remaining after selecting viable swaps. ` +
+          `Selected: ${totalSelectedDoge.toFixed(4)} ${inputToken} from ${swaps.length} note(s). ` +
+          `Some notes may be too small to swap after fees. Please try a smaller amount.`
+        );
+      }
+    }
+
+    if (swaps.length === 0) {
+      throw new Error(
+        `No viable swaps found. All notes are too small after fees. ` +
+        `Minimum required: ~0.4 ${outputToken} (platform fee).`
+      );
+    }
+
+    console.log(`[SequentialSwap] Selected ${swaps.length} viable notes for swap:`);
+    swaps.forEach((s, i) => {
+      console.log(
+        `  Swap ${i + 1}: ${formatWeiToAmount(s.swapAmount, inputDecimals)} ${inputToken} from note at index ${s.originalIndex} (${formatWeiToAmount(s.note.amount, inputDecimals)} ${inputToken})`
+      );
+    });
+
+    return swaps;
+  }
+
+  // Find optimal note selection (with viability checks)
+  const optimalSwaps = await findOptimalNoteSubset(availableNotes, totalInputAmount);
+
+  // Generate quotes and proofs for each swap
+  const results: Array<{
+    proof: { proof: string[]; publicInputs: string[] };
+    root: `0x${string}`;
+    inputNullifierHash: `0x${string}`;
+    outputCommitment1: `0x${string}`;
+    outputCommitment2: `0x${string}`;
+    outputNote: ShieldedNote;
+    changeNote: ShieldedNote | null;
+    noteIndex: number;
+    note: ShieldedNote;
+    inputAmount: bigint;
+    outputAmount: bigint;
+  }> = [];
+
+  for (let i = 0; i < optimalSwaps.length; i++) {
+    const swap = optimalSwaps[i];
+
+    // Update progress: Generating quote and proof
+    if (onProgress) {
+      onProgress(i + 1, optimalSwaps.length, Number(swap.swapAmount) / 10 ** inputDecimals);
+    }
+
+    // Get quote for this swap amount
+    const quote = await getSwapQuote(inputToken, outputToken, swap.swapAmount);
+
+    if (quote.error) {
+      throw new Error(`Swap ${i + 1} quote error: ${quote.error}`);
+    }
+
+    // Prepare swap proof
+    const swapResult = await prepareShieldedSwap(swap.note, identity, quote, poolAddress);
+
+    results.push({
+      proof: swapResult.proof,
+      root: swapResult.merkleRoot,
+      inputNullifierHash: swapResult.inputNullifierHash,
+      outputCommitment1: swapResult.outputCommitment,
+      outputCommitment2: swapResult.changeCommitment,
+      outputNote: swapResult.outputNote,
+      changeNote: swapResult.changeNote,
+      noteIndex: swap.originalIndex,
+      note: swap.note,
+      inputAmount: swap.swapAmount,
+      outputAmount: quote.outputAmount,
+    });
+  }
+
+  return results;
 }
 

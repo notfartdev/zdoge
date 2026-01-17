@@ -10,15 +10,33 @@ All zDoge smart contracts deployed on DogeOS Testnet.
 
 ## Core Contracts
 
-| Contract | Address | Purpose |
-|----------|---------|---------|
-| ShieldedPoolMultiToken | `0x2e93EC915E439920a770e5c9d8c207A6160929a8` | Main shielded pool contract (shield/transfer/unshield/swap) |
-| ShieldVerifier | `0x2cD2A2126825fC8000C1AD2dFD25D15F8Cc365f1` | Shield proof verification |
-| TransferVerifier | `0x0568BF5FaAEf348B71BdD18a05e1EC55a23459B2` | Transfer proof verification |
-| UnshieldVerifier | `0x7DFEa7a81B6f7098DB4a973b052A08899865b60b` | Unshield proof verification |
-| SwapVerifier | `0xE264695FF93e2baa700C3518227EBc917092bd3A` | Swap proof verification |
-| Hasher | `0x1931f2D78930f5c3b0ce65d27F56F35Fa4fdA67D` | MiMC hash function |
-| DogeRouter | `0x0A26D94E458EA685dAb82445914519DE6D26EB57` | Native DOGE deposits/withdrawals (auto-wraps to wDOGE) |
+| Contract | Address | Purpose | Version |
+|----------|---------|---------|---------|
+| ShieldedPoolMultiToken | `0x37A7bA0f6769ae08c4331A48f737d4Ffe1bb721a` | Main shielded pool contract (shield/transfer/unshield/swap) | **V4** |
+| ShieldVerifier | `0xD5AB6Ee21afcb4468DD11dA9a2BF58005A9cB5f9` | Shield proof verification (Groth16) | V4 |
+| TransferVerifier | `0xBAa02AB5Ca5bC2F5c0bC95d0fEE176F06c9DBb0D` | Transfer proof verification (Groth16) | V4 |
+| UnshieldVerifier | `0x0FFd1824c84b064083F377392537645313eEA540` | Unshield proof verification (supports partial unshield) | **V4** |
+| SwapVerifier | `0xFB463d228d5f1BB7aF5672b3197871Cc9b87b1A5` | Swap proof verification (Groth16) | V4 |
+| Hasher | `0x1931f2D78930f5c3b0ce65d27F56F35Fa4fdA67D` | MiMC Sponge hash function | V1 |
+| DogeRouter | `0x0A26D94E458EA685dAb82445914519DE6D26EB57` | Native DOGE deposits/withdrawals (auto-wraps to wDOGE) | V1 |
+
+### Version Information
+
+**ShieldedPoolMultiToken V4** (Current Deployment - January 2025)
+- 🔒 **Security Fixes** - All audit findings addressed (swap rate validation, rug pull prevention, etc.)
+- 🔒 **Platform Fee Enforcement** - 5 DOGE per swap (calculated internally, cannot be bypassed)
+- 🔒 **Proof Verification** - All verifiers match zkey files (canonical validation removed - snarkjs proofs not always canonical)
+- 🔒 **Root Manipulation Protection** - 500 root history buffer (increased from 30)
+- 🔒 **Commitment Uniqueness** - Prevents duplicate commitments in transfers
+- ✅ **Partial Unshield** - Unshield part of a note (e.g., unshield 5 DOGE from 10 DOGE note)
+- ✅ **Change Notes** - Automatically creates change note for partial unshields
+- ✅ **Multi-token Support** - DOGE, USDC, USDT, USD1, WETH, LBTC
+- ⚠️ **Note:** `batchTransfer` and `batchUnshield` from V2/V3 are not in V4, but backend automatically falls back to individual calls
+
+**Previous Versions:**
+- **V3** (Jan 16, 2025): Partial unshield, change notes, platform fee
+- **V2** (Jan 14, 2025): Added batchTransfer, batchUnshield, privacy-preserving events, token blacklist
+- **V1** (Original): Basic shield/transfer/unshield/swap functionality
 
 ## Token Contracts
 
@@ -63,6 +81,14 @@ These are the original mixer pool contracts with fixed denominations. The shield
 | LBTC-0.1 | `0x5ffc61930595BA9Fae2a0D0b0651cd65BC105e92` | LBTC | 0.1 LBTC |
 | LBTC-1 | `0x526A143FD0C0429cE71FB8FA09ACa6f4876d29a5` | LBTC | 1 LBTC |
 
+## Platform Treasury
+
+The platform treasury receives fees from swap operations:
+
+| Address | Purpose |
+|---------|---------|
+| `0xdFc15203f5397495Dada3D7257Eed1b00DCFF548` | Platform treasury (receives 5 DOGE per swap) |
+
 ## Network Configuration
 
 **DogeOS Testnet (Chikyū)**
@@ -72,6 +98,71 @@ These are the original mixer pool contracts with fixed denominations. The shield
 - WebSocket: `wss://ws.rpc.testnet.dogeos.com`
 - Block Explorer: `https://blockscout.testnet.dogeos.com`
 - L2Scan: `https://dogeos-testnet.l2scan.co/`
+
+## Frontend Verification
+
+:::tip Security Best Practice
+**Always verify the frontend before use.** zDoge is a client-side privacy application where your spending keys stay in your browser. If the frontend is compromised, funds could be at risk.
+
+**Quick Verification:**
+1. Visit `https://zdoge.cash/verify`
+2. Click "Verify Circuits"
+3. Compare root hash with published values below
+
+See [Frontend Verification Guide](/resources/frontend-verification) for complete instructions.
+:::
+
+### Current Build Hash (January 2026)
+
+**Root Hash (SHA-384):**
+```
+f4e00ee6409277ce7126aa2ecb66a67aa26bf0f809177fc72d9e0b4a1d1c2d6f83e821a04ea61bf256341e274f9031c8
+```
+
+**Verification:**
+- Compare this hash with the value shown at `https://zdoge.cash/verify`
+- Hash changes with each deployment - always check for latest
+- Published on: [GitHub](https://github.com/DogeProtocol/dogenado), [Frontend Verification Guide](/resources/frontend-verification)
+
+## Important Notes
+
+### Contract Version Compatibility
+
+- **V4 Events**: Same as V3 - Unshield event includes a `changeCommitment` parameter for partial unshield support
+- **V3 Events**: The Unshield event includes a `changeCommitment` parameter for partial unshield support
+- **V2 Events**: Older Unshield events don't include `changeCommitment` (automatically handled)
+- **Backward Compatible**: V4 supports V3 features (partial unshield, change notes). Note: `batchTransfer` and `batchUnshield` from V2/V3 are not in V4, but backend automatically falls back to individual calls
+- **Migration**: Users who shielded tokens in V3 can unshield them in V4 (wasEverSupported mapping)
+- **Security**: V4 includes all security fixes from audit findings
+
+### Event Format Differences
+
+**V3 Unshield Event:**
+```solidity
+event Unshield(
+    bytes32 indexed nullifierHash,
+    address indexed recipient,
+    address indexed token,
+    uint256 amount,
+    bytes32 changeCommitment,  // NEW in V3
+    address relayer,
+    uint256 fee,
+    uint256 timestamp
+)
+```
+
+**V2 Unshield Event:**
+```solidity
+event Unshield(
+    bytes32 indexed nullifierHash,
+    address indexed recipient,
+    address indexed token,
+    uint256 amount,
+    address relayer,
+    uint256 fee,
+    uint256 timestamp
+)
+```
 
 ## Verification
 
@@ -84,4 +175,4 @@ To verify a contract:
 
 ---
 
-Always verify you're interacting with the correct contract addresses before transacting.
+**⚠️ Always verify you're interacting with the correct contract addresses before transacting.**

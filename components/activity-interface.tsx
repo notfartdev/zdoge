@@ -36,7 +36,7 @@ export function ActivityInterface() {
   const { wallet } = useWallet()
   const { toast } = useToast()
   const [transactions, setTransactions] = useState<ShieldedTransaction[]>([])
-  const [filter, setFilter] = useState<TransactionType | 'all'>('all')
+  const [filter, setFilter] = useState<TransactionType | 'all' | 'receive'>('all')
   const [copiedHash, setCopiedHash] = useState<string | null>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
@@ -137,6 +137,8 @@ export function ActivityInterface() {
 
   const filteredTransactions = filter === 'all' 
     ? transactions
+    : filter === 'receive'
+    ? transactions.filter(tx => tx.type === 'transfer' && tx.isIncoming === true)
     : transactions.filter(tx => tx.type === filter)
   
   // Pagination constants and logic
@@ -149,7 +151,8 @@ export function ActivityInterface() {
   const typeCounts = {
     all: transactions.length,
     shield: getTransactionsByType('shield').length,
-    transfer: getTransactionsByType('transfer').length,
+    transfer: getTransactionsByType('transfer').filter(tx => !tx.isIncoming).length,
+    receive: getTransactionsByType('transfer').filter(tx => tx.isIncoming === true).length,
     swap: getTransactionsByType('swap').length,
     unshield: getTransactionsByType('unshield').length,
   }
@@ -176,7 +179,7 @@ export function ActivityInterface() {
 
       {/* Filter Tabs */}
       <div className="flex flex-wrap items-center gap-2">
-        {(['all', 'shield', 'transfer', 'swap', 'unshield'] as const).map((type) => {
+        {(['all', 'shield', 'transfer', 'receive', 'swap', 'unshield'] as const).map((type) => {
           const count = typeCounts[type]
           const isActive = filter === type
           return (
@@ -187,7 +190,7 @@ export function ActivityInterface() {
               onClick={() => setFilter(type)}
               className="font-body"
             >
-              {type === 'all' ? 'All' : formatTransactionType(type)}
+              {type === 'all' ? 'All' : type === 'receive' ? 'Receive' : formatTransactionType(type)}
               {count > 0 && (
                 <span className="ml-1.5 opacity-70">
                   ({count})
@@ -217,7 +220,7 @@ export function ActivityInterface() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-3 mb-2">
                         <span className="text-xs font-body font-medium text-primary">
-                          {formatTransactionType(tx.type)}
+                          {tx.type === 'transfer' && tx.isIncoming ? 'Receive' : formatTransactionType(tx.type)}
                         </span>
                         <span className="text-xs font-body text-white/70">
                           {tx.token}
@@ -237,14 +240,14 @@ export function ActivityInterface() {
                       <div className="space-y-1.5">
                         {tx.type === 'shield' && (
                           <p className="text-xl font-mono font-bold tracking-[-0.01em]">
-                            +{tx.amount} <span className="font-body text-sm text-white/70">{tx.token}</span>
+                            +{Number(tx.amount).toFixed(4)} <span className="font-body text-sm text-white/70">{tx.token}</span>
                           </p>
                         )}
                         
                         {tx.type === 'transfer' && (
                           <>
                             <p className="text-xl font-mono font-bold tracking-[-0.01em]">
-                              {tx.isIncoming ? '+' : '-'}{tx.amount} <span className="font-body text-sm text-white/70">{tx.token}</span>
+                              {tx.isIncoming ? '+' : '-'}{Number(tx.amount).toFixed(4)} <span className="font-body text-sm text-white/70">{tx.token}</span>
                             </p>
                             {tx.isIncoming ? (
                               <p className="text-xs font-body text-white/60">
@@ -283,7 +286,7 @@ export function ActivityInterface() {
                         {tx.type === 'unshield' && (
                           <>
                             <p className="text-xl font-mono font-bold tracking-[-0.01em]">
-                              +{tx.amount} <span className="font-body text-sm text-white/70">{tx.token}</span>
+                              +{Number(tx.amount).toFixed(4)} <span className="font-body text-sm text-white/70">{tx.token}</span>
                             </p>
                             {tx.recipientPublicAddress && (
                               <p className="text-xs font-body text-white/60">
@@ -412,7 +415,7 @@ export function ActivityInterface() {
       {/* Summary Stats */}
       {transactions.length > 0 && (
         <Card className="p-6">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-6">
             <div>
               <p className="text-xs font-mono uppercase tracking-[0.12em] text-white/60 mb-1">Total</p>
               <p className="text-2xl font-mono font-bold tracking-[-0.01em]">{transactions.length}</p>
@@ -424,6 +427,10 @@ export function ActivityInterface() {
             <div>
               <p className="text-xs font-mono uppercase tracking-[0.12em] text-white/60 mb-1">Transfers</p>
               <p className="text-2xl font-mono font-bold tracking-[-0.01em]">{typeCounts.transfer}</p>
+            </div>
+            <div>
+              <p className="text-xs font-mono uppercase tracking-[0.12em] text-white/60 mb-1">Receives</p>
+              <p className="text-2xl font-mono font-bold tracking-[-0.01em]">{typeCounts.receive}</p>
             </div>
             <div>
               <p className="text-xs font-mono uppercase tracking-[0.12em] text-white/60 mb-1">Unshields</p>

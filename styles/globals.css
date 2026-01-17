@@ -1,6 +1,18 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
 
+/* Override browser autofill for shielded address inputs */
+#recipient:-webkit-autofill,
+#recipient:-webkit-autofill:hover,
+#recipient:-webkit-autofill:focus,
+#recipient:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 30px rgba(0, 0, 0, 0.4) inset !important;
+  -webkit-text-fill-color: white !important;
+  background-color: transparent !important;
+  background: transparent !important;
+  caret-color: #C2A633 !important;
+}
+
 @custom-variant dark (&:is(.dark *));
 
 :root {
@@ -72,6 +84,58 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(0.269 0 0);
   --sidebar-ring: oklch(0.439 0 0);
+}
+
+/* Flow icon animation - soft pulse for finalized checkmark */
+@keyframes softPulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(1.05);
+  }
+}
+
+/* Subtle opacity pulse for icon (same philosophy as shield/unshield) */
+@keyframes breathe {
+  0%, 100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
+/* Wave animation for 3 dots - waves left to right as phase changes */
+@keyframes dotWave {
+  0%, 100% {
+    transform: translateY(0);
+    opacity: 0.5;
+  }
+  25% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+  50% {
+    transform: translateY(0);
+    opacity: 0.5;
+  }
+  75% {
+    transform: translateY(-2px);
+    opacity: 0.7;
+  }
+}
+
+/* Flowing gradient shimmer animation for progress bar */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
 }
 
 @theme inline {

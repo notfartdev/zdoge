@@ -94,6 +94,13 @@ export const config = {
 
   // Merkle tree
   merkleTreeDepth: 20,
+
+  // Shielded Pool V3 (with partial unshield support + platform fee for swaps)
+  shieldedPool: {
+    // V4 contract address - can be overridden with SHIELDED_POOL_ADDRESS env var
+    // V4: All security fixes deployed - Jan 2025 (verifiers fixed - canonical validation removed)
+    address: process.env.SHIELDED_POOL_ADDRESS || '0x37A7bA0f6769ae08c4331A48f737d4Ffe1bb721a',
+  },
 };
 
 // MixerPool ABI (minimal for events and calls)
