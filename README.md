@@ -26,7 +26,7 @@ All tokens use 18 decimals on DogeOS testnet.
 
 ## Architecture
 
-- **Smart Contract**: `ShieldedPoolMultiToken` at `0xc5F64faee07A6EFE235C12378101D62e370c0cD5`
+- **Smart Contract**: `ShieldedPoolMultiToken` at `0x37A7bA0f6769ae08c4331A48f737d4Ffe1bb721a`
 - **Frontend**: Next.js application with client-side proof generation
 - **Backend**: Indexer service for Merkle tree state and relayer for gasless transactions
 - **ZK Proofs**: Groth16 proofs for shield, transfer, and unshield operations
@@ -59,9 +59,10 @@ Please see our user guide for instructions on using zDoge.cash.
 
 ## Need Help?
 
-- See the documentation at [docs.zdoge.cash](https://docs.zdoge.cash) for help and more information
-- Ask for help on [zDoge Twitter](https://x.com/zdogecash)
-- Join our community on the zDoge Discord
+- Documentation: [docs.zdoge.cash](https://docs.zdoge.cash)
+- Twitter: [@zdogecash](https://x.com/zdogecash)
+- Discord: [discord.gg/gzPNefTMq2](https://discord.gg/gzPNefTMq2)
+- Telegram: [@zdogecsh](https://t.me/zdogecsh)
 
 ## License
 
