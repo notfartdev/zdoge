@@ -77,7 +77,7 @@ export function InboxPanel() {
     try {
       await navigator.clipboard.writeText(text)
       setCopiedId(id)
-      toast({ title: "Copied!", description: "Hash copied to clipboard" })
+      toast({ title: "Copied!", description: "Hash copied to clipboard", duration: 3000 })
       setTimeout(() => setCopiedId(null), 2000)
     } catch (err) {
       toast({ title: "Failed to copy", variant: "destructive" })

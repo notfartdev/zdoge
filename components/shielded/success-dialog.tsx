@@ -20,6 +20,8 @@ interface SuccessDialogProps {
   message: string
   txHash?: string | null
   txHashes?: string[] // For sequential transfers (multiple transactions)
+  txAmounts?: string[] // Amounts for each transaction in sequential transfers (e.g., ["5.0000", "3.0000"])
+  txToken?: string // Token symbol for amounts
   blockExplorerUrl?: string
   onClose?: () => void
   actionText?: string
@@ -34,6 +36,8 @@ export function SuccessDialog({
   message,
   txHash,
   txHashes,
+  txAmounts,
+  txToken,
   blockExplorerUrl,
   onClose,
   actionText,
@@ -127,16 +131,22 @@ export function SuccessDialog({
                 <div className="space-y-2 max-h-48 overflow-y-auto">
                   {transactions.map((hash, index) => (
                     <div key={hash} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 p-2 rounded-lg bg-zinc-900/60 border border-zinc-700/30">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-1 min-w-0">
                         <span className="text-[10px] text-gray-500">#{index + 1}</span>
-                        <span className="text-[10px] sm:text-xs text-gray-400 font-mono flex-1 break-all sm:break-normal sm:truncate">
+                        <span className="text-[10px] sm:text-xs text-gray-400 font-mono break-all sm:break-normal sm:truncate">
                           {hash.slice(0, 8)}...{hash.slice(-6)}
                         </span>
+                        {/* Show amount if available */}
+                        {txAmounts && txAmounts[index] && (
+                          <span className="text-[10px] sm:text-xs text-[#C2A633] font-medium ml-auto whitespace-nowrap">
+                            {txAmounts[index]} {txToken || 'DOGE'}
+                          </span>
+                        )}
                       </div>
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="h-7 px-2 text-[10px] bg-zinc-800/60 hover:bg-zinc-700/60 text-gray-300 hover:text-white border border-zinc-700/50 hover:border-zinc-600/50 rounded-lg transition-all"
+                        className="h-7 px-2 text-[10px] bg-zinc-800/60 hover:bg-zinc-700/60 text-gray-300 hover:text-white border border-zinc-700/50 hover:border-zinc-600/50 rounded-lg transition-all flex-shrink-0"
                         onClick={() => window.open(`${blockExplorerUrl}/tx/${hash}`, '_blank')}
                       >
                         <ExternalLink className="h-3 w-3 mr-1" />

@@ -78,7 +78,7 @@ export function ActivityInterface() {
     navigator.clipboard.writeText(hash)
     setCopiedHash(hash)
     setTimeout(() => setCopiedHash(null), 2000)
-    toast({ title: "Copied!", description: "Transaction hash copied to clipboard" })
+    toast({ title: "Copied!", description: "Transaction hash copied to clipboard", duration: 3000 })
   }
 
   const formatTimestamp = (timestamp: number): string => {

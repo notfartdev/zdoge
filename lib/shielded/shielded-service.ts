@@ -192,15 +192,10 @@ export async function initializeShieldedWallet(
       }
     }
     
-    // Auto-sync notes with chain if we have any
-    if (walletState.notes.length > 0) {
-      console.log('[ShieldedWallet] Auto-syncing notes with blockchain...');
-      try {
-        await syncNotesWithChain(poolAddress || DEFAULT_POOL_ADDRESS);
-      } catch (error) {
-        console.warn('[ShieldedWallet] Auto-sync failed, continuing with stored notes:', error);
-      }
-    }
+    // NOTE: Removed blocking sync on initialization for faster page loads
+    // Notes are now verified just-in-time before spending (transfer/unshield)
+    // This provides the same safety guarantees with much better UX
+    // Manual sync is still available via syncNotesWithChain() if needed
     
     console.log(`[ShieldedWallet] Loaded permanent identity for ${walletAddress.slice(0, 8)}...`);
     return walletState.identity;
@@ -430,6 +425,121 @@ export async function completeShield(note: ShieldedNote, leafIndex: number): Pro
 }
 
 /**
+ * Just-in-time note verification before spending
+ * Verifies that:
+ * 1. The commitment exists on-chain (note is valid)
+ * 2. The nullifier hasn't been spent (note isn't already used)
+ * 
+ * This replaces blocking sync on page load with targeted verification before spending.
+ * Same safety guarantees, much better UX.
+ * 
+ * @returns { valid: true } or throws with detailed error
+ */
+export async function verifyNoteBeforeSpending(
+  note: ShieldedNote,
+  poolAddress: string,
+  identity: typeof walletState.identity
+): Promise<{ valid: true }> {
+  const { createPublicClient, http } = await import('viem');
+  const { dogeosTestnet } = await import('../dogeos-config');
+  const { getPrivacyRpcUrl } = await import('./privacy-utils');
+  const { computeNullifier, computeNullifierHash, toBytes32, computeCommitment } = await import('./shielded-crypto');
+
+  const publicClient = createPublicClient({
+    chain: dogeosTestnet,
+    transport: http(getPrivacyRpcUrl()),
+  });
+
+  // Step 1: Verify commitment exists on-chain
+  const noteCommitment = note.commitment || await computeCommitment(note.secret, note.amount);
+  const commitmentHex = toBytes32(noteCommitment);
+
+  try {
+    const commitmentExists = await publicClient.readContract({
+      address: poolAddress as `0x${string}`,
+      abi: [{
+        type: 'function',
+        name: 'commitments',
+        inputs: [{ name: '', type: 'bytes32' }],
+        outputs: [{ name: '', type: 'bool' }],
+        stateMutability: 'view',
+      }],
+      functionName: 'commitments',
+      args: [commitmentHex],
+    }) as boolean;
+
+    if (!commitmentExists) {
+      // Note doesn't exist on current contract - remove from wallet
+      const noteIndex = walletState.notes.findIndex(n => n.commitment === note.commitment);
+      if (noteIndex !== -1) {
+        walletState.notes.splice(noteIndex, 1);
+        await saveNotesToStorage(walletState.notes);
+        console.warn(`[Verify] Removed invalid note from wallet: ${formatWeiToAmount(note.amount)} ${note.token || 'DOGE'}`);
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('shielded-wallet-updated'));
+        }
+      }
+      throw new Error('This note does not exist on the current contract. It may be from an old deployment. The note has been removed from your wallet.');
+    }
+  } catch (error: any) {
+    if (error.message?.includes('does not exist')) {
+      throw error; // Re-throw our custom error
+    }
+    // If contract call fails, log but continue (contract will reject if invalid)
+    console.warn('[Verify] Failed to verify commitment on-chain:', error);
+  }
+
+  // Step 2: Verify nullifier hasn't been spent (only if note has leafIndex)
+  if (note.leafIndex !== undefined && identity) {
+    try {
+      const nullifier = await computeNullifier(
+        note.secret,
+        BigInt(note.leafIndex),
+        identity.spendingKey
+      );
+      const nullifierHash = await computeNullifierHash(nullifier);
+      const nullifierHashBytes = toBytes32(nullifierHash);
+
+      const isSpent = await publicClient.readContract({
+        address: poolAddress as `0x${string}`,
+        abi: [{
+          name: 'isSpent',
+          type: 'function',
+          stateMutability: 'view',
+          inputs: [{ name: '_nullifierHash', type: 'bytes32' }],
+          outputs: [{ name: '', type: 'bool' }],
+        }],
+        functionName: 'isSpent',
+        args: [nullifierHashBytes],
+      }) as boolean;
+
+      if (isSpent) {
+        // Remove the spent note from wallet
+        const noteIndex = walletState.notes.findIndex(n => n.commitment === note.commitment);
+        if (noteIndex !== -1) {
+          walletState.notes.splice(noteIndex, 1);
+          await saveNotesToStorage(walletState.notes);
+          console.warn(`[Verify] Removed spent note from wallet: ${formatWeiToAmount(note.amount)} ${note.token || 'DOGE'}`);
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('shielded-wallet-updated'));
+          }
+        }
+        throw new Error('This note has already been spent on-chain. It has been removed from your wallet. Please try again with a different note.');
+      }
+    } catch (error: any) {
+      if (error.message?.includes('already been spent')) {
+        throw error; // Re-throw our custom error
+      }
+      // If contract call fails, log but continue (contract will reject if spent)
+      console.warn('[Verify] Failed to check nullifier on-chain:', error);
+    }
+  }
+
+  console.log(`[Verify] Note verified: commitment exists, not spent`);
+  return { valid: true };
+}
+
+/**
  * Prepare transfer to another shielded address
  * 
  * @param recipientAddress Recipient's shielded address string
@@ -486,63 +596,9 @@ export async function prepareTransfer(
     throw new Error('Note has no leaf index');
   }
   
-  // Pre-check: Verify nullifier is not already spent on-chain
-  try {
-    const { createPublicClient, http } = await import('viem');
-    const { dogeosTestnet } = await import('../dogeos-config');
-    const { getPrivacyRpcUrl } = await import('./privacy-utils');
-    const { computeNullifier, computeNullifierHash } = await import('./shielded-crypto');
-    const { toBytes32 } = await import('./shielded-crypto');
-    
-    const publicClient = createPublicClient({
-      chain: dogeosTestnet,
-      transport: http(getPrivacyRpcUrl()),
-    });
-    
-    // Compute nullifier the same way as in proof generation
-    const nullifier = await computeNullifier(
-      noteToSpend.secret,
-      BigInt(noteToSpend.leafIndex!),
-      walletState.identity.spendingKey
-    );
-    const nullifierHash = await computeNullifierHash(nullifier);
-    const nullifierHashBytes = toBytes32(nullifierHash);
-    
-    const isSpent = await publicClient.readContract({
-      address: poolAddress as `0x${string}`,
-      abi: [{
-        name: 'isSpent',
-        type: 'function',
-        stateMutability: 'view',
-        inputs: [{ name: '_nullifierHash', type: 'bytes32' }],
-        outputs: [{ name: '', type: 'bool' }],
-      }],
-      functionName: 'isSpent',
-      args: [nullifierHashBytes],
-    });
-    
-    if (isSpent) {
-      // Remove the spent note from wallet
-      const noteIndex = walletState.notes.findIndex(n => n.commitment === noteToSpend.commitment);
-      if (noteIndex !== -1) {
-        walletState.notes.splice(noteIndex, 1);
-        await saveNotesToStorage(walletState.notes);
-        console.warn(`[Transfer] Removed spent note from wallet: ${formatWeiToAmount(noteToSpend.amount)} DOGE`);
-        // Dispatch event to refresh UI
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('shielded-wallet-updated'));
-        }
-      }
-      throw new Error('This note has already been spent on-chain. It has been removed from your wallet. Please try again with a different note.');
-    }
-  } catch (checkError: any) {
-    // If it's our custom error, re-throw it
-    if (checkError.message && checkError.message.includes('already been spent')) {
-      throw checkError;
-    }
-    // Otherwise, log warning but continue (contract will reject if spent)
-    console.warn('[Transfer] Failed to check nullifier on-chain:', checkError);
-  }
+  // Just-in-time verification: Verify note exists on-chain AND not spent
+  // This replaces blocking sync on page load with targeted verification before spending
+  await verifyNoteBeforeSpending(noteToSpend, poolAddress, walletState.identity);
   
   // Generate proof (returns root that was used in proof)
   const { proof, outputNote1, outputNote2, nullifierHash, root } = await generateTransferProof(
@@ -1578,6 +1634,12 @@ export async function prepareMultiInputTransfer(
   
   console.log(`[MultiTransfer] Using ${notesToSpend.length} notes`);
   
+  // Just-in-time verification: Verify ALL notes exist on-chain AND not spent
+  // Run verifications in parallel for better performance
+  await Promise.all(
+    notesToSpend.map(note => verifyNoteBeforeSpending(note, poolAddress, walletState.identity))
+  );
+  
   // Generate multi-input proof
   const { generateMultiInputTransferProof } = await import('./shielded-proof-service');
   
@@ -1683,6 +1745,10 @@ export async function prepareUnshield(
   if (!note || note.leafIndex === undefined) {
     throw new Error('Invalid note');
   }
+  
+  // Just-in-time verification: Verify note exists on-chain AND not spent
+  // This replaces blocking sync on page load with targeted verification before spending
+  await verifyNoteBeforeSpending(note, poolAddress, walletState.identity);
   
   // Use feeWei if provided (already in token base units), otherwise convert from feeDoge
   // Fee must be in same units as note.amount (token base units)

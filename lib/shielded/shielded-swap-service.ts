@@ -31,7 +31,7 @@ import {
   mimcHash2,
 } from './shielded-crypto';
 import { fetchMerklePath, generateSwapProof, fetchCommitmentsFromChain } from './shielded-proof-service';
-import { getNotes } from './shielded-service';
+import { getNotes, verifyNoteBeforeSpending } from './shielded-service';
 
 // Cache for valid leaf indices per contract (avoids repeated fetches)
 let validLeafIndicesCache: { poolAddress: string; leafIndices: Set<number>; timestamp: number } | null = null;
@@ -65,6 +65,11 @@ export let SWAP_TOKENS: Record<string, {
     symbol: 'WETH',
     decimals: 18,
     address: '0x1a6094Ac3ca3Fc9F1B4777941a5f4AAc16A72000',
+  },
+  USD1: {
+    symbol: 'USD1',
+    decimals: 18,
+    address: '0x25D5E5375e01Ed39Dc856bDCA5040417fD45eA3F',
   },
 };
 
@@ -405,6 +410,10 @@ export async function prepareShieldedSwap(
   if (inputNote.leafIndex === undefined) {
     throw new Error('Input note has no leaf index');
   }
+  
+  // Just-in-time verification: Verify note exists on-chain AND not spent
+  // This replaces blocking sync on page load with targeted verification before spending
+  await verifyNoteBeforeSpending(inputNote, poolAddress, identity);
   
   // swapAmount is the amount being swapped (from quote.inputAmount)
   // This can be less than inputNote.amount if doing a partial swap

@@ -72,6 +72,7 @@ export function TransferInterface({ notes, onSuccess, selectedToken = "DOGE", on
   const [status, setStatus] = useState<TransactionStatus>("idle")
   const [txHash, setTxHash] = useState<string | null>(null)
   const [sequentialTxHashes, setSequentialTxHashes] = useState<string[]>([]) // For sequential transfers
+  const [sequentialAmounts, setSequentialAmounts] = useState<string[]>([]) // Amounts for each sequential transfer
   const [tracker, setTracker] = useState<TransactionTrackerClass | null>(null)
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
   const [showSuccessDialog, setShowSuccessDialog] = useState(false)
@@ -497,8 +498,11 @@ export function TransferInterface({ notes, onSuccess, selectedToken = "DOGE", on
         
         console.log(`[SequentialTransfer] Total amount sent to recipient: ${totalAmountSentDOGE.toFixed(4)} DOGE (from ${sequentialResults.length} transfers)`)
         
-        // Store all transaction hashes for sequential transfers
+        // Store all transaction hashes and amounts for sequential transfers
         setSequentialTxHashes(txHashes)
+        // Track amounts for each transfer (in human-readable format)
+        const amounts = sequentialResults.map(result => (Number(result.amount) / 1e18).toFixed(4))
+        setSequentialAmounts(amounts)
         // Use first tx hash for tracking (for status updates)
         setTxHash(txHashes[0])
         
@@ -853,6 +857,7 @@ export function TransferInterface({ notes, onSuccess, selectedToken = "DOGE", on
     setStatus("idle")
     setTxHash(null)
     setSequentialTxHashes([])
+    setSequentialAmounts([])
     setSequentialProgress(null)
     setTransferPhase(null)
     setErrorMessage(null)
@@ -992,6 +997,8 @@ export function TransferInterface({ notes, onSuccess, selectedToken = "DOGE", on
         }
         txHash={txHash}
         txHashes={sequentialTxHashes.length > 0 ? sequentialTxHashes : undefined}
+        txAmounts={sequentialAmounts.length > 0 ? sequentialAmounts : undefined}
+        txToken={selectedToken}
         blockExplorerUrl={dogeosTestnet.blockExplorers.default.url}
         actionText="Send Another Transfer"
         onAction={() => {

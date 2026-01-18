@@ -102,7 +102,7 @@ export function AccountModal() {
     if (wallet?.address) {
       await navigator.clipboard.writeText(wallet.address)
       setCopied(true)
-      toast({ title: "Copied!", description: "Address copied to clipboard" })
+      toast({ title: "Copied!", description: "Address copied to clipboard", duration: 3000 })
       setTimeout(() => setCopied(false), 2000)
     }
   }

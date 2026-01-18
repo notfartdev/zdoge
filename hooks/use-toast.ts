@@ -6,13 +6,14 @@ import * as React from 'react'
 import type { ToastActionElement, ToastProps } from '@/components/ui/toast'
 
 const TOAST_LIMIT = 1
-const TOAST_REMOVE_DELAY = 1000000
+const DEFAULT_TOAST_DURATION = 5000 // Default 5 seconds
 
 type ToasterToast = ToastProps & {
   id: string
   title?: React.ReactNode
   description?: React.ReactNode
   action?: ToastActionElement
+  duration?: number // Custom duration in ms
 }
 
 const actionTypes = {
@@ -55,7 +56,7 @@ interface State {
 
 const toastTimeouts = new Map<string, ReturnType<typeof setTimeout>>()
 
-const addToRemoveQueue = (toastId: string) => {
+const addToRemoveQueue = (toastId: string, duration: number = DEFAULT_TOAST_DURATION) => {
   if (toastTimeouts.has(toastId)) {
     return
   }
@@ -66,8 +67,24 @@ const addToRemoveQueue = (toastId: string) => {
       type: 'REMOVE_TOAST',
       toastId: toastId,
     })
-  }, TOAST_REMOVE_DELAY)
+  }, duration)
 
+  toastTimeouts.set(toastId, timeout)
+}
+
+// Schedule auto-dismiss for a toast
+const scheduleAutoDismiss = (toastId: string, duration: number = DEFAULT_TOAST_DURATION) => {
+  // Clear any existing timeout
+  if (toastTimeouts.has(toastId)) {
+    clearTimeout(toastTimeouts.get(toastId))
+    toastTimeouts.delete(toastId)
+  }
+  
+  const timeout = setTimeout(() => {
+    toastTimeouts.delete(toastId)
+    dispatch({ type: 'DISMISS_TOAST', toastId })
+  }, duration)
+  
   toastTimeouts.set(toastId, timeout)
 }
 
@@ -139,8 +156,9 @@ function dispatch(action: Action) {
 
 type Toast = Omit<ToasterToast, 'id'>
 
-function toast({ ...props }: Toast) {
+function toast({ duration, ...props }: Toast & { duration?: number }) {
   const id = genId()
+  const toastDuration = duration ?? DEFAULT_TOAST_DURATION
 
   const update = (props: ToasterToast) =>
     dispatch({
@@ -155,11 +173,15 @@ function toast({ ...props }: Toast) {
       ...props,
       id,
       open: true,
+      duration: toastDuration,
       onOpenChange: (open) => {
         if (!open) dismiss()
       },
     },
   })
+
+  // Schedule auto-dismiss
+  scheduleAutoDismiss(id, toastDuration)
 
   return {
     id: id,

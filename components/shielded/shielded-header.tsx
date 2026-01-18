@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { 
-  Shield, Copy, Check, Eye, EyeOff, Wallet, Lock
+  Shield, Copy, Check, Eye, EyeOff, Wallet, Lock, Coins
 } from "lucide-react"
 import { useAppLoading } from "@/lib/shielded/app-loading-context"
 import { WalletIcon } from "@/components/wallet-icon"
@@ -298,9 +298,10 @@ export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", onTokenC
   }, [mounted, wallet?.isConnected, wallet?.address])
   
   // Batching for sequential transfer notifications
+  // Batch window should be longer than poll interval (5s) to catch sequential transfers across polls
   const notificationBatchRef = useRef<Array<{ note: ShieldedNote; txHash?: string; token: string }>>([])
   const batchTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-  const BATCH_WINDOW_MS = 3000 // 3 second window to collect sequential transfers (increased from 2s for better reliability)
+  const BATCH_WINDOW_MS = 8000 // 8 second window to collect sequential transfers (must be > poll interval of 5s)
   
   // Batching for unshield notifications
   const unshieldBatchRef = useRef<Array<{ amount: bigint; token: string; txHash: string; fee: bigint }>>([])
@@ -326,8 +327,10 @@ export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", onTokenC
       totalsByToken.forEach((totalAmount, token) => {
         try {
           toast({
-            title: "Incoming Transfer!",
-            description: `Received ${formatWeiToAmount(totalAmount).toFixed(4)} ${token}`,
+            title: <span className="flex items-center gap-2"><Coins className="h-4 w-4 text-[#C2A633]" /> Incoming Transfer!</span>,
+            description: `You received ${formatWeiToAmount(totalAmount).toFixed(4)} ${token} privately`,
+            variant: "success" as const,
+            duration: 7000,
           })
         } catch (error) {
           console.error('[ShieldedHeader] Error showing notification for token:', token, error)
@@ -339,8 +342,10 @@ export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", onTokenC
       notificationBatchRef.current.forEach(({ note, token }) => {
         try {
           toast({
-            title: "Incoming Transfer!",
-            description: `Received ${formatWeiToAmount(note.amount).toFixed(4)} ${token}`,
+            title: <span className="flex items-center gap-2"><Coins className="h-4 w-4 text-[#C2A633]" /> Incoming Transfer!</span>,
+            description: `You received ${formatWeiToAmount(note.amount).toFixed(4)} ${token} privately`,
+            variant: "success" as const,
+            duration: 7000,
           })
         } catch (fallbackError) {
           console.error('[ShieldedHeader] Error showing fallback notification:', fallbackError)
@@ -372,8 +377,10 @@ export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", onTokenC
       totalsByToken.forEach((totalAmount, token) => {
         try {
           toast({
-            title: "Incoming Unshield Transfer!",
-            description: `Received ${formatWeiToAmount(totalAmount).toFixed(4)} ${token}`,
+            title: <span className="flex items-center gap-2"><Coins className="h-4 w-4 text-[#C2A633]" /> Unshield Complete!</span>,
+            description: `Received ${formatWeiToAmount(totalAmount).toFixed(4)} ${token} to your wallet`,
+            variant: "success" as const,
+            duration: 7000,
           })
         } catch (error) {
           console.error('[ShieldedHeader] Error showing unshield notification for token:', token, error)
@@ -385,8 +392,10 @@ export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", onTokenC
       unshieldBatchRef.current.forEach(({ amount, token }) => {
         try {
           toast({
-            title: "Incoming Unshield Transfer!",
-            description: `Received ${formatWeiToAmount(amount).toFixed(4)} ${token}`,
+            title: <span className="flex items-center gap-2"><Coins className="h-4 w-4 text-[#C2A633]" /> Unshield Complete!</span>,
+            description: `Received ${formatWeiToAmount(amount).toFixed(4)} ${token} to your wallet`,
+            variant: "success" as const,
+            duration: 7000,
           })
         } catch (fallbackError) {
           console.error('[ShieldedHeader] Error showing fallback unshield notification:', fallbackError)
@@ -424,6 +433,11 @@ export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", onTokenC
           // Give more time for notes to be calculated and synced
           await new Promise(resolve => setTimeout(resolve, 500))
           setIsLoadingShielded(false)
+          
+          // Initialize transaction history for this wallet (required for addTransaction to work)
+          await initTransactionHistory(wallet.address!).catch(err => {
+            console.warn('[ShieldedHeader] Failed to init transaction history:', err)
+          })
           
           // Start auto-discovery for incoming transfers
           // Track shown notifications to prevent duplicate alerts on refresh
@@ -683,7 +697,7 @@ export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", onTokenC
     await navigator.clipboard.writeText(`zdoge:${walletState.shieldedAddress}`)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
-    toast({ title: "Address copied!" })
+    toast({ title: "Address copied!", duration: 3000 })
   }
   
   if (!mounted) return null

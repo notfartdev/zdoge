@@ -112,7 +112,7 @@ export function ReceiveInterface() {
     await navigator.clipboard.writeText(wallet.address)
     setCopiedPublic(true)
     setTimeout(() => setCopiedPublic(false), 2000)
-    toast({ title: "Public address copied!" })
+    toast({ title: "Public address copied!", duration: 3000 })
   }
 
   const copyShieldedAddress = async () => {
@@ -120,7 +120,7 @@ export function ReceiveInterface() {
     await navigator.clipboard.writeText(shieldedAddress)
     setCopiedShielded(true)
     setTimeout(() => setCopiedShielded(false), 2000)
-    toast({ title: "Shielded address copied!" })
+    toast({ title: "Shielded address copied!", duration: 3000 })
   }
 
   const downloadPublicQR = () => {

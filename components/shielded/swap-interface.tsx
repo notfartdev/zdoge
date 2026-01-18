@@ -597,9 +597,9 @@ export function SwapInterface({ notes, onSuccess, onReset, onInputTokenChange }:
         await completeSwap(
           spentNoteIndex,
           result.outputNote,
-          data.leafIndex1 || undefined,
+          data.outputLeafIndex1 || data.outputLeafIndex || undefined,  // Swap uses outputLeafIndex1, not leafIndex1
           result.changeNote,
-          data.leafIndex2 || undefined
+          data.outputLeafIndex2 || undefined  // Change note leaf index
         )
         
         // Dispatch event to refresh UI after each swap
