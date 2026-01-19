@@ -1,17 +1,18 @@
 "use client"
 
+import { useEffect } from "react"
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
+  ResponsiveDialog,
+  ResponsiveDialogContent,
+  ResponsiveDialogDescription,
+  ResponsiveDialogFooter,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+} from "@/components/ui/responsive-dialog"
+import { Button } from "@/components/ui/button"
 import { AlertCircle, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { hapticConfirmation, hapticSuccess, hapticError } from "@/lib/haptic"
 
 interface ConfirmationDialogProps {
   open: boolean
@@ -40,7 +41,15 @@ export function ConfirmationDialog({
   isLoading = false,
   details,
 }: ConfirmationDialogProps) {
+  // Haptic feedback when dialog opens
+  useEffect(() => {
+    if (open) {
+      hapticConfirmation()
+    }
+  }, [open])
+
   const handleConfirm = async () => {
+    hapticSuccess()
     await onConfirm()
     if (!isLoading) {
       onOpenChange(false)
@@ -48,34 +57,36 @@ export function ConfirmationDialog({
   }
 
   const handleCancel = () => {
+    if (variant === "destructive") {
+      hapticError()
+    }
     onCancel?.()
     onOpenChange(false)
   }
 
   return (
-    <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent className={cn(
-        "bg-gradient-to-br from-zinc-900 via-zinc-900 to-zinc-950 border-2 shadow-2xl rounded-2xl p-4 sm:p-6 max-w-[95vw] sm:max-w-md",
+    <ResponsiveDialog open={open} onOpenChange={onOpenChange}>
+      <ResponsiveDialogContent className={cn(
         variant === "destructive" 
           ? "border-red-500/30 shadow-red-500/10" 
           : "border-[#C2A633]/30 shadow-[#C2A633]/10"
       )}>
-        <AlertDialogHeader className="space-y-3">
+        <ResponsiveDialogHeader className="space-y-3">
           {variant === "destructive" && (
             <div className="flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-br from-red-500/20 to-red-600/10 border-2 border-red-500/30 mx-auto mb-2">
               <AlertCircle className="h-8 w-8 text-red-400" strokeWidth={2.5} />
             </div>
           )}
-          <AlertDialogTitle className={cn(
+          <ResponsiveDialogTitle className={cn(
             "text-white text-lg sm:text-xl font-semibold text-center",
             !variant && "flex items-center justify-center gap-2"
           )}>
             {title}
-          </AlertDialogTitle>
-          <AlertDialogDescription className="text-gray-300 text-center text-xs sm:text-sm leading-relaxed">
+          </ResponsiveDialogTitle>
+          <ResponsiveDialogDescription className="text-gray-300 text-center text-xs sm:text-sm leading-relaxed">
             {description}
-          </AlertDialogDescription>
-        </AlertDialogHeader>
+          </ResponsiveDialogDescription>
+        </ResponsiveDialogHeader>
         
         {details && (
           <div className={cn(
@@ -88,19 +99,20 @@ export function ConfirmationDialog({
           </div>
         )}
 
-        <AlertDialogFooter className="flex-col sm:flex-row gap-2 sm:gap-2 mt-6">
-          <AlertDialogCancel
+        <ResponsiveDialogFooter className="flex-col-reverse sm:flex-row gap-2 sm:gap-2 mt-6">
+          <Button
+            variant="outline"
             onClick={handleCancel}
             disabled={isLoading}
-            className="bg-zinc-800/60 hover:bg-zinc-700/70 text-gray-300 hover:text-white border border-zinc-700/50 hover:border-zinc-600/60 rounded-xl px-4 py-2.5 transition-all w-full sm:w-auto"
+            className="bg-zinc-800/60 hover:bg-zinc-700/70 text-gray-300 hover:text-white border border-zinc-700/50 hover:border-zinc-600/60 rounded-xl px-4 py-2.5 h-12 sm:h-10 transition-all w-full sm:w-auto touch-manipulation"
           >
             {cancelText}
-          </AlertDialogCancel>
-          <AlertDialogAction
+          </Button>
+          <Button
             onClick={handleConfirm}
             disabled={isLoading}
             className={cn(
-              "rounded-xl px-4 py-2.5 font-medium border transition-all w-full sm:w-auto",
+              "rounded-xl px-4 py-2.5 h-12 sm:h-10 font-medium border transition-all w-full sm:w-auto touch-manipulation",
               variant === "destructive"
                 ? "bg-red-500/10 hover:bg-red-500/15 text-red-400 border-red-500/30 hover:border-red-500/40"
                 : "bg-[#C2A633]/10 hover:bg-[#C2A633]/15 text-[#C2A633] border-[#C2A633]/30 hover:border-[#C2A633]/40"
@@ -114,9 +126,9 @@ export function ConfirmationDialog({
             ) : (
               confirmText
             )}
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+          </Button>
+        </ResponsiveDialogFooter>
+      </ResponsiveDialogContent>
+    </ResponsiveDialog>
   )
 }

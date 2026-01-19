@@ -1,17 +1,17 @@
 "use client"
 
+import { useEffect } from "react"
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
+  ResponsiveDialog,
+  ResponsiveDialogContent,
+  ResponsiveDialogDescription,
+  ResponsiveDialogFooter,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+} from "@/components/ui/responsive-dialog"
 import { Check, ExternalLink } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { cn } from "@/lib/utils"
+import { hapticSuccess } from "@/lib/haptic"
 
 interface SuccessDialogProps {
   open: boolean
@@ -46,6 +46,14 @@ export function SuccessDialog({
 }: SuccessDialogProps) {
   // Use txHashes if provided (sequential transfers), otherwise use single txHash
   const transactions = txHashes && txHashes.length > 0 ? txHashes : (txHash ? [txHash] : [])
+  
+  // Haptic feedback when success dialog opens
+  useEffect(() => {
+    if (open) {
+      hapticSuccess()
+    }
+  }, [open])
+
   const handleClose = () => {
     onClose?.()
     onOpenChange(false)
@@ -67,36 +75,26 @@ export function SuccessDialog({
   }
 
   return (
-    <AlertDialog open={open} onOpenChange={handleOpenChange}>
-      <AlertDialogContent 
-        className={cn(
-          "bg-gradient-to-br from-zinc-900 via-zinc-900 to-zinc-950 border-2 border-[#C2A633]/30 shadow-2xl shadow-[#C2A633]/10 rounded-2xl p-4 sm:p-6 max-w-[95vw] sm:max-w-md",
-          // Enter animations
-          "data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-[0.98] data-[state=open]:duration-300",
-          // Exit animations - smooth fade out
-          "data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-[0.98] data-[state=closed]:duration-[250ms] data-[state=closed]:ease-in-out"
-        )}
-        onPointerDownOutside={(e) => e.preventDefault()}
-        onEscapeKeyDown={(e) => e.preventDefault()}
-      >
-        <AlertDialogHeader className="space-y-3">
+    <ResponsiveDialog open={open} onOpenChange={handleOpenChange}>
+      <ResponsiveDialogContent className="border-[#C2A633]/30 shadow-[#C2A633]/10">
+        <ResponsiveDialogHeader className="space-y-3">
           {/* Minimalist success icon - simple checkmark */}
           <div className="flex items-center justify-center mx-auto mb-2">
             <div className="w-10 h-10 rounded-full bg-[#C2A633]/10 flex items-center justify-center">
               <Check className="h-5 w-5 text-[#C2A633]" strokeWidth={2.5} />
             </div>
           </div>
-          <AlertDialogTitle className="text-white text-lg sm:text-xl font-semibold text-center flex items-center justify-center gap-2">
+          <ResponsiveDialogTitle className="text-white text-lg sm:text-xl font-semibold text-center flex items-center justify-center gap-2">
             {title}
-          </AlertDialogTitle>
-          <AlertDialogDescription className="text-gray-300 text-center text-xs sm:text-sm leading-relaxed">
+          </ResponsiveDialogTitle>
+          <ResponsiveDialogDescription className="text-gray-300 text-center text-xs sm:text-sm leading-relaxed">
             {message && message.trim() !== '' 
               ? message 
               : transactions.length > 1 
                 ? 'Sequential transfers finalized on-chain.' 
                 : 'Transaction completed successfully.'}
-          </AlertDialogDescription>
-        </AlertDialogHeader>
+          </ResponsiveDialogDescription>
+        </ResponsiveDialogHeader>
         
         {details && (
           <div className="my-3 sm:my-4 p-3 sm:p-4 rounded-xl bg-zinc-800/60 backdrop-blur-sm border border-[#C2A633]/20 shadow-inner">
@@ -114,7 +112,7 @@ export function SuccessDialog({
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-8 px-3 text-[10px] sm:text-xs bg-zinc-800/60 hover:bg-zinc-700/60 text-gray-300 hover:text-white border border-zinc-700/50 hover:border-zinc-600/50 rounded-lg transition-all self-start sm:self-auto min-w-[120px] sm:min-w-0"
+                    className="h-10 sm:h-8 px-3 text-[10px] sm:text-xs bg-zinc-800/60 hover:bg-zinc-700/60 text-gray-300 hover:text-white border border-zinc-700/50 hover:border-zinc-600/50 rounded-lg transition-all self-start sm:self-auto min-w-[120px] sm:min-w-0 touch-manipulation"
                     onClick={() => window.open(`${blockExplorerUrl}/tx/${transactions[0]}`, '_blank')}
                   >
                     <ExternalLink className="h-3 w-3 mr-1.5 flex-shrink-0" />
@@ -146,7 +144,7 @@ export function SuccessDialog({
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="h-7 px-2 text-[10px] bg-zinc-800/60 hover:bg-zinc-700/60 text-gray-300 hover:text-white border border-zinc-700/50 hover:border-zinc-600/50 rounded-lg transition-all flex-shrink-0"
+                        className="h-9 sm:h-7 px-2 text-[10px] bg-zinc-800/60 hover:bg-zinc-700/60 text-gray-300 hover:text-white border border-zinc-700/50 hover:border-zinc-600/50 rounded-lg transition-all flex-shrink-0 touch-manipulation"
                         onClick={() => window.open(`${blockExplorerUrl}/tx/${hash}`, '_blank')}
                       >
                         <ExternalLink className="h-3 w-3 mr-1" />
@@ -160,32 +158,33 @@ export function SuccessDialog({
           </div>
         )}
 
-        <AlertDialogFooter className="flex-col sm:flex-row gap-2 sm:gap-2 mt-6">
+        <ResponsiveDialogFooter className="flex-col-reverse sm:flex-row gap-2 sm:gap-2 mt-6">
           {actionText && onAction ? (
             <>
-              <AlertDialogAction
+              <Button
+                variant="outline"
                 onClick={handleClose}
-                className="bg-zinc-800/60 hover:bg-zinc-700/70 text-gray-300 hover:text-white border border-zinc-700/50 hover:border-zinc-600/60 rounded-xl px-4 py-2.5 transition-all w-full sm:w-auto"
+                className="bg-zinc-800/60 hover:bg-zinc-700/70 text-gray-300 hover:text-white border border-zinc-700/50 hover:border-zinc-600/60 rounded-xl px-4 py-2.5 h-12 sm:h-10 transition-all w-full sm:w-auto touch-manipulation"
               >
                 Done
-              </AlertDialogAction>
-              <AlertDialogAction
+              </Button>
+              <Button
                 onClick={handleAction}
-                className="bg-[#C2A633]/10 hover:bg-[#C2A633]/15 text-[#C2A633] border border-[#C2A633]/30 hover:border-[#C2A633]/40 rounded-xl px-4 py-2.5 font-medium transition-all w-full sm:w-auto"
+                className="bg-[#C2A633]/10 hover:bg-[#C2A633]/15 text-[#C2A633] border border-[#C2A633]/30 hover:border-[#C2A633]/40 rounded-xl px-4 py-2.5 h-12 sm:h-10 font-medium transition-all w-full sm:w-auto touch-manipulation"
               >
                 {actionText}
-              </AlertDialogAction>
+              </Button>
             </>
           ) : (
-            <AlertDialogAction
+            <Button
               onClick={handleClose}
-              className="bg-[#C2A633]/10 hover:bg-[#C2A633]/15 text-[#C2A633] border border-[#C2A633]/30 hover:border-[#C2A633]/40 rounded-xl px-6 py-2.5 font-medium transition-all w-full"
+              className="bg-[#C2A633]/10 hover:bg-[#C2A633]/15 text-[#C2A633] border border-[#C2A633]/30 hover:border-[#C2A633]/40 rounded-xl px-6 py-2.5 h-12 sm:h-10 font-medium transition-all w-full touch-manipulation"
             >
               Done
-            </AlertDialogAction>
+            </Button>
           )}
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+        </ResponsiveDialogFooter>
+      </ResponsiveDialogContent>
+    </ResponsiveDialog>
   )
 }

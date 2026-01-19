@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef, useMemo } from "react"
+import { useState, useEffect, useRef, useMemo, useCallback } from "react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -8,6 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { 
   Shield, Copy, Check, Eye, EyeOff, Wallet, Lock, Coins
 } from "lucide-react"
+import { usePullToRefresh } from "@/hooks/use-pull-to-refresh"
+import { PullToRefreshIndicator } from "@/components/ui/pull-to-refresh"
 import { useAppLoading } from "@/lib/shielded/app-loading-context"
 import { WalletIcon } from "@/components/wallet-icon"
 import { useToast } from "@/hooks/use-toast"
@@ -133,7 +135,48 @@ export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", onTokenC
     setMounted(true)
   }, [])
   
-  // Fetch all public token balances
+  // Fetch all public token balances - reusable function
+  const fetchAllPublicBalances = useCallback(async () => {
+    if (!wallet?.address) return
+    
+    setIsLoadingBalances(true)
+    const balances: Record<string, string> = {}
+    
+    for (const [symbol, config] of Object.entries(TOKEN_CONFIG)) {
+      try {
+        if (config.isNative) {
+          // Fetch native DOGE balance
+          const provider = (window as any).ethereum
+          if (provider) {
+            const balance = await provider.request({
+              method: "eth_getBalance",
+              params: [wallet.address, "latest"],
+            })
+            const balanceWei = BigInt(balance)
+            const balanceDoge = Number(balanceWei) / 1e18
+            balances[symbol] = balanceDoge.toFixed(4)
+          }
+        } else if (config.address) {
+          // Fetch ERC20 balance
+          const balance = await publicClient.readContract({
+            address: config.address as Address,
+            abi: ERC20ABI,
+            functionName: 'balanceOf',
+            args: [wallet.address as Address],
+          })
+          balances[symbol] = (Number(balance) / 1e18).toFixed(4)
+        }
+      } catch (error) {
+        console.error(`Failed to fetch ${symbol} balance:`, error)
+        balances[symbol] = "0"
+      }
+    }
+    
+    setAllPublicBalances(balances)
+    setIsLoadingBalances(false)
+  }, [wallet?.address])
+  
+  // Initial fetch and polling of public balances
   useEffect(() => {
     if (!mounted || !wallet?.isConnected || !wallet?.address) {
       setAllPublicBalances({})
@@ -141,50 +184,10 @@ export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", onTokenC
       return
     }
     
-    async function fetchAllBalances() {
-      setIsLoadingBalances(true)
-      // Add a small delay to make loading more visible
-      await new Promise(resolve => setTimeout(resolve, 200))
-      const balances: Record<string, string> = {}
-      
-      for (const [symbol, config] of Object.entries(TOKEN_CONFIG)) {
-        try {
-          if (config.isNative) {
-            // Fetch native DOGE balance
-            const provider = (window as any).ethereum
-            if (provider) {
-              const balance = await provider.request({
-                method: "eth_getBalance",
-                params: [wallet.address, "latest"],
-              })
-              const balanceWei = BigInt(balance)
-              const balanceDoge = Number(balanceWei) / 1e18
-              balances[symbol] = balanceDoge.toFixed(4)
-            }
-          } else if (config.address) {
-            // Fetch ERC20 balance
-            const balance = await publicClient.readContract({
-              address: config.address as Address,
-              abi: ERC20ABI,
-              functionName: 'balanceOf',
-              args: [wallet.address as Address],
-            })
-            balances[symbol] = (Number(balance) / 1e18).toFixed(4)
-          }
-        } catch (error) {
-          console.error(`Failed to fetch ${symbol} balance:`, error)
-          balances[symbol] = "0"
-        }
-      }
-      
-      setAllPublicBalances(balances)
-      setIsLoadingBalances(false)
-    }
-    
-    fetchAllBalances()
-    const interval = setInterval(fetchAllBalances, 10000)
+    fetchAllPublicBalances()
+    const interval = setInterval(fetchAllPublicBalances, 10000)
     return () => clearInterval(interval)
-  }, [mounted, wallet?.isConnected, wallet?.address])
+  }, [mounted, wallet?.isConnected, wallet?.address, fetchAllPublicBalances])
   
   // Refresh balances when onStateChange is called (after shield/unshield)
   useEffect(() => {
@@ -700,6 +703,28 @@ export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", onTokenC
     toast({ title: "Address copied!", duration: 3000 })
   }
   
+  // Pull-to-refresh handler
+  const handlePullRefresh = useCallback(async () => {
+    // Refresh public balances
+    await fetchAllPublicBalances()
+    // Trigger balance recalculation
+    setBalanceUpdateCounter(prev => prev + 1)
+    // Notify parent
+    onStateChange?.()
+    toast({ title: "Refreshed", description: "Balances updated", duration: 2000 })
+  }, [fetchAllPublicBalances, onStateChange, toast])
+  
+  const {
+    pullDistance,
+    isRefreshing,
+    progress,
+    containerRef,
+  } = usePullToRefresh({
+    onRefresh: handlePullRefresh,
+    threshold: 80,
+    disabled: !wallet?.isConnected,
+  })
+  
   if (!mounted) return null
   
   // Show connect wallet prompt if not connected
@@ -719,7 +744,16 @@ export function ShieldedHeader({ onStateChange, selectedToken = "DOGE", onTokenC
   }
   
   return (
-    <Card className={`${compact ? 'p-4' : 'p-6'} mb-6 bg-card/50 backdrop-blur border-primary/20`}>
+    <Card 
+      ref={containerRef as React.RefObject<HTMLDivElement>}
+      className={`${compact ? 'p-4' : 'p-6'} mb-6 bg-card/50 backdrop-blur border-primary/20 overflow-hidden`}
+    >
+      {/* Pull-to-refresh indicator */}
+      <PullToRefreshIndicator
+        pullDistance={pullDistance}
+        isRefreshing={isRefreshing}
+        progress={progress}
+      />
       
       <div className={`grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 ${compact ? '' : 'mb-4'}`}>
         <div className={`${compact ? 'p-3 sm:p-4' : 'p-4 sm:p-5'} rounded-lg bg-muted/30 border`}>
